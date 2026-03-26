@@ -26,7 +26,7 @@ function FeedRow({ entry }: { entry: typeof FEED_ENTRIES[0] }) {
   if (entry.type === 'enter') {
     return (
       <div className="flex items-center gap-2 py-1.5 font-mono text-xs">
-        <span className="text-[#00A8FF]">🐦</span>
+        <img src="/logo.png" alt="" className="w-4 h-4 object-contain opacity-90" style={{ filter: 'drop-shadow(0 0 4px rgba(0,168,255,0.7))' }} />
         <span className="text-[#00A8FF] font-bold">ENTERED</span>
         <span className="text-white/40">[{entry.mode}]</span>
         <span className="text-white font-bold">{entry.mint}</span>

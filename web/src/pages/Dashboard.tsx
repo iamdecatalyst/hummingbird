@@ -146,7 +146,12 @@ export default function Dashboard() {
     return (
       <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center">
         <div className="text-center">
-          <div className="font-mono text-4xl mb-4">🐦</div>
+          <img
+            src="/logo.png"
+            alt="Hummingbird"
+            className="w-16 h-16 object-contain mx-auto mb-4 animate-pulse"
+            style={{ filter: 'drop-shadow(0 0 16px rgba(0,168,255,0.5))' }}
+          />
           <p className="font-mono text-[#555] text-sm animate-pulse">Connecting to orchestrator...</p>
         </div>
       </div>
