@@ -180,11 +180,21 @@ func (m Model) View() string {
 	}
 
 	// Footer
-	b.WriteString("\n\n")
 	hint := "← →  switch tab   ↑↓ / j k  scroll   g G  top/bottom   r  refresh   q  quit"
-	b.WriteString("  " + StyleHelp.Render(hint))
+	footer := "\n\n  " + StyleHelp.Render(hint)
 
-	return b.String()
+	content := b.String()
+
+	// Pad to terminal height so bubbletea clears any ghost content from previous tabs
+	if m.height > 0 {
+		used := strings.Count(content, "\n") + strings.Count(footer, "\n") + 2
+		pad := m.height - used - 1
+		if pad > 0 {
+			content += strings.Repeat("\n", pad)
+		}
+	}
+
+	return content + footer
 }
 
 func renderBanner(termWidth int) string {

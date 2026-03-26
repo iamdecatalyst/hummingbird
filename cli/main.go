@@ -126,22 +126,62 @@ func main() {
 	}
 }
 
-// readHidden reads a line from stdin with echo disabled via stty.
-// Falls back to plain reading if stty is unavailable.
+// readHidden reads a token from stdin, printing * for each character typed/pasted.
+// Falls back to silent read if stty raw mode is unavailable.
 func readHidden() string {
-	stty := exec.Command("stty", "-echo")
-	stty.Stdin = os.Stdin
-	_ = stty.Run()
+	// Try interactive mode: raw + no echo so we can print * ourselves
+	rawOn := exec.Command("stty", "raw", "-echo")
+	rawOn.Stdin = os.Stdin
+	if err := rawOn.Run(); err != nil {
+		return readHiddenSilent()
+	}
+	defer func() {
+		restore := exec.Command("stty", "-raw", "echo")
+		restore.Stdin = os.Stdin
+		_ = restore.Run()
+	}()
 
+	var buf []byte
+	b := make([]byte, 1)
+	for {
+		_, err := os.Stdin.Read(b)
+		if err != nil {
+			break
+		}
+		switch b[0] {
+		case '\r', '\n':
+			fmt.Print("\r\n")
+			return strings.TrimSpace(string(buf))
+		case 127, 8: // backspace / delete
+			if len(buf) > 0 {
+				buf = buf[:len(buf)-1]
+				fmt.Print("\b \b")
+			}
+		case 3: // Ctrl+C
+			fmt.Print("\r\n")
+			os.Exit(1)
+		default:
+			if b[0] >= 32 && b[0] < 127 {
+				buf = append(buf, b[0])
+				fmt.Print("*")
+			}
+		}
+	}
+	return strings.TrimSpace(string(buf))
+}
+
+// readHiddenSilent is the fallback when stty raw mode is unavailable.
+func readHiddenSilent() string {
+	noEcho := exec.Command("stty", "-echo")
+	noEcho.Stdin = os.Stdin
+	_ = noEcho.Run()
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Scan()
 	input := strings.TrimSpace(scanner.Text())
-
-	sttyOn := exec.Command("stty", "echo")
-	sttyOn.Stdin = os.Stdin
-	_ = sttyOn.Run()
+	echo := exec.Command("stty", "echo")
+	echo.Stdin = os.Stdin
+	_ = echo.Run()
 	fmt.Println()
-
 	return input
 }
 
