@@ -43,7 +43,7 @@ export default function CLIAuth() {
     }}>
       {/* Logo + title */}
       <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-        <img src="/logo.png" alt="" style={{ width: 52, marginBottom: '1rem', filter: 'drop-shadow(0 0 12px rgba(0,168,255,0.4))' }} />
+        <img src="/logo.png" alt="" style={{ width: 52, display: 'block', margin: '0 auto 1rem', filter: 'drop-shadow(0 0 12px rgba(0,168,255,0.4))' }} />
         <div style={{ color: '#00A8FF', fontWeight: 700, fontSize: '1.1rem', letterSpacing: 2 }}>HUMMINGBIRD</div>
         <div style={{ color: '#555', fontSize: '0.78rem', marginTop: 4 }}>CLI authentication</div>
       </div>
