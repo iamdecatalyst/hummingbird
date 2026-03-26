@@ -416,6 +416,21 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 		fmt.Fprint(w, `{"status":"ok","bot_active":true}`)
 	})
 
+	// Internal scorer endpoint — routes signals to all active user instances.
+	// Called from localhost by the Python scorer; no user auth required.
+	mux.HandleFunc("POST /trade", func(w http.ResponseWriter, r *http.Request) {
+		var result models.ScoreResult
+		if err := json.NewDecoder(r.Body).Decode(&result); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		instances := mgr.All()
+		for _, inst := range instances {
+			inst.Trader.Execute(&result)
+		}
+		fmt.Fprintf(w, `{"status":"queued","instances":%d}`, len(instances))
+	})
+
 	// Per-user trading endpoints (keyed by Nexus user ID)
 
 	mux.HandleFunc("GET /stats", func(w http.ResponseWriter, r *http.Request) {

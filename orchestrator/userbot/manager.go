@@ -108,6 +108,17 @@ func (m *Manager) Get(userID string) *Instance {
 	return m.instances[userID]
 }
 
+// All returns a snapshot of all active instances.
+func (m *Manager) All() []*Instance {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]*Instance, 0, len(m.instances))
+	for _, inst := range m.instances {
+		out = append(out, inst)
+	}
+	return out
+}
+
 // GetByChatID looks up an instance by Telegram chat ID.
 func (m *Manager) GetByChatID(chatID string) (string, *Instance) {
 	m.mu.RLock()
