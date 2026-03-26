@@ -40,17 +40,18 @@ export interface ClosedPosition extends Position {
 }
 
 export interface MeResponse {
-  id:                string
-  username:          string
-  first_name:        string
-  last_name:         string
-  email:             string
-  avatar:            string
-  has_signet:        boolean
-  signet_key_prefix: string
-  wallet_id:         string
-  main_wallet_id:    string
-  bot_active:        boolean
+  id:                 string
+  username:           string
+  first_name:         string
+  last_name:          string
+  email:              string
+  avatar:             string
+  has_signet:         boolean
+  signet_key_prefix:  string
+  wallet_id:          string
+  main_wallet_id:     string
+  telegram_chat_id:   string
+  bot_active:         boolean
 }
 
 export interface WalletEntry {
@@ -133,6 +134,10 @@ export const api = {
   setMainWallet(walletId: string): Promise<void> {
     return post(`/wallets/${walletId}/set-main`)
   },
+  telegramToken(): Promise<{ token: string; bot_username: string }> {
+    return post('/auth/telegram/token')
+  },
+
   deleteSignet(): Promise<void> {
     const token = getToken()
     return fetch(`${BASE}/auth/signet`, {

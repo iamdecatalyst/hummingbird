@@ -86,6 +86,7 @@ function DashboardRoute() {
       signetKeyPrefix={me?.signet_key_prefix}
       hasSignet={me?.has_signet}
       mainWalletId={me?.main_wallet_id}
+      telegramChatId={me?.telegram_chat_id}
       onCredentialsSaved={refreshMe}
     />
   )

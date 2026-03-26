@@ -20,17 +20,18 @@ type DB struct {
 }
 
 type User struct {
-	NexusUserID     string
-	Username        string
-	FirstName       string
-	LastName        string
-	Email           string
-	Avatar          string
-	HasSignet       bool // true once Signet key has been configured
-	SignetKeyPrefix string
-	WalletID        string
-	MainWalletID    string
-	CreatedAt       time.Time
+	NexusUserID      string
+	Username         string
+	FirstName        string
+	LastName         string
+	Email            string
+	Avatar           string
+	HasSignet        bool // true once Signet key has been configured
+	SignetKeyPrefix  string
+	WalletID         string
+	MainWalletID     string
+	TelegramChatID   string
+	CreatedAt        time.Time
 }
 
 func New(databaseURL, encryptionKeyHex string) (*DB, error) {
@@ -75,7 +76,10 @@ func (d *DB) migrate() error {
 	if _, err := d.sql.Exec(`ALTER TABLE hb_users ADD COLUMN IF NOT EXISTS signet_key_prefix TEXT NOT NULL DEFAULT ''`); err != nil {
 		return err
 	}
-	_, err := d.sql.Exec(`ALTER TABLE hb_users ADD COLUMN IF NOT EXISTS main_wallet_id TEXT NOT NULL DEFAULT ''`)
+	if _, err := d.sql.Exec(`ALTER TABLE hb_users ADD COLUMN IF NOT EXISTS main_wallet_id TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
+	_, err := d.sql.Exec(`ALTER TABLE hb_users ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT NOT NULL DEFAULT ''`)
 	return err
 }
 
@@ -96,11 +100,11 @@ func (d *DB) GetUser(nexusUserID string) (*User, error) {
 	err := d.sql.QueryRow(`
 		SELECT nexus_user_id, COALESCE(username,''), first_name, last_name, email, avatar,
 		       (signet_key IS NOT NULL), COALESCE(signet_key_prefix,''), COALESCE(wallet_id,''),
-		       COALESCE(main_wallet_id,''), created_at
+		       COALESCE(main_wallet_id,''), COALESCE(telegram_chat_id,''), created_at
 		FROM hb_users WHERE nexus_user_id=$1
 	`, nexusUserID).Scan(
 		&u.NexusUserID, &u.Username, &u.FirstName, &u.LastName, &u.Email, &u.Avatar,
-		&u.HasSignet, &u.SignetKeyPrefix, &u.WalletID, &u.MainWalletID, &u.CreatedAt,
+		&u.HasSignet, &u.SignetKeyPrefix, &u.WalletID, &u.MainWalletID, &u.TelegramChatID, &u.CreatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -140,6 +144,37 @@ func (d *DB) ClearSignetCredentials(nexusUserID string) error {
 func (d *DB) SetMainWallet(nexusUserID, walletID string) error {
 	_, err := d.sql.Exec(`UPDATE hb_users SET main_wallet_id=$1 WHERE nexus_user_id=$2`, walletID, nexusUserID)
 	return err
+}
+
+// SetTelegramChatID stores the user's Telegram chat ID after deep-link linking.
+func (d *DB) SetTelegramChatID(nexusUserID string, chatID string) error {
+	_, err := d.sql.Exec(`UPDATE hb_users SET telegram_chat_id=$1 WHERE nexus_user_id=$2`, chatID, nexusUserID)
+	return err
+}
+
+// AllConfiguredUsersData returns full User records for users with Signet credentials.
+func (d *DB) AllConfiguredUsersData() ([]*User, error) {
+	rows, err := d.sql.Query(`
+		SELECT nexus_user_id, COALESCE(username,''), first_name, last_name, email, avatar,
+		       (signet_key IS NOT NULL), COALESCE(signet_key_prefix,''), COALESCE(wallet_id,''),
+		       COALESCE(main_wallet_id,''), COALESCE(telegram_chat_id,''), created_at
+		FROM hb_users WHERE signet_key IS NOT NULL
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var users []*User
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(
+			&u.NexusUserID, &u.Username, &u.FirstName, &u.LastName, &u.Email, &u.Avatar,
+			&u.HasSignet, &u.SignetKeyPrefix, &u.WalletID, &u.MainWalletID, &u.TelegramChatID, &u.CreatedAt,
+		); err == nil {
+			users = append(users, &u)
+		}
+	}
+	return users, rows.Err()
 }
 
 // GetSignetCredentials decrypts and returns the user's Signet API key + secret.

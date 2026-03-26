@@ -173,21 +173,73 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 
 	mgr := userbot.NewManager(cfg)
 
+	// Telegram bot (multi-tenant mode)
+	var tgBot *bot.Bot
+	if cfg.TelegramToken != "" {
+		tgBot, err = bot.NewMultiTenant(
+			cfg.TelegramToken,
+			// resolve: given chat_id → portfolio + executor
+			func(chatID int64) (string, *portfolio.Portfolio, bot.Executor, bool) {
+				nexusID, inst := mgr.GetByChatID(strconv.FormatInt(chatID, 10))
+				if inst == nil {
+					return "", nil, nil, false
+				}
+				return nexusID, inst.Port, inst.Trader, true
+			},
+			// onLink: save chat_id to DB + restart instance with Telegram notifier
+			func(nexusID string, chatID int64) {
+				chatStr := strconv.FormatInt(chatID, 10)
+				database.SetTelegramChatID(nexusID, chatStr)
+				apiKey, apiSecret, err := database.GetSignetCredentials(nexusID)
+				if err != nil {
+					return
+				}
+				user, _ := database.GetUser(nexusID)
+				walletID := ""
+				if user != nil && user.MainWalletID != "" {
+					walletID = user.MainWalletID
+				}
+				mgr.Stop(nexusID)
+				if walletID != "" {
+					mgr.StartWithWallet(nexusID, apiKey, apiSecret, walletID, chatStr)
+				} else {
+					mgr.Start(nexusID, apiKey, apiSecret, chatStr)
+				}
+				log.Printf("[bot] linked chat %s to user %s", chatStr, nexusID[:8])
+			},
+			// onStop: remove instance from manager
+			func(nexusID string) {
+				mgr.Stop(nexusID)
+			},
+		)
+		if err != nil {
+			log.Printf("[main] telegram bot init failed: %v", err)
+			tgBot = nil
+		} else {
+			go tgBot.Run()
+		}
+	}
+
 	// Resume bots for all configured users on startup
 	go func() {
-		ids, err := database.AllConfiguredUsers()
+		users, err := database.AllConfiguredUsersData()
 		if err != nil {
 			log.Printf("[main] failed to load users: %v", err)
 			return
 		}
-		for _, uid := range ids {
-			apiKey, apiSecret, err := database.GetSignetCredentials(uid)
+		for _, u := range users {
+			apiKey, apiSecret, err := database.GetSignetCredentials(u.NexusUserID)
 			if err != nil {
-				log.Printf("[main] skip resume for user %s: %v", uid[:8], err)
+				log.Printf("[main] skip resume for user %s: %v", u.NexusUserID[:8], err)
 				continue
 			}
-			if err := mgr.Start(uid, apiKey, apiSecret); err != nil {
-				log.Printf("[main] resume failed for user %s: %v", uid[:8], err)
+			if u.MainWalletID != "" {
+				err = mgr.StartWithWallet(u.NexusUserID, apiKey, apiSecret, u.MainWalletID, u.TelegramChatID)
+			} else {
+				err = mgr.Start(u.NexusUserID, apiKey, apiSecret, u.TelegramChatID)
+			}
+			if err != nil {
+				log.Printf("[main] resume failed for user %s: %v", u.NexusUserID[:8], err)
 			}
 		}
 	}()
@@ -291,17 +343,18 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 		inst := mgr.Get(nexusID)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
-			"id":                user.NexusUserID,
-			"username":          user.Username,
-			"first_name":        user.FirstName,
-			"last_name":         user.LastName,
-			"email":             user.Email,
-			"avatar":            user.Avatar,
-			"has_signet":        user.HasSignet,
-			"signet_key_prefix": user.SignetKeyPrefix,
-			"wallet_id":         user.WalletID,
-			"main_wallet_id":    user.MainWalletID,
-			"bot_active":        inst != nil,
+			"id":                 user.NexusUserID,
+			"username":           user.Username,
+			"first_name":         user.FirstName,
+			"last_name":          user.LastName,
+			"email":              user.Email,
+			"avatar":             user.Avatar,
+			"has_signet":         user.HasSignet,
+			"signet_key_prefix":  user.SignetKeyPrefix,
+			"wallet_id":          user.WalletID,
+			"main_wallet_id":     user.MainWalletID,
+			"telegram_chat_id":   user.TelegramChatID,
+			"bot_active":         inst != nil,
 		})
 	})
 
@@ -341,7 +394,12 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 
 		// Start the bot
 		if mgr.Get(nexusID) == nil {
-			mgr.Start(nexusID, req.APIKey, req.APISecret)
+			user, _ := database.GetUser(nexusID)
+			chatID := ""
+			if user != nil {
+				chatID = user.TelegramChatID
+			}
+			mgr.Start(nexusID, req.APIKey, req.APISecret, chatID)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -429,7 +487,12 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 		if inst == nil {
 			apiKey, apiSecret, err := database.GetSignetCredentials(nexusID)
 			if err == nil {
-				mgr.Start(nexusID, apiKey, apiSecret)
+				user, _ := database.GetUser(nexusID)
+				chatID := ""
+				if user != nil {
+					chatID = user.TelegramChatID
+				}
+				mgr.Start(nexusID, apiKey, apiSecret, chatID)
 			}
 		} else {
 			inst.Port.Resume()
@@ -452,6 +515,25 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 		fmt.Fprint(w, `{"status":"removed"}`)
 	})
 
+	// POST /auth/telegram/token — generate a deep-link token for Telegram account linking
+	mux.HandleFunc("POST /auth/telegram/token", func(w http.ResponseWriter, r *http.Request) {
+		nexusID, err := requireAuth(r)
+		if err != nil {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		if tgBot == nil {
+			http.Error(w, `{"error":"telegram not configured"}`, http.StatusServiceUnavailable)
+			return
+		}
+		token := tgBot.GenerateLinkToken(nexusID)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"token":        token,
+			"bot_username": tgBot.Username(),
+		})
+	})
+
 	// POST /wallets/:id/set-main — mark a wallet as the trading wallet
 	mux.HandleFunc("POST /wallets/{id}/set-main", func(w http.ResponseWriter, r *http.Request) {
 		nexusID, err := requireAuth(r)
@@ -463,9 +545,14 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 		// Restart bot with the new wallet
 		apiKey, apiSecret, err := database.GetSignetCredentials(nexusID)
 		if err == nil {
+			user, _ := database.GetUser(nexusID)
+			chatID := ""
+			if user != nil {
+				chatID = user.TelegramChatID
+			}
 			mgr.Stop(nexusID)
 			database.SetMainWallet(nexusID, walletID)
-			mgr.StartWithWallet(nexusID, apiKey, apiSecret, walletID)
+			mgr.StartWithWallet(nexusID, apiKey, apiSecret, walletID, chatID)
 		} else {
 			database.SetMainWallet(nexusID, walletID)
 		}

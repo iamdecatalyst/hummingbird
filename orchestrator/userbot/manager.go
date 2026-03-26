@@ -26,15 +26,17 @@ type Instance struct {
 
 // Manager owns all active instances, keyed by user ID.
 type Manager struct {
-	mu        sync.RWMutex
-	instances map[string]*Instance
-	cfg       *config.Config
+	mu          sync.RWMutex
+	instances   map[string]*Instance
+	chatToUser  map[string]string // telegram chat_id → nexus user ID
+	cfg         *config.Config
 }
 
 func NewManager(cfg *config.Config) *Manager {
 	return &Manager{
-		instances: make(map[string]*Instance),
-		cfg:       cfg,
+		instances:  make(map[string]*Instance),
+		chatToUser: make(map[string]string),
+		cfg:        cfg,
 	}
 }
 
@@ -46,7 +48,7 @@ func short(s string) string {
 }
 
 // Start creates (or replaces) a bot instance, ensuring a default wallet exists.
-func (m *Manager) Start(userID, apiKey, apiSecret string) error {
+func (m *Manager) Start(userID, apiKey, apiSecret, telegramChatID string) error {
 	client := signet.NewClient(apiKey, apiSecret).WithBaseURL(m.cfg.SignetBaseURL)
 
 	walletName := fmt.Sprintf("hummingbird-%s", short(userID))
@@ -54,19 +56,26 @@ func (m *Manager) Start(userID, apiKey, apiSecret string) error {
 	if err != nil {
 		return fmt.Errorf("wallet setup: %w", err)
 	}
-	return m.startInstance(userID, apiKey, apiSecret, walletID)
+	return m.startInstance(userID, apiKey, apiSecret, walletID, telegramChatID)
 }
 
 // StartWithWallet creates (or replaces) a bot instance using a specific wallet ID.
-func (m *Manager) StartWithWallet(userID, apiKey, apiSecret, walletID string) error {
-	return m.startInstance(userID, apiKey, apiSecret, walletID)
+func (m *Manager) StartWithWallet(userID, apiKey, apiSecret, walletID, telegramChatID string) error {
+	return m.startInstance(userID, apiKey, apiSecret, walletID, telegramChatID)
 }
 
-func (m *Manager) startInstance(userID, apiKey, apiSecret, walletID string) error {
+func (m *Manager) startInstance(userID, apiKey, apiSecret, walletID, telegramChatID string) error {
 	client := signet.NewClient(apiKey, apiSecret).WithBaseURL(m.cfg.SignetBaseURL)
 
 	port := portfolio.New(1.0, m.cfg.MaxConcurrentPositions, m.cfg.MaxDailyLossPercent)
-	var n alerts.Notifier = noopNotifier{userID}
+
+	var n alerts.Notifier
+	if telegramChatID != "" && m.cfg.TelegramToken != "" {
+		n = alerts.NewTelegram(m.cfg.TelegramToken, telegramChatID)
+	} else {
+		n = noopNotifier{userID}
+	}
+
 	tr := trader.New(client, walletID, port, n, m.cfg.SolanaRPC, "http://localhost:8001")
 
 	inst := &Instance{
@@ -78,9 +87,13 @@ func (m *Manager) startInstance(userID, apiKey, apiSecret, walletID string) erro
 
 	m.mu.Lock()
 	m.instances[userID] = inst
+	if telegramChatID != "" {
+		m.chatToUser[telegramChatID] = userID
+	}
 	m.mu.Unlock()
 
-	log.Printf("[userbot] started instance for user %s | wallet %s", short(userID), walletID)
+	log.Printf("[userbot] started instance for user %s | wallet %s | tg=%v",
+		short(userID), walletID, telegramChatID != "")
 	eventlog.Emit(eventlog.Event{
 		Type:    "START",
 		Message: fmt.Sprintf("Bot started — wallet %s", walletID),
@@ -95,12 +108,30 @@ func (m *Manager) Get(userID string) *Instance {
 	return m.instances[userID]
 }
 
+// GetByChatID looks up an instance by Telegram chat ID.
+func (m *Manager) GetByChatID(chatID string) (string, *Instance) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	nexusID := m.chatToUser[chatID]
+	if nexusID == "" {
+		return "", nil
+	}
+	return nexusID, m.instances[nexusID]
+}
+
 // Stop removes the instance and closes all positions.
 func (m *Manager) Stop(userID string) {
 	m.mu.Lock()
 	inst, ok := m.instances[userID]
 	if ok {
 		delete(m.instances, userID)
+		// Remove reverse chat mapping
+		for chatID, uid := range m.chatToUser {
+			if uid == userID {
+				delete(m.chatToUser, chatID)
+				break
+			}
+		}
 	}
 	m.mu.Unlock()
 	if ok {

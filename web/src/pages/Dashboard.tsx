@@ -11,6 +11,7 @@ import {
   Pulse, SignOut, Copy, Check, Wallet, Key,
   ArrowUp, ArrowDown, Lightning, Warning, Info,
   Eye, EyeSlash, X, Plus, QrCode, PaperPlaneTilt, CaretDown,
+  TelegramLogo,
 } from '@phosphor-icons/react'
 import type { WalletEntry } from '../lib/api'
 import { useOrchestrator } from '../hooks/useOrchestrator'
@@ -303,9 +304,10 @@ function ModalHeader({ icon, title, sub, onClose }: {
 
 // ── Credentials modal ─────────────────────────────────────────────────────────
 
-function CredentialsModal({ signetKeyPrefix, hasSignet, onClose, onSaved }: {
+function CredentialsModal({ signetKeyPrefix, hasSignet, telegramChatId, onClose, onSaved }: {
   signetKeyPrefix?: string
   hasSignet?: boolean
+  telegramChatId?: string
   onClose: () => void
   onSaved?: () => void
 }) {
@@ -313,10 +315,11 @@ function CredentialsModal({ signetKeyPrefix, hasSignet, onClose, onSaved }: {
   const [apiSecret,  setApiSecret]  = useState('')
   const [showKey,    setShowKey]    = useState(false)
   const [showSecret, setShowSecret] = useState(false)
-  const [saving,     setSaving]     = useState(false)
-  const [deleting,   setDeleting]   = useState(false)
-  const [error,      setError]      = useState('')
-  const [saved,      setSaved]      = useState(false)
+  const [saving,       setSaving]       = useState(false)
+  const [deleting,     setDeleting]     = useState(false)
+  const [error,        setError]        = useState('')
+  const [saved,        setSaved]        = useState(false)
+  const [tgLinking,    setTgLinking]    = useState(false)
 
   const handleSave = async () => {
     if (!apiKey.trim() || !apiSecret.trim()) { setError('Both fields required'); return }
@@ -334,6 +337,14 @@ function CredentialsModal({ signetKeyPrefix, hasSignet, onClose, onSaved }: {
     setDeleting(true)
     try { await api.deleteSignet(); onClose(); onSaved?.() }
     catch { /* ignore */ } finally { setDeleting(false) }
+  }
+
+  const handleConnectTelegram = async () => {
+    setTgLinking(true)
+    try {
+      const { token, bot_username } = await api.telegramToken()
+      window.open(`https://t.me/${bot_username}?start=${token}`, '_blank')
+    } catch { /* ignore */ } finally { setTgLinking(false) }
   }
 
   return (
@@ -435,6 +446,38 @@ function CredentialsModal({ signetKeyPrefix, hasSignet, onClose, onSaved }: {
         <p className="font-mono text-[10px] text-[#333] text-center">
           Get your keys at <a href="https://signet.vylth.com" target="_blank" rel="noopener noreferrer" className="text-[#00A8FF] hover:underline">signet.vylth.com</a>
         </p>
+
+        {/* Telegram connect */}
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
+          <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-3">Telegram Alerts</p>
+          {telegramChatId ? (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '12px 16px', borderRadius: 14,
+              background: '#0d0d0d',
+              boxShadow: 'inset 2px 2px 6px #070707, inset -1px -1px 4px rgba(255,255,255,0.02)',
+              borderLeft: '3px solid #4ADE80',
+            }}>
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(74,222,128,0.08)' }}>
+                <TelegramLogo size={15} className="text-[#4ADE80]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-0.5">Connected</p>
+                <p className="font-mono text-xs text-[#a0a0a0]">Trade alerts active</p>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={handleConnectTelegram}
+              disabled={tgLinking}
+              className="w-full py-3 rounded-xl font-mono text-xs font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+              style={{ background: 'rgba(36,161,222,0.1)', color: '#24A1DE' }}
+            >
+              <TelegramLogo size={14} weight="fill" />
+              {tgLinking ? 'Opening Telegram…' : 'Connect Telegram'}
+            </button>
+          )}
+        </div>
       </div>
     </Modal>
   )
@@ -1439,18 +1482,19 @@ function _TabConfigRemoved({ userName, userUsername, userAvatar, botActive }: {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 interface DashboardProps {
-  onLogout?:         () => void
-  walletId?:         string
-  userName?:         string
-  userUsername?:     string
-  userAvatar?:       string
-  signetKeyPrefix?:  string
-  hasSignet?:        boolean
-  mainWalletId?:     string
+  onLogout?:           () => void
+  walletId?:           string
+  userName?:           string
+  userUsername?:       string
+  userAvatar?:         string
+  signetKeyPrefix?:    string
+  hasSignet?:          boolean
+  mainWalletId?:       string
+  telegramChatId?:     string
   onCredentialsSaved?: () => void
 }
 
-export default function Dashboard({ onLogout, walletId, userName, userUsername, userAvatar, signetKeyPrefix, hasSignet, mainWalletId, onCredentialsSaved }: DashboardProps) {
+export default function Dashboard({ onLogout, walletId, userName, userUsername, userAvatar, signetKeyPrefix, hasSignet, mainWalletId, telegramChatId, onCredentialsSaved }: DashboardProps) {
   const { stats, positions, closed, online, loading, error, stop, resume } = useOrchestrator()
   const [tab, setTab] = useState('overview')
   const [showCredentials, setShowCredentials] = useState(false)
@@ -1511,6 +1555,7 @@ export default function Dashboard({ onLogout, walletId, userName, userUsername, 
         <CredentialsModal
           signetKeyPrefix={signetKeyPrefix}
           hasSignet={hasSignet}
+          telegramChatId={telegramChatId}
           onClose={() => setShowCredentials(false)}
           onSaved={onCredentialsSaved}
         />
