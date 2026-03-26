@@ -177,12 +177,32 @@ function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpe
             </button>
         }
 
-        {/* User avatar */}
+        {/* Icon buttons — Wallets + Credentials */}
+        {onOpenWallets && (
+          <button
+            onClick={onOpenWallets}
+            title="Wallets"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#555] hover:text-white hover:bg-white/5 transition-colors"
+          >
+            <Wallet size={15} />
+          </button>
+        )}
+        {onOpenCredentials && (
+          <button
+            onClick={onOpenCredentials}
+            title="API Credentials"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#555] hover:text-white hover:bg-white/5 transition-colors"
+          >
+            <Key size={15} />
+          </button>
+        )}
+
+        {/* User avatar / sign out */}
         {onLogout && (
           <div className="relative">
             <button
               onClick={() => setUserMenuOpen(v => !v)}
-              className="flex items-center gap-2 pl-2 pr-3 py-1 rounded-lg hover:bg-white/5 transition-colors"
+              className="flex items-center gap-2 pl-1.5 pr-2.5 py-1 rounded-lg hover:bg-white/5 transition-colors"
             >
               {userAvatar
                 ? <img src={userAvatar} className="w-6 h-6 rounded-full object-cover ring-1 ring-white/10" alt="" />
@@ -190,7 +210,7 @@ function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpe
                     <span className="font-mono text-[10px] text-[#666]">{(userName || 'U')[0].toUpperCase()}</span>
                   </div>
               }
-              <span className="font-mono text-xs text-[#666] hidden md:block max-w-[120px] truncate">
+              <span className="font-mono text-xs text-[#666] hidden md:block max-w-[100px] truncate">
                 {userUsername ? `@${userUsername}` : (userName || 'User')}
               </span>
             </button>
@@ -198,24 +218,7 @@ function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpe
             {userMenuOpen && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setUserMenuOpen(false)} />
-                <div className="absolute right-0 top-full mt-1.5 z-20 w-48 neu-card rounded-xl py-1 shadow-2xl">
-                  {onOpenCredentials && (
-                    <button
-                      onClick={() => { setUserMenuOpen(false); onOpenCredentials() }}
-                      className="flex items-center gap-2 w-full px-4 py-2.5 font-mono text-xs text-[#666] hover:text-white hover:bg-white/4 transition-colors"
-                    >
-                      <Key size={13} /> API Credentials
-                    </button>
-                  )}
-                  {onOpenWallets && (
-                    <button
-                      onClick={() => { setUserMenuOpen(false); onOpenWallets() }}
-                      className="flex items-center gap-2 w-full px-4 py-2.5 font-mono text-xs text-[#666] hover:text-white hover:bg-white/4 transition-colors"
-                    >
-                      <Wallet size={13} /> Wallets
-                    </button>
-                  )}
-                  <div className="border-t border-white/5 my-1" />
+                <div className="absolute right-0 top-full mt-1.5 z-20 w-40 neu-card rounded-xl py-1 shadow-2xl">
                   <button
                     onClick={() => { setUserMenuOpen(false); onLogout() }}
                     className="flex items-center gap-2 w-full px-4 py-2.5 font-mono text-xs text-[#666] hover:text-[#EF4444] hover:bg-white/4 transition-colors"
