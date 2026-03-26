@@ -190,15 +190,19 @@ func (m Model) View() string {
 
 	content := b.String() + footer
 
-	// Pad every line to m.width so bubbletea fully overwrites the previous frame.
-	// Without this, shorter lines leave ghost characters from wider previous content.
-	if m.width > 0 {
+	// Pad every line to m.width AND fill to m.height so bubbletea fully
+	// overwrites the previous frame in both dimensions.
+	if m.width > 0 && m.height > 0 {
 		lines := strings.Split(content, "\n")
+		blank := strings.Repeat(" ", m.width)
 		for i, line := range lines {
 			vis := lipgloss.Width(line)
 			if vis < m.width {
 				lines[i] = line + strings.Repeat(" ", m.width-vis)
 			}
+		}
+		for len(lines) < m.height {
+			lines = append(lines, blank)
 		}
 		content = strings.Join(lines, "\n")
 	}

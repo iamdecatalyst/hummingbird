@@ -155,7 +155,7 @@ func renderTrades(open []client.Position, closed []client.ClosedPosition) string
 	)
 	openDivider := "  " + StyleDivider.Render(strings.Repeat("─", 64))
 
-	b.WriteString(StyleTitle.Render(fmt.Sprintf("Open Positions (%d)", len(open))))
+	b.WriteString("  " + StyleTitle.Render(fmt.Sprintf("Open Positions (%d)", len(open))))
 	b.WriteString("\n\n")
 	b.WriteString(openHeader + "\n")
 	b.WriteString(openDivider + "\n")
@@ -195,7 +195,7 @@ func renderTrades(open []client.Position, closed []client.ClosedPosition) string
 		recentClosed = recentClosed[len(recentClosed)-limit:]
 	}
 
-	b.WriteString(StyleTitle.Render(fmt.Sprintf("Recent Closed (%d shown)", limit)))
+	b.WriteString("  " + StyleTitle.Render(fmt.Sprintf("Recent Closed (%d shown)", limit)))
 	b.WriteString("\n\n")
 	b.WriteString(closedHeader + "\n")
 	b.WriteString(closedDivider + "\n")
