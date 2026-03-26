@@ -220,7 +220,7 @@ func renderTrades(open []client.Position, closed []client.ClosedPosition) string
 		}
 	}
 
-	return StyleBox.Render(b.String())
+	return b.String()
 }
 
 // PositionsOnce runs a one-shot positions fetch and returns a formatted string.

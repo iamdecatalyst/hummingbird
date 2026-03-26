@@ -181,7 +181,7 @@ func (m ControlsModel) View() string {
 
 	if m.stats != nil {
 		b.WriteString(renderStatusCard(m.stats))
-		b.WriteString("\n\n")
+		b.WriteString("\n\n  " + StyleDivider.Render(strings.Repeat("─", 60)) + "\n\n")
 	}
 
 	// ── Busy spinner ─────────────────────────────────────
@@ -203,22 +203,16 @@ func (m ControlsModel) View() string {
 	// ── Confirmation prompts ─────────────────────────────
 	switch m.confirm {
 	case confirmStop:
-		b.WriteString(StyleBox.Render(
-			"  " + StyleConfirmWarning.Render("▼ STOP BOT") + "\n\n" +
-			"  " + StyleMuted.Render("This pauses trading. Open positions stay open.") + "\n\n" +
-			"  " + StyleYellow.Render("y") + StyleMuted.Render("  confirm    ") +
-			StyleMuted.Render("esc  cancel"),
-		))
+		b.WriteString("  " + StyleConfirmWarning.Render("▼ STOP BOT") + "\n\n")
+		b.WriteString("  " + StyleMuted.Render("This pauses trading. Open positions stay open.") + "\n\n")
+		b.WriteString("  " + StyleYellow.Render("y") + StyleMuted.Render("  confirm    esc  cancel"))
 		return b.String()
 
 	case confirmExitAll:
-		b.WriteString(StyleBox.Render(
-			"  " + StyleRed.Bold(true).Render("! EXIT ALL POSITIONS") + "\n\n" +
-			"  " + StyleMuted.Render("Immediately market-sells all open positions.") + "\n" +
-			"  " + StyleRed.Render("This cannot be undone.") + "\n\n" +
-			"  " + StyleRed.Bold(true).Render("y") + StyleMuted.Render("  confirm    ") +
-			StyleMuted.Render("esc  cancel"),
-		))
+		b.WriteString("  " + StyleRed.Bold(true).Render("! EXIT ALL POSITIONS") + "\n\n")
+		b.WriteString("  " + StyleMuted.Render("Immediately market-sells all open positions.") + "\n")
+		b.WriteString("  " + StyleRed.Render("This cannot be undone.") + "\n\n")
+		b.WriteString("  " + StyleRed.Bold(true).Render("y") + StyleMuted.Render("  confirm    esc  cancel"))
 		return b.String()
 	}
 
@@ -252,11 +246,7 @@ func renderStatusCard(s *client.Stats) string {
 		openStr += "s"
 	}
 
-	inner := fmt.Sprintf("  %s  %s\n\n  %s",
-		dot, statusText,
-		StyleMuted.Render(openStr),
-	)
-	return StyleBox.Render(inner)
+	return fmt.Sprintf("  %s  %s    %s", dot, statusText, StyleMuted.Render(openStr))
 }
 
 func renderControls(running, paused bool) string {
@@ -293,7 +283,7 @@ func renderControls(running, paused bool) string {
 		b.WriteString(line + "\n")
 	}
 
-	return StyleBox.Render(b.String())
+	return b.String()
 }
 
 // suppress unused import

@@ -146,7 +146,7 @@ func renderOverview(s *client.Stats) string {
 	))
 	b.WriteString("\n")
 
-	return StyleBox.Render(b.String())
+	return b.String()
 }
 
 // OverviewOnce runs a one-shot stats fetch and returns a formatted string.
