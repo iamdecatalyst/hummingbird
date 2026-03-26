@@ -6,3 +6,7 @@ BLUEPRINT.md
 web/node_modules/
 web/dist/
 web/.vite/
+
+# npm distribution — binaries are built by scripts/build-npm.sh, not committed
+npm/@iamdecatalyst/hummingbird-*/bin/hummingbird
+npm/@iamdecatalyst/hummingbird-*/bin/hummingbird.exe
