@@ -118,7 +118,20 @@ hummingbird/
 
 ---
 
-## Quick Start
+## CLI — Quick Install
+
+No Go required. Works on Linux, macOS, Windows:
+
+```bash
+npm install -g @decatalyst/hummingbird
+hummingbird          # interactive TUI dashboard
+hummingbird login    # save your API credentials
+hummingbird status   # one-shot stats
+```
+
+---
+
+## Self-Hosted Setup
 
 **Prerequisites:** Rust, Python 3.11+, Go 1.22+, PostgreSQL
 

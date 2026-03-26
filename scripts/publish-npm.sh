@@ -6,7 +6,7 @@ set -euo pipefail
 VERSION="${1:-1.0.0}"
 DRY="${2:-}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-NPM="$ROOT/npm/@iamdecatalyst"
+NPM="$ROOT/npm/@decatalyst"
 
 FLAGS="--access public"
 if [[ "$DRY" == "--dry-run" ]]; then
@@ -14,7 +14,7 @@ if [[ "$DRY" == "--dry-run" ]]; then
   echo "▶ DRY RUN — no packages will actually be published"
 fi
 
-echo "▶ Publishing @iamdecatalyst/hummingbird@$VERSION"
+echo "▶ Publishing @decatalyst/hummingbird@$VERSION"
 echo ""
 
 # Publish platform packages first — main package depends on them
@@ -27,19 +27,19 @@ PLATFORM_PKGS=(
 )
 
 for PKG in "${PLATFORM_PKGS[@]}"; do
-  echo "  publishing @iamdecatalyst/$PKG..."
+  echo "  publishing @decatalyst/$PKG..."
   cd "$NPM/$PKG"
   npm publish $FLAGS
 done
 
 # Main package last
-echo "  publishing @iamdecatalyst/hummingbird..."
+echo "  publishing @decatalyst/hummingbird..."
 cd "$NPM/hummingbird"
 npm publish $FLAGS
 
 echo ""
-echo "✓ Published @iamdecatalyst/hummingbird@$VERSION"
+echo "✓ Published @decatalyst/hummingbird@$VERSION"
 echo ""
-echo "  Install:  npm install -g @iamdecatalyst/hummingbird"
-echo "  Run:      npx @iamdecatalyst/hummingbird"
-echo "  Alias:    npm install -g @iamdecatalyst/hummingbird && hummingbird"
+echo "  Install:  npm install -g @decatalyst/hummingbird"
+echo "  Run:      npx @decatalyst/hummingbird"
+echo "  Alias:    npm install -g @decatalyst/hummingbird && hummingbird"

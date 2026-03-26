@@ -6,7 +6,7 @@ set -euo pipefail
 VERSION="${1:-1.0.0}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CLI="$ROOT/cli"
-NPM="$ROOT/npm/@iamdecatalyst"
+NPM="$ROOT/npm/@decatalyst"
 
 echo "▶ Building hummingbird CLI $VERSION for all platforms"
 echo ""
@@ -27,7 +27,7 @@ for PLATFORM in "${!TARGETS[@]}"; do
   BINARY="${ENTRY#*:}"
 
   OUT="$NPM/$PKG/bin/$BINARY"
-  printf "  %-24s → npm/@iamdecatalyst/%s/bin/%s\n" "$GOOS/$GOARCH" "$PKG" "$BINARY"
+  printf "  %-24s → npm/@decatalyst/%s/bin/%s\n" "$GOOS/$GOARCH" "$PKG" "$BINARY"
 
   (cd "$CLI" && GOOS=$GOOS GOARCH=$GOARCH CGO_ENABLED=0 \
     go build -ldflags="-s -w -X main.version=$VERSION" \
