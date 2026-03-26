@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	signet "github.com/VYLTH/signet-sdk-go/signet"
 
 	"github.com/iamdecatalyst/hummingbird/orchestrator/alerts"
+	"github.com/iamdecatalyst/hummingbird/orchestrator/bot"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/config"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/models"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/portfolio"
@@ -34,6 +36,21 @@ func main() {
 	port := portfolio.New(1.0, cfg.MaxConcurrentPositions, cfg.MaxDailyLossPercent)
 	scorerURL := "http://localhost:8001" // Python scorer
 	tr := trader.New(signetClient, walletID, port, tg, cfg.SolanaRPC, scorerURL)
+
+	// Telegram interactive bot
+	if cfg.TelegramToken != "" && cfg.TelegramChatID != "" {
+		chatID, err := strconv.ParseInt(cfg.TelegramChatID, 10, 64)
+		if err != nil {
+			log.Printf("[main] invalid TELEGRAM_CHAT_ID: %v", err)
+		} else {
+			tgBot, err := bot.New(cfg.TelegramToken, chatID, port, tr)
+			if err != nil {
+				log.Printf("[main] bot init failed: %v", err)
+			} else {
+				go tgBot.Run()
+			}
+		}
+	}
 
 	// Daily stats ticker
 	go dailyStats(tg, port)

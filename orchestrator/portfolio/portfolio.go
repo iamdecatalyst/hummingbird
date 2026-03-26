@@ -141,12 +141,38 @@ func (p *Portfolio) OpenPositions() []*models.Position {
 	return out
 }
 
+// Pause manually pauses the bot with a reason.
+func (p *Portfolio) Pause(reason string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.paused = true
+	p.pauseReason = reason
+}
+
 // Resume unpauses the bot.
 func (p *Portfolio) Resume() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.paused = false
 	p.pauseReason = ""
+}
+
+// RecentClosed returns the last n closed positions (most recent first).
+func (p *Portfolio) RecentClosed(n int) []*models.ClosedPosition {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	if len(p.closed) == 0 {
+		return nil
+	}
+	start := len(p.closed) - n
+	if start < 0 {
+		start = 0
+	}
+	out := make([]*models.ClosedPosition, len(p.closed)-start)
+	for i, c := range p.closed[start:] {
+		out[len(out)-1-i] = c // reverse: newest first
+	}
+	return out
 }
 
 func (p *Portfolio) refreshToday() {
