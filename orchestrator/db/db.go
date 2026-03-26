@@ -29,6 +29,7 @@ type User struct {
 	HasSignet       bool // true once Signet key has been configured
 	SignetKeyPrefix string
 	WalletID        string
+	MainWalletID    string
 	CreatedAt       time.Time
 }
 
@@ -71,7 +72,10 @@ func (d *DB) migrate() error {
 	if _, err := d.sql.Exec(`ALTER TABLE hb_users ADD COLUMN IF NOT EXISTS username TEXT NOT NULL DEFAULT ''`); err != nil {
 		return err
 	}
-	_, err := d.sql.Exec(`ALTER TABLE hb_users ADD COLUMN IF NOT EXISTS signet_key_prefix TEXT NOT NULL DEFAULT ''`)
+	if _, err := d.sql.Exec(`ALTER TABLE hb_users ADD COLUMN IF NOT EXISTS signet_key_prefix TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
+	_, err := d.sql.Exec(`ALTER TABLE hb_users ADD COLUMN IF NOT EXISTS main_wallet_id TEXT NOT NULL DEFAULT ''`)
 	return err
 }
 
@@ -91,11 +95,12 @@ func (d *DB) GetUser(nexusUserID string) (*User, error) {
 	var u User
 	err := d.sql.QueryRow(`
 		SELECT nexus_user_id, COALESCE(username,''), first_name, last_name, email, avatar,
-		       (signet_key IS NOT NULL), COALESCE(signet_key_prefix,''), COALESCE(wallet_id,''), created_at
+		       (signet_key IS NOT NULL), COALESCE(signet_key_prefix,''), COALESCE(wallet_id,''),
+		       COALESCE(main_wallet_id,''), created_at
 		FROM hb_users WHERE nexus_user_id=$1
 	`, nexusUserID).Scan(
 		&u.NexusUserID, &u.Username, &u.FirstName, &u.LastName, &u.Email, &u.Avatar,
-		&u.HasSignet, &u.SignetKeyPrefix, &u.WalletID, &u.CreatedAt,
+		&u.HasSignet, &u.SignetKeyPrefix, &u.WalletID, &u.MainWalletID, &u.CreatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -120,6 +125,20 @@ func (d *DB) SetSignetCredentials(nexusUserID, apiKey, apiSecret, walletID strin
 	_, err = d.sql.Exec(`
 		UPDATE hb_users SET signet_key=$1, signet_secret=$2, wallet_id=$3, signet_key_prefix=$4 WHERE nexus_user_id=$5
 	`, encKey, encSecret, walletID, prefix, nexusUserID)
+	return err
+}
+
+// ClearSignetCredentials removes the user's Signet credentials (does not delete the user row).
+func (d *DB) ClearSignetCredentials(nexusUserID string) error {
+	_, err := d.sql.Exec(`
+		UPDATE hb_users SET signet_key=NULL, signet_secret=NULL, signet_key_prefix='', wallet_id='' WHERE nexus_user_id=$1
+	`, nexusUserID)
+	return err
+}
+
+// SetMainWallet sets the wallet the bot should trade with.
+func (d *DB) SetMainWallet(nexusUserID, walletID string) error {
+	_, err := d.sql.Exec(`UPDATE hb_users SET main_wallet_id=$1 WHERE nexus_user_id=$2`, walletID, nexusUserID)
 	return err
 }
 

@@ -300,6 +300,7 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 			"has_signet":        user.HasSignet,
 			"signet_key_prefix": user.SignetKeyPrefix,
 			"wallet_id":         user.WalletID,
+			"main_wallet_id":    user.MainWalletID,
 			"bot_active":        inst != nil,
 		})
 	})
@@ -434,6 +435,41 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 			inst.Port.Resume()
 		}
 		fmt.Fprint(w, `{"status":"resumed"}`)
+	})
+
+	// DELETE /auth/signet — remove stored Signet credentials and stop bot
+	mux.HandleFunc("DELETE /auth/signet", func(w http.ResponseWriter, r *http.Request) {
+		nexusID, err := requireAuth(r)
+		if err != nil {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		mgr.Stop(nexusID)
+		if err := database.ClearSignetCredentials(nexusID); err != nil {
+			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+			return
+		}
+		fmt.Fprint(w, `{"status":"removed"}`)
+	})
+
+	// POST /wallets/:id/set-main — mark a wallet as the trading wallet
+	mux.HandleFunc("POST /wallets/{id}/set-main", func(w http.ResponseWriter, r *http.Request) {
+		nexusID, err := requireAuth(r)
+		if err != nil {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		walletID := r.PathValue("id")
+		// Restart bot with the new wallet
+		apiKey, apiSecret, err := database.GetSignetCredentials(nexusID)
+		if err == nil {
+			mgr.Stop(nexusID)
+			database.SetMainWallet(nexusID, walletID)
+			mgr.StartWithWallet(nexusID, apiKey, apiSecret, walletID)
+		} else {
+			database.SetMainWallet(nexusID, walletID)
+		}
+		fmt.Fprint(w, `{"status":"ok"}`)
 	})
 
 	// GET /wallets — list all Signet wallets for this user

@@ -49,6 +49,7 @@ export interface MeResponse {
   has_signet:        boolean
   signet_key_prefix: string
   wallet_id:         string
+  main_wallet_id:    string
   bot_active:        boolean
 }
 
@@ -128,5 +129,15 @@ export const api = {
   },
   withdraw(walletId: string, to: string, amount: string): Promise<{ tx_hash: string }> {
     return post(`/wallets/${walletId}/withdraw`, { to, amount })
+  },
+  setMainWallet(walletId: string): Promise<void> {
+    return post(`/wallets/${walletId}/set-main`)
+  },
+  deleteSignet(): Promise<void> {
+    const token = getToken()
+    return fetch(`${BASE}/auth/signet`, {
+      method: 'DELETE',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }).then(r => { if (!r.ok) throw new Error('delete failed') })
   },
 }

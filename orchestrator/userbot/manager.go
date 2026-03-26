@@ -45,7 +45,7 @@ func short(s string) string {
 	return s
 }
 
-// Start creates (or replaces) a bot instance for the user with the given credentials.
+// Start creates (or replaces) a bot instance, ensuring a default wallet exists.
 func (m *Manager) Start(userID, apiKey, apiSecret string) error {
 	client := signet.NewClient(apiKey, apiSecret).WithBaseURL(m.cfg.SignetBaseURL)
 
@@ -54,6 +54,16 @@ func (m *Manager) Start(userID, apiKey, apiSecret string) error {
 	if err != nil {
 		return fmt.Errorf("wallet setup: %w", err)
 	}
+	return m.startInstance(userID, apiKey, apiSecret, walletID)
+}
+
+// StartWithWallet creates (or replaces) a bot instance using a specific wallet ID.
+func (m *Manager) StartWithWallet(userID, apiKey, apiSecret, walletID string) error {
+	return m.startInstance(userID, apiKey, apiSecret, walletID)
+}
+
+func (m *Manager) startInstance(userID, apiKey, apiSecret, walletID string) error {
+	client := signet.NewClient(apiKey, apiSecret).WithBaseURL(m.cfg.SignetBaseURL)
 
 	port := portfolio.New(1.0, m.cfg.MaxConcurrentPositions, m.cfg.MaxDailyLossPercent)
 	var n alerts.Notifier = noopNotifier{userID}

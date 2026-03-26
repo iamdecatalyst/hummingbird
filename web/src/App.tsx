@@ -84,6 +84,7 @@ function DashboardRoute() {
       userUsername={me?.username}
       userAvatar={me?.avatar}
       signetKeyPrefix={me?.signet_key_prefix}
+      mainWalletId={me?.main_wallet_id}
       onCredentialsSaved={refreshMe}
     />
   )

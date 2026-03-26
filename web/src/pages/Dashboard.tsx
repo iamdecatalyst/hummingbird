@@ -10,7 +10,7 @@ import {
   ChartBar, ArrowsLeftRight, Terminal, Play, Stop,
   Pulse, SignOut, Copy, Check, Wallet, Key,
   ArrowUp, ArrowDown, Lightning, Warning, Info,
-  Eye, EyeSlash, X, Plus, QrCode, PaperPlaneTilt,
+  Eye, EyeSlash, X, Plus, QrCode, PaperPlaneTilt, CaretDown,
 } from '@phosphor-icons/react'
 import type { WalletEntry } from '../lib/api'
 import { useOrchestrator } from '../hooks/useOrchestrator'
@@ -313,6 +313,7 @@ function CredentialsModal({ signetKeyPrefix, onClose, onSaved }: {
   const [showKey,    setShowKey]    = useState(false)
   const [showSecret, setShowSecret] = useState(false)
   const [saving,     setSaving]     = useState(false)
+  const [deleting,   setDeleting]   = useState(false)
   const [error,      setError]      = useState('')
   const [saved,      setSaved]      = useState(false)
 
@@ -325,9 +326,13 @@ function CredentialsModal({ signetKeyPrefix, onClose, onSaved }: {
       setTimeout(() => { onClose(); onSaved?.() }, 900)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Invalid credentials')
-    } finally {
-      setSaving(false)
-    }
+    } finally { setSaving(false) }
+  }
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    try { await api.deleteSignet(); onClose(); onSaved?.() }
+    catch { /* ignore */ } finally { setDeleting(false) }
   }
 
   return (
@@ -339,12 +344,11 @@ function CredentialsModal({ signetKeyPrefix, onClose, onSaved }: {
         onClose={onClose}
       />
       <div className="p-5 space-y-4">
-        {/* Current key status */}
+        {/* Saved key card */}
         {signetKeyPrefix && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 12,
-            padding: '12px 14px',
-            borderRadius: 14,
+            padding: '14px 16px', borderRadius: 14,
             background: '#0d0d0d',
             boxShadow: 'inset 2px 2px 6px #070707, inset -1px -1px 4px rgba(255,255,255,0.02)',
             borderLeft: '3px solid #4ADE80',
@@ -356,6 +360,15 @@ function CredentialsModal({ signetKeyPrefix, onClose, onSaved }: {
               <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-0.5">Active Key</p>
               <p className="font-mono text-xs text-[#a0a0a0]">{signetKeyPrefix}</p>
             </div>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              title="Remove credentials"
+              className="w-8 h-8 rounded-xl flex items-center justify-center transition-colors disabled:opacity-40 shrink-0"
+              style={{ background: 'rgba(239,68,68,0.08)', color: '#EF4444' }}
+            >
+              <X size={13} />
+            </button>
           </div>
         )}
 
@@ -446,13 +459,18 @@ const SolanaIcon = ({ size = 16 }: { size?: number }) => (
   </svg>
 )
 
-function WalletsModal({ onClose }: { onClose: () => void }) {
-  const [wallets,     setWallets]     = useState<WalletEntry[]>([])
-  const [loading,     setLoading]     = useState(true)
-  const [creating,    setCreating]    = useState(false)
-  const [createLabel, setCreateLabel] = useState('')
-  const [showCreate,  setShowCreate]  = useState(false)
+function WalletsModal({ onClose, mainWalletId, onMainWalletSet }: {
+  onClose: () => void
+  mainWalletId?: string
+  onMainWalletSet?: () => void
+}) {
+  const [wallets,      setWallets]      = useState<WalletEntry[]>([])
+  const [loading,      setLoading]      = useState(true)
+  const [creating,     setCreating]     = useState(false)
+  const [createLabel,  setCreateLabel]  = useState('')
+  const [showCreate,   setShowCreate]   = useState(false)
   const [activeWallet, setActiveWallet] = useState<string | null>(null)
+  const [dropOpen,     setDropOpen]     = useState(false)
 
   const load = () => {
     setLoading(true)
@@ -485,52 +503,81 @@ function WalletsModal({ onClose }: { onClose: () => void }) {
           <p className="font-mono text-xs text-[#333] text-center py-12">Loading wallets…</p>
         ) : (
           <>
-            {/* Wallet selector pills */}
+            {/* Wallet switcher dropdown */}
             {wallets.length > 0 && (
-              <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
-                {wallets.map(w => (
-                  <button
-                    key={w.id}
-                    onClick={() => setActiveWallet(w.id)}
-                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-xs transition-all"
-                    style={{
-                      background: activeWallet === w.id ? 'rgba(0,168,255,0.12)' : 'rgba(255,255,255,0.04)',
-                      color: activeWallet === w.id ? '#00A8FF' : '#555',
-                      boxShadow: activeWallet === w.id ? '0 0 0 1px rgba(0,168,255,0.3)' : 'none',
-                    }}
-                  >
-                    <SolanaIcon size={11} />
-                    {w.label || 'Wallet'}
-                  </button>
-                ))}
-                {showCreate ? (
-                  <div className="flex gap-1.5 shrink-0">
-                    <input
-                      autoFocus
-                      type="text"
-                      placeholder="Label…"
-                      value={createLabel}
-                      onChange={e => setCreateLabel(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && handleCreate()}
-                      className="w-28 bg-[#141414] border border-white/8 rounded-lg px-2 py-1 font-mono text-xs text-white placeholder-[#444] outline-none"
-                    />
-                    <button onClick={handleCreate} disabled={creating}
-                      className="px-2 py-1 rounded-lg font-mono text-[10px] disabled:opacity-40"
-                      style={{ background: 'rgba(0,168,255,0.1)', color: '#00A8FF' }}>
-                      {creating ? '…' : 'OK'}
-                    </button>
-                    <button onClick={() => setShowCreate(false)}
-                      className="w-7 h-7 rounded-lg flex items-center justify-center text-[#444] hover:text-white"
-                      style={{ background: 'rgba(255,255,255,0.04)' }}>
-                      <X size={11} />
-                    </button>
+              <div className="relative mb-4">
+                {/* Trigger */}
+                <button
+                  onClick={() => setDropOpen(v => !v)}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all"
+                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
+                >
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(153,69,255,0.15)' }}>
+                    <SolanaIcon size={13} />
                   </div>
-                ) : (
-                  <button onClick={() => setShowCreate(true)}
-                    className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-lg font-mono text-xs text-[#444] hover:text-white transition-colors"
-                    style={{ background: 'rgba(255,255,255,0.04)' }}>
-                    <Plus size={11} /> New
-                  </button>
+                  <div className="flex-1 text-left min-w-0">
+                    <p className="font-mono text-xs text-white font-bold truncate">
+                      {wallets.find(w => w.id === activeWallet)?.label || 'Wallet'}
+                    </p>
+                    <p className="font-mono text-[10px] text-[#555]">
+                      {wallets.find(w => w.id === activeWallet)?.balance_sol.toFixed(4)} SOL
+                    </p>
+                  </div>
+                  <CaretDown size={13} className="text-[#555] shrink-0 transition-transform" style={{ transform: dropOpen ? 'rotate(180deg)' : 'none' }} />
+                </button>
+
+                {/* Dropdown list */}
+                {dropOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setDropOpen(false)} />
+                    <div className="absolute left-0 right-0 top-full mt-1.5 z-20 rounded-xl overflow-hidden"
+                      style={{ background: '#111', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 12px 40px rgba(0,0,0,0.7)' }}>
+                      {wallets.map(w => (
+                        <button
+                          key={w.id}
+                          onClick={() => { setActiveWallet(w.id); setDropOpen(false) }}
+                          className="w-full flex items-center gap-3 px-4 py-3 transition-colors hover:bg-white/4"
+                          style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}
+                        >
+                          <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(153,69,255,0.12)' }}>
+                            <SolanaIcon size={11} />
+                          </div>
+                          <div className="flex-1 text-left min-w-0">
+                            <p className="font-mono text-xs text-white truncate">{w.label || 'Wallet'}</p>
+                            <p className="font-mono text-[10px] text-[#555]">{w.balance_sol.toFixed(4)} SOL</p>
+                          </div>
+                          {activeWallet === w.id && <Check size={13} className="text-[#00A8FF] shrink-0" />}
+                        </button>
+                      ))}
+                      {/* New wallet row */}
+                      {showCreate ? (
+                        <div className="flex items-center gap-2 px-3 py-2.5">
+                          <input
+                            autoFocus
+                            type="text"
+                            placeholder="Label (optional)…"
+                            value={createLabel}
+                            onChange={e => setCreateLabel(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleCreate()}
+                            className="flex-1 bg-[#1a1a1a] rounded-lg px-3 py-1.5 font-mono text-xs text-white placeholder-[#444] outline-none"
+                          />
+                          <button onClick={handleCreate} disabled={creating}
+                            className="px-3 py-1.5 rounded-lg font-mono text-[10px] disabled:opacity-40 shrink-0"
+                            style={{ background: 'rgba(0,168,255,0.1)', color: '#00A8FF' }}>
+                            {creating ? '…' : 'Create'}
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setShowCreate(true)}
+                          className="w-full flex items-center gap-2 px-4 py-3 text-[#555] hover:text-white transition-colors"
+                        >
+                          <Plus size={13} />
+                          <span className="font-mono text-xs">New wallet</span>
+                        </button>
+                      )}
+                    </div>
+                  </>
                 )}
               </div>
             )}
@@ -559,7 +606,7 @@ function WalletsModal({ onClose }: { onClose: () => void }) {
                 )}
               </div>
             ) : active ? (
-              <WalletDetail wal={active} onRefresh={load} />
+              <WalletDetail wal={active} onRefresh={load} mainWalletId={mainWalletId} onMainWalletSet={onMainWalletSet} />
             ) : null}
           </>
         )}
@@ -570,7 +617,12 @@ function WalletsModal({ onClose }: { onClose: () => void }) {
 
 type WalletView = 'overview' | 'deposit' | 'withdraw'
 
-function WalletDetail({ wal, onRefresh }: { wal: WalletEntry; onRefresh: () => void }) {
+function WalletDetail({ wal, onRefresh, mainWalletId, onMainWalletSet }: {
+  wal: WalletEntry
+  onRefresh: () => void
+  mainWalletId?: string
+  onMainWalletSet?: () => void
+}) {
   const [view, setView]         = useState<WalletView>('overview')
   const [addrCopied, setAddrCopied] = useState(false)
   const [sendTo,    setSendTo]   = useState('')
@@ -578,6 +630,7 @@ function WalletDetail({ wal, onRefresh }: { wal: WalletEntry; onRefresh: () => v
   const [sending,   setSending]  = useState(false)
   const [sendErr,   setSendErr]  = useState('')
   const [txHash,    setTxHash]   = useState('')
+  const [settingMain, setSettingMain] = useState(false)
   const prevId = useRef(wal.id)
 
   // reset when wallet switches
@@ -607,6 +660,14 @@ function WalletDetail({ wal, onRefresh }: { wal: WalletEntry; onRefresh: () => v
     } finally { setSending(false) }
   }
 
+  const isMain = mainWalletId === wal.id
+  const handleSetMain = async () => {
+    if (isMain || settingMain) return
+    setSettingMain(true)
+    try { await api.setMainWallet(wal.id); onMainWalletSet?.(); onRefresh() }
+    catch { /* ignore */ } finally { setSettingMain(false) }
+  }
+
   const VIEWS: { id: WalletView; label: string; icon: React.ReactNode }[] = [
     { id: 'overview', label: 'Overview', icon: <Wallet size={13} /> },
     { id: 'deposit',  label: 'Deposit',  icon: <QrCode size={13} /> },
@@ -629,8 +690,28 @@ function WalletDetail({ wal, onRefresh }: { wal: WalletEntry; onRefresh: () => v
               <SolanaIcon size={14} />
             </div>
             <span className="font-mono text-xs text-[#666]">{wal.label || 'Wallet'}</span>
+            {isMain && (
+              <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full uppercase tracking-widest"
+                style={{ background: 'rgba(0,168,255,0.12)', color: '#00A8FF' }}>
+                Trading
+              </span>
+            )}
           </div>
-          <span className="font-mono text-[10px] text-[#444]">SOLANA MAINNET</span>
+          <div className="flex items-center gap-2">
+            {!isMain && (
+              <button
+                onClick={handleSetMain}
+                disabled={settingMain}
+                className="font-mono text-[10px] px-2.5 py-1 rounded-lg transition-colors disabled:opacity-40"
+                style={{ background: 'rgba(255,255,255,0.05)', color: '#555' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = '#fff' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = '#555' }}
+              >
+                {settingMain ? '…' : 'Set as main'}
+              </button>
+            )}
+            <span className="font-mono text-[10px] text-[#444]">SOLANA MAINNET</span>
+          </div>
         </div>
         <div className="mb-1">
           <span className="font-mono text-3xl font-bold text-white">{wal.balance_sol.toFixed(4)}</span>
@@ -1347,10 +1428,11 @@ interface DashboardProps {
   userUsername?:     string
   userAvatar?:       string
   signetKeyPrefix?:  string
+  mainWalletId?:     string
   onCredentialsSaved?: () => void
 }
 
-export default function Dashboard({ onLogout, walletId, userName, userUsername, userAvatar, signetKeyPrefix, onCredentialsSaved }: DashboardProps) {
+export default function Dashboard({ onLogout, walletId, userName, userUsername, userAvatar, signetKeyPrefix, mainWalletId, onCredentialsSaved }: DashboardProps) {
   const { stats, positions, closed, online, loading, error, stop, resume } = useOrchestrator()
   const [tab, setTab] = useState('overview')
   const [showCredentials, setShowCredentials] = useState(false)
@@ -1414,7 +1496,7 @@ export default function Dashboard({ onLogout, walletId, userName, userUsername, 
           onSaved={onCredentialsSaved}
         />
       )}
-      {showWallets && <WalletsModal onClose={() => setShowWallets(false)} />}
+      {showWallets && <WalletsModal onClose={() => setShowWallets(false)} mainWalletId={mainWalletId} onMainWalletSet={onCredentialsSaved} />}
     </div>
   )
 }
