@@ -160,6 +160,9 @@ func (m Model) View() string {
 	if m.width > 0 {
 		barWidth = m.width - 4
 	}
+	if barWidth > 120 {
+		barWidth = 120
+	}
 	b.WriteString("  " + StyleTabSep.Render(strings.Repeat("─", barWidth)))
 	b.WriteString("\n\n")
 
@@ -184,25 +187,23 @@ func (m Model) View() string {
 }
 
 func renderBanner(termWidth int) string {
-	bird := `   ──.
-  /  ◉ \──
-  \    /   >────
-   '──'`
+	birdRaw := []string{
+		`   ──.`,
+		`  /  ◉ \──`,
+		`  \    /   >────`,
+		`   '──'`,
+	}
 
-	title := lipgloss.NewStyle().
-		Foreground(ColorAccent).
-		Bold(true).
-		Render("hummingbird")
+	birdStyle := lipgloss.NewStyle().Foreground(ColorAccent)
+	birdLines := make([]string, len(birdRaw))
+	for i, l := range birdRaw {
+		birdLines[i] = birdStyle.Render(l)
+	}
 
-	sub := lipgloss.NewStyle().
-		Foreground(ColorMuted).
-		Render("autonomous pump.fun trading agent")
+	title := lipgloss.NewStyle().Foreground(ColorAccent).Bold(true).Render("hummingbird")
+	sub   := lipgloss.NewStyle().Foreground(ColorMuted).Render("autonomous pump.fun trading agent")
+	ver   := lipgloss.NewStyle().Foreground(ColorDim).Render(Version + "  ·  by VYLTH Strategies · @iamdecatalyst")
 
-	ver := lipgloss.NewStyle().
-		Foreground(ColorDim).
-		Render(Version + "  ·  by VYLTH Strategies · @iamdecatalyst")
-
-	birdLines   := strings.Split(lipgloss.NewStyle().Foreground(ColorAccent).Render(bird), "\n")
 	detailLines := []string{
 		"",
 		"  " + title,
@@ -210,9 +211,12 @@ func renderBanner(termWidth int) string {
 		"  " + ver,
 	}
 
-	width := termWidth - 2
+	width := termWidth - 4
 	if width < 60 {
 		width = 60
+	}
+	if width > 120 {
+		width = 120
 	}
 	divider := lipgloss.NewStyle().Foreground(ColorDim).Render(strings.Repeat("─", width))
 

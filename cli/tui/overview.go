@@ -78,7 +78,6 @@ func (m OverviewModel) View() string {
 
 	if m.err != nil {
 		b.WriteString("  " + StyleError.Render("✗  " + m.err.Error()))
-		b.WriteString("\n\n  " + StyleHelp.Render("r  retry"))
 		return b.String()
 	}
 
@@ -87,7 +86,6 @@ func (m OverviewModel) View() string {
 			b.WriteString("  " + m.spinner.View() + "\n\n")
 		}
 		b.WriteString(renderOverview(m.stats))
-		b.WriteString("\n\n  " + StyleHelp.Render("r  refresh   auto-refreshes every 5s"))
 	} else {
 		b.WriteString("  " + StyleMuted.Render("loading..."))
 	}
