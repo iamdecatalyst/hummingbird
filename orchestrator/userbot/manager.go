@@ -112,7 +112,7 @@ func (n noopNotifier) Exited(c *models.ClosedPosition) {
 		Token:   c.Mint,
 		PnLSOL:  c.PnLSOL,
 		PnLPct:  c.PnLPercent,
-		Reason:  c.Reason,
+		Reason:  string(c.Reason),
 		Message: fmt.Sprintf("Exited %s…  %+.4f SOL (%+.1f%%)", c.Mint[:8], c.PnLSOL, c.PnLPercent),
 	})
 }
