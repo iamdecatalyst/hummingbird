@@ -166,7 +166,7 @@ func renderLogEntry(e client.LogEntry) string {
 
 func renderLogs(logs []client.LogEntry, scrollOff int) string {
 	if len(logs) == 0 {
-		return StyleBox.Render("  " + StyleMuted.Render("no events yet"))
+		return "  " + StyleMuted.Render("no events yet")
 	}
 
 	const maxDisplay = 50
@@ -205,7 +205,7 @@ func renderLogs(logs []client.LogEntry, scrollOff int) string {
 		)))
 	}
 
-	return StyleBox.Render(b.String())
+	return b.String()
 }
 
 // LogsOnce runs a one-shot logs fetch and returns a formatted string.

@@ -188,18 +188,22 @@ func (m Model) View() string {
 	hint := "← →  switch tab   ↑↓ / j k  scroll   g G  top/bottom   r  refresh   q  quit"
 	footer := "\n\n  " + StyleHelp.Render(hint)
 
-	content := b.String()
+	content := b.String() + footer
 
-	// Pad to terminal height so bubbletea clears any ghost content from previous tabs
-	if m.height > 0 {
-		used := strings.Count(content, "\n") + strings.Count(footer, "\n") + 2
-		pad := m.height - used - 1
-		if pad > 0 {
-			content += strings.Repeat("\n", pad)
+	// Pad every line to m.width so bubbletea fully overwrites the previous frame.
+	// Without this, shorter lines leave ghost characters from wider previous content.
+	if m.width > 0 {
+		lines := strings.Split(content, "\n")
+		for i, line := range lines {
+			vis := lipgloss.Width(line)
+			if vis < m.width {
+				lines[i] = line + strings.Repeat(" ", m.width-vis)
+			}
 		}
+		content = strings.Join(lines, "\n")
 	}
 
-	return content + footer
+	return content
 }
 
 func renderBanner(termWidth int) string {
