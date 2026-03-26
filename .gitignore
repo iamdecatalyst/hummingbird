@@ -3,3 +3,4 @@ target/
 BLUEPRINT.md
 *.pem
 *.key
+web/node_modules/\nweb/dist/

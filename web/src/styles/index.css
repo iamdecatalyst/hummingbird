@@ -1,0 +1,241 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Crimson+Pro:ital,wght@0,400;1,400&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Hummingbird design tokens ────────────────────────────────────────────── */
+:root {
+  --hb-blue:      #00A8FF;
+  --hb-blue-dim:  #0078CC;
+  --hb-blue-dark: #004A8F;
+  --hb-navy:      #0A1628;
+  --hb-navy-2:    #0D1F3C;
+  --hb-glow:      rgba(0, 168, 255, 0.25);
+  --hb-glow-lg:   rgba(0, 168, 255, 0.12);
+
+  /* neumorphic base (dark mode only — Hummingbird is always dark) */
+  --neu-bg-base:     #0d0d0d;
+  --neu-bg-card:     #141414;
+  --neu-bg-input:    #0a0a0a;
+  --neu-bg-elevated: #1a1a1a;
+
+  --neu-text-primary:   #ffffff;
+  --neu-text-secondary: #a0a0a0;
+  --neu-text-muted:     #555555;
+
+  --neu-shadow-raised:
+    6px 6px 12px rgba(0,0,0,0.75),
+    -6px -6px 12px rgba(40,40,40,0.15);
+  --neu-shadow-raised-sm:
+    3px 3px 8px rgba(0,0,0,0.7),
+    -3px -3px 8px rgba(40,40,40,0.12);
+  --neu-shadow-raised-lg:
+    10px 10px 20px rgba(0,0,0,0.85),
+    -10px -10px 20px rgba(50,50,50,0.2);
+  --neu-shadow-pressed:
+    inset 4px 4px 8px rgba(0,0,0,0.75),
+    inset -4px -4px 8px rgba(40,40,40,0.08);
+
+  --neu-radius-md: 16px;
+  --neu-radius-lg: 20px;
+  --neu-radius-xl: 24px;
+  --neu-transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Base reset ───────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--neu-bg-base);
+  color: var(--neu-text-primary);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* ── Scrollbar ────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.08);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(0,168,255,0.3); }
+
+/* ── Neumorphic utility classes ───────────────────────────────────────────── */
+.neu-card {
+  background: var(--neu-bg-card);
+  border-radius: var(--neu-radius-xl);
+  box-shadow: var(--neu-shadow-raised);
+  transition: var(--neu-transition);
+  border: none;
+}
+.neu-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--neu-shadow-raised-lg);
+}
+.neu-card-inset {
+  background: var(--neu-bg-input);
+  border-radius: var(--neu-radius-lg);
+  box-shadow: var(--neu-shadow-pressed);
+}
+.neu-tile {
+  background: var(--neu-bg-card);
+  border-radius: var(--neu-radius-lg);
+  box-shadow: var(--neu-shadow-raised-sm);
+  transition: var(--neu-transition);
+}
+.neu-tile:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--neu-shadow-raised);
+}
+
+/* Hummingbird accent card — electric blue glow */
+.hb-card {
+  background: var(--neu-bg-card);
+  border-radius: var(--neu-radius-xl);
+  box-shadow:
+    var(--neu-shadow-raised),
+    0 0 0 1px rgba(0,168,255,0.08);
+  transition: var(--neu-transition);
+}
+.hb-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    var(--neu-shadow-raised-lg),
+    0 0 30px var(--hb-glow),
+    0 0 0 1px rgba(0,168,255,0.18);
+}
+
+/* Accent button */
+.hb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 28px;
+  background: var(--hb-blue);
+  color: #0a0a0a;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  border: none;
+  border-radius: var(--neu-radius-lg);
+  cursor: pointer;
+  transition: var(--neu-transition);
+  box-shadow: 0 0 20px var(--hb-glow), var(--neu-shadow-raised-sm);
+}
+.hb-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 35px var(--hb-glow), var(--neu-shadow-raised);
+}
+.hb-btn:active {
+  transform: translateY(0);
+  box-shadow: var(--neu-shadow-pressed);
+}
+
+/* Ghost button */
+.neu-btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 26px;
+  background: var(--neu-bg-card);
+  color: var(--neu-text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: none;
+  border-radius: var(--neu-radius-lg);
+  cursor: pointer;
+  transition: var(--neu-transition);
+  box-shadow: var(--neu-shadow-raised-sm);
+}
+.neu-btn-ghost:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--neu-shadow-raised);
+}
+
+/* ── Text utilities ───────────────────────────────────────────────────────── */
+.text-hb { color: var(--hb-blue); }
+.text-muted { color: var(--neu-text-muted); }
+.text-secondary { color: var(--neu-text-secondary); }
+.font-mono { font-family: 'JetBrains Mono', monospace; }
+
+/* ── Glow text ────────────────────────────────────────────────────────────── */
+.hb-glow-text {
+  color: var(--hb-blue);
+  text-shadow: 0 0 20px var(--hb-glow), 0 0 40px rgba(0,168,255,0.15);
+}
+
+/* ── Gradient text ────────────────────────────────────────────────────────── */
+.hb-gradient-text {
+  background: linear-gradient(135deg, #ffffff 0%, var(--hb-blue) 60%, #7B9FFF 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Status dot ───────────────────────────────────────────────────────────── */
+.status-dot-live {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--hb-blue);
+  box-shadow: 0 0 8px var(--hb-blue);
+  animation: hb-pulse 2s infinite;
+}
+@keyframes hb-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--hb-blue); }
+  50% { opacity: 0.6; box-shadow: 0 0 16px var(--hb-blue), 0 0 32px var(--hb-glow); }
+}
+
+/* ── Trade feed scroll ────────────────────────────────────────────────────── */
+.feed-scroll {
+  animation: feedScroll 18s linear infinite;
+}
+.feed-scroll:hover { animation-play-state: paused; }
+@keyframes feedScroll {
+  0%   { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+
+/* ── Shimmer skeleton ─────────────────────────────────────────────────────── */
+.shimmer {
+  background: linear-gradient(90deg,
+    var(--neu-bg-input) 25%,
+    var(--neu-bg-elevated) 50%,
+    var(--neu-bg-input) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Section fade-up ──────────────────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Scan line on terminal ────────────────────────────────────────────────── */
+.scan-line::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    transparent 0%,
+    rgba(0,168,255,0.02) 50%,
+    transparent 100%
+  );
+  background-size: 100% 4px;
+  pointer-events: none;
+  border-radius: inherit;
+}
