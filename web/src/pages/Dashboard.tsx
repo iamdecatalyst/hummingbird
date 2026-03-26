@@ -6,10 +6,12 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import {
-  ChartBar, ArrowsLeftRight, Terminal, Gear, Play, Stop,
+  ChartBar, ArrowsLeftRight, Terminal, Play, Stop,
   Pulse, SignOut, Copy, Check, Wallet, Key,
   ArrowUp, ArrowDown, Lightning, Warning, Info,
+  Eye, EyeSlash, X, Plus,
 } from '@phosphor-icons/react'
+import type { WalletEntry } from '../lib/api'
 import { useOrchestrator } from '../hooks/useOrchestrator'
 import { api } from '../lib/api'
 import type { ClosedPosition, Position, LogEntry } from '../lib/api'
@@ -108,10 +110,9 @@ const TABS = [
   { id: 'overview', label: 'Overview', icon: <ChartBar size={14} weight="duotone" /> },
   { id: 'trades',   label: 'Trades',   icon: <ArrowsLeftRight size={14} weight="duotone" /> },
   { id: 'logs',     label: 'Logs',     icon: <Terminal size={14} weight="duotone" /> },
-  { id: 'config',   label: 'Config',   icon: <Gear size={14} weight="duotone" /> },
 ]
 
-function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, walletId, userName, userUsername, userAvatar }: {
+function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpenCredentials, onOpenWallets, userName, userUsername, userAvatar }: {
   tab: string
   setTab: (t: string) => void
   paused: boolean
@@ -119,7 +120,8 @@ function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, walle
   onStop: () => void
   onResume: () => void
   onLogout?: () => void
-  walletId?: string
+  onOpenCredentials?: () => void
+  onOpenWallets?: () => void
   userName?: string
   userUsername?: string
   userAvatar?: string
@@ -196,7 +198,24 @@ function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, walle
             {userMenuOpen && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setUserMenuOpen(false)} />
-                <div className="absolute right-0 top-full mt-1.5 z-20 w-44 neu-card rounded-xl py-1 shadow-2xl">
+                <div className="absolute right-0 top-full mt-1.5 z-20 w-48 neu-card rounded-xl py-1 shadow-2xl">
+                  {onOpenCredentials && (
+                    <button
+                      onClick={() => { setUserMenuOpen(false); onOpenCredentials() }}
+                      className="flex items-center gap-2 w-full px-4 py-2.5 font-mono text-xs text-[#666] hover:text-white hover:bg-white/4 transition-colors"
+                    >
+                      <Key size={13} /> API Credentials
+                    </button>
+                  )}
+                  {onOpenWallets && (
+                    <button
+                      onClick={() => { setUserMenuOpen(false); onOpenWallets() }}
+                      className="flex items-center gap-2 w-full px-4 py-2.5 font-mono text-xs text-[#666] hover:text-white hover:bg-white/4 transition-colors"
+                    >
+                      <Wallet size={13} /> Wallets
+                    </button>
+                  )}
+                  <div className="border-t border-white/5 my-1" />
                   <button
                     onClick={() => { setUserMenuOpen(false); onLogout() }}
                     className="flex items-center gap-2 w-full px-4 py-2.5 font-mono text-xs text-[#666] hover:text-[#EF4444] hover:bg-white/4 transition-colors"
@@ -210,6 +229,318 @@ function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, walle
         )}
       </div>
     </nav>
+  )
+}
+
+// ── Modals ────────────────────────────────────────────────────────────────────
+
+function Modal({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
+  return (
+    <>
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed', inset: 0, zIndex: 100,
+          background: 'rgba(0,0,0,0.65)',
+          backdropFilter: 'blur(6px)',
+          animation: 'hb-fade-in 0.18s ease-out',
+        }}
+      />
+      <div style={{
+        position: 'fixed', top: '50%', left: '50%',
+        transform: 'translate(-50%, -50%)',
+        zIndex: 101,
+        width: '92vw', maxWidth: 480, maxHeight: '85vh',
+        background: '#111',
+        borderRadius: 20,
+        boxShadow: '8px 8px 24px #050505, -4px -4px 16px rgba(255,255,255,0.03)',
+        overflowY: 'auto',
+        animation: 'hb-slide-up 0.22s ease-out',
+      }}>
+        {children}
+      </div>
+      <style>{`
+        @keyframes hb-fade-in  { from { opacity:0 } to { opacity:1 } }
+        @keyframes hb-slide-up { from { opacity:0; transform:translate(-50%,-48%) } to { opacity:1; transform:translate(-50%,-50%) } }
+      `}</style>
+    </>
+  )
+}
+
+function ModalHeader({ icon, title, sub, onClose }: {
+  icon: React.ReactNode; title: string; sub?: string; onClose: () => void
+}) {
+  return (
+    <div style={{
+      position: 'sticky', top: 0, zIndex: 1,
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '18px 20px 14px',
+      background: '#111',
+      borderBottom: '1px solid rgba(255,255,255,0.06)',
+    }}>
+      <div className="flex items-center gap-3">
+        <div className="neu-card-inset w-9 h-9 rounded-xl flex items-center justify-center shrink-0">
+          {icon}
+        </div>
+        <div>
+          <h2 className="font-mono text-xs font-bold text-white uppercase tracking-[3px]">{title}</h2>
+          {sub && <p className="font-mono text-[10px] text-[#555] mt-0.5">{sub}</p>}
+        </div>
+      </div>
+      <button
+        onClick={onClose}
+        className="w-8 h-8 neu-card-inset rounded-xl flex items-center justify-center text-[#555] hover:text-white transition-colors"
+      >
+        <X size={14} />
+      </button>
+    </div>
+  )
+}
+
+// ── Credentials modal ─────────────────────────────────────────────────────────
+
+function CredentialsModal({ signetKeyPrefix, onClose, onSaved }: {
+  signetKeyPrefix?: string
+  onClose: () => void
+  onSaved?: () => void
+}) {
+  const [apiKey,     setApiKey]     = useState('')
+  const [apiSecret,  setApiSecret]  = useState('')
+  const [showKey,    setShowKey]    = useState(false)
+  const [showSecret, setShowSecret] = useState(false)
+  const [saving,     setSaving]     = useState(false)
+  const [error,      setError]      = useState('')
+  const [saved,      setSaved]      = useState(false)
+
+  const handleSave = async () => {
+    if (!apiKey.trim() || !apiSecret.trim()) { setError('Both fields required'); return }
+    setSaving(true); setError('')
+    try {
+      await api.setupSignet(apiKey.trim(), apiSecret.trim())
+      setSaved(true)
+      setTimeout(() => { onClose(); onSaved?.() }, 900)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Invalid credentials')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal onClose={onClose}>
+      <ModalHeader
+        icon={<Key size={16} className="text-[#00A8FF]" />}
+        title="API Credentials"
+        sub="Signet API key — encrypted at rest"
+        onClose={onClose}
+      />
+      <div className="p-5 space-y-4">
+        {/* Current key status */}
+        {signetKeyPrefix && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 12,
+            padding: '12px 14px',
+            borderRadius: 14,
+            background: '#0d0d0d',
+            boxShadow: 'inset 2px 2px 6px #070707, inset -1px -1px 4px rgba(255,255,255,0.02)',
+            borderLeft: '3px solid #4ADE80',
+          }}>
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(74,222,128,0.08)' }}>
+              <Check size={14} className="text-[#4ADE80]" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-0.5">Active Key</p>
+              <p className="font-mono text-xs text-[#a0a0a0]">{signetKeyPrefix}</p>
+            </div>
+          </div>
+        )}
+
+        <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest">
+          {signetKeyPrefix ? 'Replace with new credentials' : 'Enter Signet credentials'}
+        </p>
+
+        {/* API Key */}
+        <div>
+          <label className="font-mono text-[10px] text-[#555] uppercase tracking-wider block mb-1.5">API Key</label>
+          <div className="flex items-center neu-card-inset rounded-xl overflow-hidden">
+            <input
+              type={showKey ? 'text' : 'password'}
+              value={apiKey}
+              onChange={e => setApiKey(e.target.value)}
+              placeholder="sgn_••••••••••••••••"
+              className="flex-1 px-3 py-2.5 bg-transparent font-mono text-xs text-white placeholder-[#333] outline-none"
+            />
+            <button
+              onClick={() => setShowKey(v => !v)}
+              className="w-9 h-9 flex items-center justify-center text-[#444] hover:text-[#a0a0a0] transition-colors shrink-0"
+            >
+              {showKey ? <EyeSlash size={13} /> : <Eye size={13} />}
+            </button>
+          </div>
+        </div>
+
+        {/* API Secret */}
+        <div>
+          <label className="font-mono text-[10px] text-[#555] uppercase tracking-wider block mb-1.5">API Secret</label>
+          <div className="flex items-center neu-card-inset rounded-xl overflow-hidden">
+            <input
+              type={showSecret ? 'text' : 'password'}
+              value={apiSecret}
+              onChange={e => setApiSecret(e.target.value)}
+              placeholder="••••••••••••••••••••••••••"
+              className="flex-1 px-3 py-2.5 bg-transparent font-mono text-xs text-white placeholder-[#333] outline-none"
+            />
+            <button
+              onClick={() => setShowSecret(v => !v)}
+              className="w-9 h-9 flex items-center justify-center text-[#444] hover:text-[#a0a0a0] transition-colors shrink-0"
+            >
+              {showSecret ? <EyeSlash size={13} /> : <Eye size={13} />}
+            </button>
+          </div>
+        </div>
+
+        {error && <p className="font-mono text-xs text-[#EF4444]">{error}</p>}
+
+        <button
+          onClick={handleSave}
+          disabled={saving || saved}
+          className="w-full py-3 rounded-xl font-mono text-xs font-bold transition-all"
+          style={{
+            background: saved ? 'rgba(74,222,128,0.12)' : 'rgba(0,168,255,0.1)',
+            color: saved ? '#4ADE80' : '#00A8FF',
+            opacity: saving ? 0.6 : 1,
+          }}
+        >
+          {saved ? '✓ Saved' : saving ? 'Verifying…' : signetKeyPrefix ? 'Update Credentials' : 'Save Credentials'}
+        </button>
+
+        <p className="font-mono text-[10px] text-[#333] text-center">
+          Get your keys at <a href="https://signet.vylth.com" target="_blank" rel="noopener noreferrer" className="text-[#00A8FF] hover:underline">signet.vylth.com</a>
+        </p>
+      </div>
+    </Modal>
+  )
+}
+
+// ── Wallets modal ─────────────────────────────────────────────────────────────
+
+function WalletsModal({ onClose }: { onClose: () => void }) {
+  const [wallets,     setWallets]     = useState<WalletEntry[]>([])
+  const [loading,     setLoading]     = useState(true)
+  const [creating,    setCreating]    = useState(false)
+  const [createLabel, setCreateLabel] = useState('')
+  const [showCreate,  setShowCreate]  = useState(false)
+
+  const load = () => {
+    setLoading(true)
+    api.wallets().then(setWallets).catch(() => {}).finally(() => setLoading(false))
+  }
+  useEffect(() => { load() }, [])
+
+  const handleCreate = async () => {
+    if (creating) return
+    setCreating(true)
+    try {
+      await api.createWallet(createLabel.trim() || undefined)
+      setCreateLabel(''); setShowCreate(false); load()
+    } catch { /* ignore */ } finally { setCreating(false) }
+  }
+
+  return (
+    <Modal onClose={onClose}>
+      <ModalHeader
+        icon={<Wallet size={16} className="text-[#00A8FF]" />}
+        title="Signet Wallets"
+        sub="Your Solana wallets managed by Signet"
+        onClose={onClose}
+      />
+      <div className="p-5 space-y-3">
+        {/* Create wallet */}
+        <div>
+          {showCreate ? (
+            <div className="flex gap-2 mb-2">
+              <input
+                autoFocus
+                type="text"
+                placeholder="Label (optional)"
+                value={createLabel}
+                onChange={e => setCreateLabel(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleCreate()}
+                className="flex-1 neu-card-inset rounded-xl px-3 py-2 font-mono text-xs text-white placeholder-[#444] outline-none"
+              />
+              <button
+                onClick={handleCreate}
+                disabled={creating}
+                className="px-4 py-2 rounded-xl font-mono text-xs text-[#00A8FF] transition-colors disabled:opacity-40"
+                style={{ background: 'rgba(0,168,255,0.1)' }}
+              >
+                {creating ? '…' : 'Create'}
+              </button>
+              <button
+                onClick={() => setShowCreate(false)}
+                className="w-9 h-9 neu-card-inset rounded-xl flex items-center justify-center text-[#555] hover:text-white transition-colors"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowCreate(true)}
+              className="flex items-center gap-2 w-full px-4 py-2.5 rounded-xl font-mono text-xs text-[#555] hover:text-white transition-colors"
+              style={{ background: 'rgba(255,255,255,0.04)' }}
+            >
+              <Plus size={13} /> New wallet
+            </button>
+          )}
+        </div>
+
+        {loading ? (
+          <p className="font-mono text-xs text-[#333] text-center py-8">Loading wallets…</p>
+        ) : wallets.length === 0 ? (
+          <p className="font-mono text-xs text-[#444] text-center py-8">No wallets yet. Create one above.</p>
+        ) : (
+          <div className="space-y-2.5 max-h-[400px] overflow-y-auto pr-1">
+            {wallets.map(wal => (
+              <WalletCard key={wal.id} wal={wal} />
+            ))}
+          </div>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+function WalletCard({ wal }: { wal: WalletEntry }) {
+  const [copied, setCopied] = useState(false)
+  const copy = () => {
+    navigator.clipboard.writeText(wal.address)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+  return (
+    <div style={{
+      padding: '14px 16px',
+      borderRadius: 14,
+      background: '#0d0d0d',
+      boxShadow: 'inset 2px 2px 6px #070707, inset -1px -1px 4px rgba(255,255,255,0.02)',
+    }}>
+      <div className="flex items-center justify-between mb-2.5">
+        <span className="font-mono text-xs text-white font-bold truncate max-w-[160px]">
+          {wal.label || 'Unnamed'}
+        </span>
+        <span className="font-mono text-sm font-bold text-[#4ADE80]">
+          {wal.balance_sol.toFixed(3)}<span className="text-[10px] text-[#555] ml-1 font-normal">SOL</span>
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="font-mono text-[10px] text-[#555] flex-1 truncate">
+          {wal.address.slice(0, 14)}…{wal.address.slice(-8)}
+        </span>
+        <button onClick={copy} className="text-[#444] hover:text-white transition-colors shrink-0">
+          {copied ? <Check size={12} className="text-[#4ADE80]" /> : <Copy size={12} />}
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -638,10 +969,10 @@ function TabLogs() {
   )
 }
 
-function TabConfig({ userName, userUsername, userAvatar, botActive }: {
+function _TabConfigRemoved({ userName, userUsername, userAvatar, botActive }: {
   userName?: string; userUsername?: string; userAvatar?: string; botActive?: boolean
 }) {
-  const [wallets, setWallets]       = useState<import('../lib/api').WalletEntry[]>([])
+  const [wallets, setWallets]       = useState<WalletEntry[]>([])
   const [walletsLoading, setWLoad]  = useState(true)
   const [creating, setCreating]     = useState(false)
   const [createLabel, setCreateLabel] = useState('')
@@ -777,16 +1108,20 @@ function TabConfig({ userName, userUsername, userAvatar, botActive }: {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 interface DashboardProps {
-  onLogout?:    () => void
-  walletId?:    string
-  userName?:    string
-  userUsername?: string
-  userAvatar?:  string
+  onLogout?:         () => void
+  walletId?:         string
+  userName?:         string
+  userUsername?:     string
+  userAvatar?:       string
+  signetKeyPrefix?:  string
+  onCredentialsSaved?: () => void
 }
 
-export default function Dashboard({ onLogout, walletId, userName, userUsername, userAvatar }: DashboardProps) {
+export default function Dashboard({ onLogout, walletId, userName, userUsername, userAvatar, signetKeyPrefix, onCredentialsSaved }: DashboardProps) {
   const { stats, positions, closed, online, loading, error, stop, resume } = useOrchestrator()
   const [tab, setTab] = useState('overview')
+  const [showCredentials, setShowCredentials] = useState(false)
+  const [showWallets,     setShowWallets]     = useState(false)
 
   if (loading) {
     return (
@@ -828,7 +1163,8 @@ export default function Dashboard({ onLogout, walletId, userName, userUsername, 
         onStop={stop}
         onResume={resume}
         onLogout={onLogout}
-        walletId={walletId}
+        onOpenCredentials={() => setShowCredentials(true)}
+        onOpenWallets={() => setShowWallets(true)}
         userName={userName}
         userUsername={userUsername}
         userAvatar={userAvatar}
@@ -837,7 +1173,15 @@ export default function Dashboard({ onLogout, walletId, userName, userUsername, 
       {tab === 'overview' && <TabOverview stats={stats} positions={positions} closed={closed} online={online} error={error} />}
       {tab === 'trades'   && <TabTrades positions={positions} closed={closed} />}
       {tab === 'logs'     && <TabLogs />}
-      {tab === 'config'   && <TabConfig userName={userName} userUsername={userUsername} userAvatar={userAvatar} botActive={stats?.configured} />}
+
+      {showCredentials && (
+        <CredentialsModal
+          signetKeyPrefix={signetKeyPrefix}
+          onClose={() => setShowCredentials(false)}
+          onSaved={onCredentialsSaved}
+        />
+      )}
+      {showWallets && <WalletsModal onClose={() => setShowWallets(false)} />}
     </div>
   )
 }

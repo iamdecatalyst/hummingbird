@@ -20,15 +20,16 @@ type DB struct {
 }
 
 type User struct {
-	NexusUserID string
-	Username    string
-	FirstName   string
-	LastName    string
-	Email       string
-	Avatar      string
-	HasSignet   bool // true once Signet key has been configured
-	WalletID    string
-	CreatedAt   time.Time
+	NexusUserID     string
+	Username        string
+	FirstName       string
+	LastName        string
+	Email           string
+	Avatar          string
+	HasSignet       bool // true once Signet key has been configured
+	SignetKeyPrefix string
+	WalletID        string
+	CreatedAt       time.Time
 }
 
 func New(databaseURL, encryptionKeyHex string) (*DB, error) {
@@ -67,7 +68,10 @@ func (d *DB) migrate() error {
 	`); err != nil {
 		return err
 	}
-	_, err := d.sql.Exec(`ALTER TABLE hb_users ADD COLUMN IF NOT EXISTS username TEXT NOT NULL DEFAULT ''`)
+	if _, err := d.sql.Exec(`ALTER TABLE hb_users ADD COLUMN IF NOT EXISTS username TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
+	_, err := d.sql.Exec(`ALTER TABLE hb_users ADD COLUMN IF NOT EXISTS signet_key_prefix TEXT NOT NULL DEFAULT ''`)
 	return err
 }
 
@@ -87,11 +91,11 @@ func (d *DB) GetUser(nexusUserID string) (*User, error) {
 	var u User
 	err := d.sql.QueryRow(`
 		SELECT nexus_user_id, COALESCE(username,''), first_name, last_name, email, avatar,
-		       (signet_key IS NOT NULL), COALESCE(wallet_id,''), created_at
+		       (signet_key IS NOT NULL), COALESCE(signet_key_prefix,''), COALESCE(wallet_id,''), created_at
 		FROM hb_users WHERE nexus_user_id=$1
 	`, nexusUserID).Scan(
 		&u.NexusUserID, &u.Username, &u.FirstName, &u.LastName, &u.Email, &u.Avatar,
-		&u.HasSignet, &u.WalletID, &u.CreatedAt,
+		&u.HasSignet, &u.SignetKeyPrefix, &u.WalletID, &u.CreatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -109,9 +113,13 @@ func (d *DB) SetSignetCredentials(nexusUserID, apiKey, apiSecret, walletID strin
 	if err != nil {
 		return err
 	}
+	prefix := apiKey
+	if len(prefix) > 16 {
+		prefix = prefix[:16] + "…"
+	}
 	_, err = d.sql.Exec(`
-		UPDATE hb_users SET signet_key=$1, signet_secret=$2, wallet_id=$3 WHERE nexus_user_id=$4
-	`, encKey, encSecret, walletID, nexusUserID)
+		UPDATE hb_users SET signet_key=$1, signet_secret=$2, wallet_id=$3, signet_key_prefix=$4 WHERE nexus_user_id=$5
+	`, encKey, encSecret, walletID, prefix, nexusUserID)
 	return err
 }
 

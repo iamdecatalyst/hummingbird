@@ -291,15 +291,16 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 		inst := mgr.Get(nexusID)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
-			"id":         user.NexusUserID,
-			"username":   user.Username,
-			"first_name": user.FirstName,
-			"last_name":  user.LastName,
-			"email":      user.Email,
-			"avatar":     user.Avatar,
-			"has_signet": user.HasSignet,
-			"wallet_id":  user.WalletID,
-			"bot_active": inst != nil,
+			"id":                user.NexusUserID,
+			"username":          user.Username,
+			"first_name":        user.FirstName,
+			"last_name":         user.LastName,
+			"email":             user.Email,
+			"avatar":            user.Avatar,
+			"has_signet":        user.HasSignet,
+			"signet_key_prefix": user.SignetKeyPrefix,
+			"wallet_id":         user.WalletID,
+			"bot_active":        inst != nil,
 		})
 	})
 

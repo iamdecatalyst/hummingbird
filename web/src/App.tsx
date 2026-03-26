@@ -83,6 +83,8 @@ function DashboardRoute() {
       userName={me ? `${me.first_name} ${me.last_name}`.trim() : undefined}
       userUsername={me?.username}
       userAvatar={me?.avatar}
+      signetKeyPrefix={me?.signet_key_prefix}
+      onCredentialsSaved={refreshMe}
     />
   )
 }

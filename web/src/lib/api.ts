@@ -40,15 +40,16 @@ export interface ClosedPosition extends Position {
 }
 
 export interface MeResponse {
-  id:         string
-  username:   string
-  first_name: string
-  last_name:  string
-  email:      string
-  avatar:     string
-  has_signet: boolean
-  wallet_id:  string
-  bot_active: boolean
+  id:                string
+  username:          string
+  first_name:        string
+  last_name:         string
+  email:             string
+  avatar:            string
+  has_signet:        boolean
+  signet_key_prefix: string
+  wallet_id:         string
+  bot_active:        boolean
 }
 
 export interface WalletEntry {
