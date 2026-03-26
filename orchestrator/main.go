@@ -479,6 +479,41 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 		json.NewEncoder(w).Encode(result)
 	})
 
+	// POST /wallets/:id/withdraw — transfer SOL from a wallet
+	mux.HandleFunc("POST /wallets/{id}/withdraw", func(w http.ResponseWriter, r *http.Request) {
+		nexusID, err := requireAuth(r)
+		if err != nil {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		walletID := r.PathValue("id")
+		var req struct {
+			To     string `json:"to"`
+			Amount string `json:"amount"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.To == "" || req.Amount == "" {
+			http.Error(w, `{"error":"to and amount required"}`, http.StatusBadRequest)
+			return
+		}
+		apiKey, apiSecret, err := database.GetSignetCredentials(nexusID)
+		if err != nil {
+			http.Error(w, `{"error":"no signet credentials"}`, http.StatusBadRequest)
+			return
+		}
+		client := signet.NewClient(apiKey, apiSecret).WithBaseURL(cfg.SignetBaseURL)
+		result, err := client.Wallets.Transfer(walletID, signet.TransferParams{
+			To:     req.To,
+			Amount: req.Amount,
+		})
+		if err != nil {
+			log.Printf("[wallets] transfer failed: %v", err)
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(result)
+	})
+
 	// POST /wallets — create a new Solana wallet
 	mux.HandleFunc("POST /wallets", func(w http.ResponseWriter, r *http.Request) {
 		nexusID, err := requireAuth(r)

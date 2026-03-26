@@ -126,4 +126,7 @@ export const api = {
   createWallet(label?: string):        Promise<{ id: string; address: string }> {
     return post('/wallets', { label: label ?? 'hummingbird' })
   },
+  withdraw(walletId: string, to: string, amount: string): Promise<{ tx_hash: string }> {
+    return post(`/wallets/${walletId}/withdraw`, { to, amount })
+  },
 }

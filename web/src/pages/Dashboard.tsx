@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -9,7 +10,7 @@ import {
   ChartBar, ArrowsLeftRight, Terminal, Play, Stop,
   Pulse, SignOut, Copy, Check, Wallet, Key,
   ArrowUp, ArrowDown, Lightning, Warning, Info,
-  Eye, EyeSlash, X, Plus,
+  Eye, EyeSlash, X, Plus, QrCode, PaperPlaneTilt,
 } from '@phosphor-icons/react'
 import type { WalletEntry } from '../lib/api'
 import { useOrchestrator } from '../hooks/useOrchestrator'
@@ -427,16 +428,36 @@ function CredentialsModal({ signetKeyPrefix, onClose, onSaved }: {
 
 // ── Wallets modal ─────────────────────────────────────────────────────────────
 
+// Solana logo inline SVG
+const SolanaIcon = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 397.7 311.7" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <linearGradient id="sol-a" x1="360.879" y1="351.455" x2="141.213" y2="-69.294" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stopColor="#9945ff"/><stop offset=".91" stopColor="#14f195"/>
+    </linearGradient>
+    <linearGradient id="sol-b" x1="264.829" y1="401.601" x2="45.163" y2="-19.148" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stopColor="#9945ff"/><stop offset=".91" stopColor="#14f195"/>
+    </linearGradient>
+    <linearGradient id="sol-c" x1="312.548" y1="376.688" x2="92.882" y2="-44.061" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stopColor="#9945ff"/><stop offset=".91" stopColor="#14f195"/>
+    </linearGradient>
+    <path d="M64.6 237.9a11 11 0 017.7-3.2h317.6c4.9 0 7.3 5.9 3.9 9.4l-62.7 62.7a11 11 0 01-7.7 3.2H5.8c-4.9 0-7.3-5.9-3.9-9.4l62.7-62.7z" fill="url(#sol-a)"/>
+    <path d="M64.6 3.2A11.2 11.2 0 0172.3 0h317.6c4.9 0 7.3 5.9 3.9 9.4L331.1 72a11 11 0 01-7.7 3.2H5.8C.9 75.2-1.5 69.3 1.9 65.9L64.6 3.2z" fill="url(#sol-b)"/>
+    <path d="M333.1 120.1a11 11 0 00-7.7-3.2H5.8c-4.9 0-7.3 5.9-3.9 9.4l62.7 62.7a11 11 0 007.7 3.2h317.6c4.9 0 7.3-5.9 3.9-9.4l-62.7-62.7z" fill="url(#sol-c)"/>
+  </svg>
+)
+
 function WalletsModal({ onClose }: { onClose: () => void }) {
   const [wallets,     setWallets]     = useState<WalletEntry[]>([])
   const [loading,     setLoading]     = useState(true)
   const [creating,    setCreating]    = useState(false)
   const [createLabel, setCreateLabel] = useState('')
   const [showCreate,  setShowCreate]  = useState(false)
+  const [activeWallet, setActiveWallet] = useState<string | null>(null)
 
   const load = () => {
     setLoading(true)
-    api.wallets().then(setWallets).catch(() => {}).finally(() => setLoading(false))
+    api.wallets().then(ws => { setWallets(ws); if (ws.length > 0 && !activeWallet) setActiveWallet(ws[0].id) })
+      .catch(() => {}).finally(() => setLoading(false))
   }
   useEffect(() => { load() }, [])
 
@@ -449,100 +470,309 @@ function WalletsModal({ onClose }: { onClose: () => void }) {
     } catch { /* ignore */ } finally { setCreating(false) }
   }
 
+  const active = wallets.find(w => w.id === activeWallet)
+
   return (
     <Modal onClose={onClose}>
       <ModalHeader
-        icon={<Wallet size={16} className="text-[#00A8FF]" />}
-        title="Signet Wallets"
-        sub="Your Solana wallets managed by Signet"
+        icon={<SolanaIcon size={16} />}
+        title="Solana Wallets"
+        sub="Powered by Signet KMS"
         onClose={onClose}
       />
-      <div className="p-5 space-y-3">
-        {/* Create wallet */}
-        <div>
-          {showCreate ? (
-            <div className="flex gap-2 mb-2">
-              <input
-                autoFocus
-                type="text"
-                placeholder="Label (optional)"
-                value={createLabel}
-                onChange={e => setCreateLabel(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleCreate()}
-                className="flex-1 neu-card-inset rounded-xl px-3 py-2 font-mono text-xs text-white placeholder-[#444] outline-none"
-              />
-              <button
-                onClick={handleCreate}
-                disabled={creating}
-                className="px-4 py-2 rounded-xl font-mono text-xs text-[#00A8FF] transition-colors disabled:opacity-40"
-                style={{ background: 'rgba(0,168,255,0.1)' }}
-              >
-                {creating ? '…' : 'Create'}
-              </button>
-              <button
-                onClick={() => setShowCreate(false)}
-                className="w-9 h-9 neu-card-inset rounded-xl flex items-center justify-center text-[#555] hover:text-white transition-colors"
-              >
-                <X size={13} />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowCreate(true)}
-              className="flex items-center gap-2 w-full px-4 py-2.5 rounded-xl font-mono text-xs text-[#555] hover:text-white transition-colors"
-              style={{ background: 'rgba(255,255,255,0.04)' }}
-            >
-              <Plus size={13} /> New wallet
-            </button>
-          )}
-        </div>
-
+      <div className="p-5">
         {loading ? (
-          <p className="font-mono text-xs text-[#333] text-center py-8">Loading wallets…</p>
-        ) : wallets.length === 0 ? (
-          <p className="font-mono text-xs text-[#444] text-center py-8">No wallets yet. Create one above.</p>
+          <p className="font-mono text-xs text-[#333] text-center py-12">Loading wallets…</p>
         ) : (
-          <div className="space-y-2.5 max-h-[400px] overflow-y-auto pr-1">
-            {wallets.map(wal => (
-              <WalletCard key={wal.id} wal={wal} />
-            ))}
-          </div>
+          <>
+            {/* Wallet selector pills */}
+            {wallets.length > 0 && (
+              <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
+                {wallets.map(w => (
+                  <button
+                    key={w.id}
+                    onClick={() => setActiveWallet(w.id)}
+                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-xs transition-all"
+                    style={{
+                      background: activeWallet === w.id ? 'rgba(0,168,255,0.12)' : 'rgba(255,255,255,0.04)',
+                      color: activeWallet === w.id ? '#00A8FF' : '#555',
+                      boxShadow: activeWallet === w.id ? '0 0 0 1px rgba(0,168,255,0.3)' : 'none',
+                    }}
+                  >
+                    <SolanaIcon size={11} />
+                    {w.label || 'Wallet'}
+                  </button>
+                ))}
+                {showCreate ? (
+                  <div className="flex gap-1.5 shrink-0">
+                    <input
+                      autoFocus
+                      type="text"
+                      placeholder="Label…"
+                      value={createLabel}
+                      onChange={e => setCreateLabel(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleCreate()}
+                      className="w-28 bg-[#141414] border border-white/8 rounded-lg px-2 py-1 font-mono text-xs text-white placeholder-[#444] outline-none"
+                    />
+                    <button onClick={handleCreate} disabled={creating}
+                      className="px-2 py-1 rounded-lg font-mono text-[10px] disabled:opacity-40"
+                      style={{ background: 'rgba(0,168,255,0.1)', color: '#00A8FF' }}>
+                      {creating ? '…' : 'OK'}
+                    </button>
+                    <button onClick={() => setShowCreate(false)}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center text-[#444] hover:text-white"
+                      style={{ background: 'rgba(255,255,255,0.04)' }}>
+                      <X size={11} />
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => setShowCreate(true)}
+                    className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-lg font-mono text-xs text-[#444] hover:text-white transition-colors"
+                    style={{ background: 'rgba(255,255,255,0.04)' }}>
+                    <Plus size={11} /> New
+                  </button>
+                )}
+              </div>
+            )}
+
+            {wallets.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="font-mono text-xs text-[#444] mb-4">No wallets yet.</p>
+                {showCreate ? (
+                  <div className="flex gap-2 justify-center">
+                    <input autoFocus type="text" placeholder="Label (optional)"
+                      value={createLabel} onChange={e => setCreateLabel(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleCreate()}
+                      className="neu-card-inset rounded-xl px-3 py-2 font-mono text-xs text-white placeholder-[#444] outline-none w-40" />
+                    <button onClick={handleCreate} disabled={creating}
+                      className="px-4 py-2 rounded-xl font-mono text-xs disabled:opacity-40"
+                      style={{ background: 'rgba(0,168,255,0.1)', color: '#00A8FF' }}>
+                      {creating ? '…' : 'Create'}
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => setShowCreate(true)}
+                    className="flex items-center gap-2 mx-auto px-4 py-2.5 rounded-xl font-mono text-xs text-[#555] hover:text-white transition-colors"
+                    style={{ background: 'rgba(255,255,255,0.04)' }}>
+                    <Plus size={13} /> Create first wallet
+                  </button>
+                )}
+              </div>
+            ) : active ? (
+              <WalletDetail wal={active} onRefresh={load} />
+            ) : null}
+          </>
         )}
       </div>
     </Modal>
   )
 }
 
-function WalletCard({ wal }: { wal: WalletEntry }) {
-  const [copied, setCopied] = useState(false)
-  const copy = () => {
+type WalletView = 'overview' | 'deposit' | 'withdraw'
+
+function WalletDetail({ wal, onRefresh }: { wal: WalletEntry; onRefresh: () => void }) {
+  const [view, setView]         = useState<WalletView>('overview')
+  const [addrCopied, setAddrCopied] = useState(false)
+  const [sendTo,    setSendTo]   = useState('')
+  const [sendAmt,   setSendAmt]  = useState('')
+  const [sending,   setSending]  = useState(false)
+  const [sendErr,   setSendErr]  = useState('')
+  const [txHash,    setTxHash]   = useState('')
+  const prevId = useRef(wal.id)
+
+  // reset when wallet switches
+  useEffect(() => {
+    if (prevId.current !== wal.id) {
+      setView('overview'); setSendTo(''); setSendAmt(''); setSendErr(''); setTxHash('')
+      prevId.current = wal.id
+    }
+  }, [wal.id])
+
+  const copyAddr = () => {
     navigator.clipboard.writeText(wal.address)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
+    setAddrCopied(true)
+    setTimeout(() => setAddrCopied(false), 1500)
   }
+
+  const handleWithdraw = async () => {
+    if (!sendTo.trim() || !sendAmt.trim()) { setSendErr('Address and amount required'); return }
+    setSending(true); setSendErr(''); setTxHash('')
+    try {
+      const res = await api.withdraw(wal.id, sendTo.trim(), sendAmt.trim())
+      setTxHash(res.tx_hash)
+      setSendTo(''); setSendAmt('')
+      onRefresh()
+    } catch (e: unknown) {
+      setSendErr(e instanceof Error ? e.message : 'Transaction failed')
+    } finally { setSending(false) }
+  }
+
+  const VIEWS: { id: WalletView; label: string; icon: React.ReactNode }[] = [
+    { id: 'overview', label: 'Overview', icon: <Wallet size={13} /> },
+    { id: 'deposit',  label: 'Deposit',  icon: <QrCode size={13} /> },
+    { id: 'withdraw', label: 'Withdraw', icon: <PaperPlaneTilt size={13} /> },
+  ]
+
   return (
-    <div style={{
-      padding: '14px 16px',
-      borderRadius: 14,
-      background: '#0d0d0d',
-      boxShadow: 'inset 2px 2px 6px #070707, inset -1px -1px 4px rgba(255,255,255,0.02)',
-    }}>
-      <div className="flex items-center justify-between mb-2.5">
-        <span className="font-mono text-xs text-white font-bold truncate max-w-[160px]">
-          {wal.label || 'Unnamed'}
-        </span>
-        <span className="font-mono text-sm font-bold text-[#4ADE80]">
-          {wal.balance_sol.toFixed(3)}<span className="text-[10px] text-[#555] ml-1 font-normal">SOL</span>
-        </span>
+    <div>
+      {/* Balance card */}
+      <div style={{
+        borderRadius: 16,
+        background: 'linear-gradient(135deg, #0f1318 0%, #111827 100%)',
+        border: '1px solid rgba(255,255,255,0.06)',
+        padding: '20px 20px 18px',
+        marginBottom: 16,
+      }}>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: 'rgba(153,69,255,0.15)' }}>
+              <SolanaIcon size={14} />
+            </div>
+            <span className="font-mono text-xs text-[#666]">{wal.label || 'Wallet'}</span>
+          </div>
+          <span className="font-mono text-[10px] text-[#444]">SOLANA MAINNET</span>
+        </div>
+        <div className="mb-1">
+          <span className="font-mono text-3xl font-bold text-white">{wal.balance_sol.toFixed(4)}</span>
+          <span className="font-mono text-sm text-[#555] ml-2">SOL</span>
+        </div>
+        <div className="flex items-center gap-2 mt-3">
+          <span className="font-mono text-[10px] text-[#444] flex-1 truncate">
+            {wal.address.slice(0, 12)}…{wal.address.slice(-8)}
+          </span>
+          <button onClick={copyAddr} className="flex items-center gap-1 text-[#444] hover:text-white transition-colors shrink-0">
+            {addrCopied ? <Check size={11} className="text-[#4ADE80]" /> : <Copy size={11} />}
+          </button>
+        </div>
       </div>
-      <div className="flex items-center gap-2">
-        <span className="font-mono text-[10px] text-[#555] flex-1 truncate">
-          {wal.address.slice(0, 14)}…{wal.address.slice(-8)}
-        </span>
-        <button onClick={copy} className="text-[#444] hover:text-white transition-colors shrink-0">
-          {copied ? <Check size={12} className="text-[#4ADE80]" /> : <Copy size={12} />}
-        </button>
+
+      {/* View pill nav */}
+      <div className="flex gap-1 mb-5 p-1 rounded-xl" style={{ background: 'rgba(255,255,255,0.04)' }}>
+        {VIEWS.map(v => (
+          <button
+            key={v.id}
+            onClick={() => setView(v.id)}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg font-mono text-xs transition-all"
+            style={{
+              background: view === v.id ? '#111' : 'transparent',
+              color: view === v.id ? '#00A8FF' : '#555',
+              boxShadow: view === v.id ? '0 2px 8px rgba(0,0,0,0.4)' : 'none',
+              fontWeight: view === v.id ? 600 : 400,
+            }}
+          >
+            {v.icon} {v.label}
+          </button>
+        ))}
       </div>
+
+      {/* ── Overview ── */}
+      {view === 'overview' && (
+        <div style={{
+          padding: '14px 16px', borderRadius: 14,
+          background: '#0d0d0d',
+          boxShadow: 'inset 2px 2px 6px #070707, inset -1px -1px 4px rgba(255,255,255,0.02)',
+        }}>
+          <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-3">Wallet Address</p>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs text-[#a0a0a0] flex-1 break-all leading-relaxed">{wal.address}</span>
+            <button onClick={copyAddr} className="text-[#444] hover:text-white transition-colors shrink-0 ml-1">
+              {addrCopied ? <Check size={13} className="text-[#4ADE80]" /> : <Copy size={13} />}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Deposit ── */}
+      {view === 'deposit' && (
+        <div className="text-center">
+          <div className="inline-flex p-4 rounded-2xl mb-4" style={{ background: '#fff' }}>
+            <QRCodeSVG value={wal.address} size={180} bgColor="#ffffff" fgColor="#0a0a0a" level="M" />
+          </div>
+          <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-1">Scan to deposit SOL</p>
+          <p className="font-mono text-[10px] text-[#333] mb-4">Solana network only</p>
+          <div className="flex items-center gap-2 p-3 rounded-xl text-left" style={{ background: '#0d0d0d', boxShadow: 'inset 2px 2px 6px #070707' }}>
+            <span className="font-mono text-[10px] text-[#666] flex-1 break-all leading-relaxed">{wal.address}</span>
+            <button onClick={copyAddr} className="text-[#444] hover:text-white transition-colors shrink-0">
+              {addrCopied ? <Check size={13} className="text-[#4ADE80]" /> : <Copy size={13} />}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Withdraw ── */}
+      {view === 'withdraw' && (
+        <div className="space-y-3">
+          {/* Available */}
+          <div className="flex items-center justify-between px-3 py-2.5 rounded-xl" style={{ background: '#0d0d0d', boxShadow: 'inset 2px 2px 6px #070707' }}>
+            <span className="font-mono text-xs text-[#555]">Available</span>
+            <div className="flex items-center gap-1.5">
+              <SolanaIcon size={12} />
+              <span className="font-mono text-xs font-bold text-white">{wal.balance_sol.toFixed(4)} SOL</span>
+            </div>
+          </div>
+
+          {/* Recipient */}
+          <div>
+            <label className="font-mono text-[10px] text-[#555] uppercase tracking-wider block mb-1.5">Recipient Address</label>
+            <input
+              type="text"
+              value={sendTo}
+              onChange={e => setSendTo(e.target.value)}
+              placeholder="Solana address (base58)"
+              className="w-full neu-card-inset rounded-xl px-3 py-2.5 font-mono text-xs text-white placeholder-[#333] outline-none"
+            />
+          </div>
+
+          {/* Amount */}
+          <div>
+            <label className="font-mono text-[10px] text-[#555] uppercase tracking-wider block mb-1.5">Amount (SOL)</label>
+            <div className="flex items-center neu-card-inset rounded-xl overflow-hidden">
+              <input
+                type="text"
+                inputMode="decimal"
+                value={sendAmt}
+                onChange={e => setSendAmt(e.target.value)}
+                placeholder="0.000"
+                className="flex-1 px-3 py-2.5 bg-transparent font-mono text-sm text-white placeholder-[#333] outline-none"
+              />
+              <button
+                onClick={() => setSendAmt(wal.balance_sol.toFixed(4))}
+                className="px-3 py-1.5 mr-1.5 rounded-lg font-mono text-[10px] font-bold tracking-widest"
+                style={{ background: 'rgba(0,168,255,0.1)', color: '#00A8FF' }}
+              >
+                MAX
+              </button>
+            </div>
+          </div>
+
+          {sendErr && <p className="font-mono text-xs text-[#EF4444]">{sendErr}</p>}
+
+          {txHash && (
+            <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.15)' }}>
+              <Check size={13} className="text-[#4ADE80] shrink-0" />
+              <span className="font-mono text-[10px] text-[#4ADE80] flex-1 truncate">Sent · {txHash.slice(0, 16)}…</span>
+            </div>
+          )}
+
+          <button
+            onClick={handleWithdraw}
+            disabled={sending || !sendTo || !sendAmt}
+            className="w-full py-3 rounded-xl font-mono text-xs font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-40"
+            style={{ background: 'rgba(0,168,255,0.12)', color: '#00A8FF' }}
+          >
+            <PaperPlaneTilt size={13} weight="fill" />
+            {sending ? 'Sending…' : 'Send SOL'}
+          </button>
+
+          {/* Warning */}
+          <div className="flex items-start gap-2 p-3 rounded-xl" style={{ background: 'rgba(251,191,36,0.05)', border: '1px solid rgba(251,191,36,0.1)' }}>
+            <Warning size={12} className="text-[#F59E0B] shrink-0 mt-0.5" weight="fill" />
+            <span className="font-mono text-[10px] text-[#555] leading-relaxed">
+              Double-check the address. Blockchain transactions are irreversible.
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
