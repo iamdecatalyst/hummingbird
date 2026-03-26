@@ -45,6 +45,11 @@ func New(token string, chatID int64, port *portfolio.Portfolio, exec Executor) (
 	}, nil
 }
 
+// SetExecutor wires in the trader after both are constructed.
+func (b *Bot) SetExecutor(exec Executor) {
+	b.executor = exec
+}
+
 // Run starts long-polling. Blocks until the process exits.
 func (b *Bot) Run() {
 	u := tgbotapi.NewUpdate(0)
@@ -300,4 +305,23 @@ func stopConfirmText() string {
 		"",
 		"<b>Are you sure?</b>",
 	}, "\n")
+}
+
+// ── Outbound push notifications ───────────────────────────────────────────────
+// These replace alerts.Telegram — same chat, full HTML+ASCII box formatting.
+
+func (b *Bot) Entered(p *models.Position) {
+	b.send(b.chatID, renderEntered(p), nil)
+}
+
+func (b *Bot) Exited(c *models.ClosedPosition) {
+	b.send(b.chatID, renderExited(c), nil)
+}
+
+func (b *Bot) DailyStats(stats portfolio.Stats) {
+	b.send(b.chatID, renderDailyStats(stats), nil)
+}
+
+func (b *Bot) Alert(text string) {
+	b.send(b.chatID, "⚠️  "+text, nil)
 }

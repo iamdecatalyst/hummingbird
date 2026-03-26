@@ -18,12 +18,15 @@ import (
 	"github.com/iamdecatalyst/hummingbird/orchestrator/portfolio"
 )
 
+// compile-time check that alerts.Telegram still satisfies Notifier
+var _ alerts.Notifier = (*alerts.Telegram)(nil)
+
 // Trader executes trades via Signet and manages position lifecycle.
 type Trader struct {
 	signet    *signet.Client
 	walletID  string
 	portfolio *portfolio.Portfolio
-	telegram  *alerts.Telegram
+	telegram  alerts.Notifier
 	solanaRPC string
 	scorerURL string // for scalp-closed callbacks
 
@@ -35,7 +38,7 @@ func New(
 	signetClient *signet.Client,
 	walletID string,
 	port *portfolio.Portfolio,
-	tg *alerts.Telegram,
+	tg alerts.Notifier,
 	solanaRPC string,
 	scorerURL string,
 ) *Trader {

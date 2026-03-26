@@ -31,29 +31,38 @@ func main() {
 		log.Fatalf("[main] wallet setup failed: %v", err)
 	}
 
-	// Init components
-	tg := alerts.NewTelegram(cfg.TelegramToken, cfg.TelegramChatID)
 	port := portfolio.New(1.0, cfg.MaxConcurrentPositions, cfg.MaxDailyLossPercent)
-	scorerURL := "http://localhost:8001" // Python scorer
-	tr := trader.New(signetClient, walletID, port, tg, cfg.SolanaRPC, scorerURL)
+	scorerURL := "http://localhost:8001"
 
-	// Telegram interactive bot
+	// Init Telegram bot — it is both the interactive handler and the notifier.
+	// Falls back to a no-op notifier if token/chatID are not set.
+	var notifier alerts.Notifier = noopNotifier{}
+	var tgBot *bot.Bot
+
 	if cfg.TelegramToken != "" && cfg.TelegramChatID != "" {
-		chatID, err := strconv.ParseInt(cfg.TelegramChatID, 10, 64)
-		if err != nil {
-			log.Printf("[main] invalid TELEGRAM_CHAT_ID: %v", err)
+		chatID, parseErr := strconv.ParseInt(cfg.TelegramChatID, 10, 64)
+		if parseErr != nil {
+			log.Printf("[main] invalid TELEGRAM_CHAT_ID: %v", parseErr)
 		} else {
-			tgBot, err := bot.New(cfg.TelegramToken, chatID, port, tr)
+			tgBot, err = bot.New(cfg.TelegramToken, chatID, port, nil) // executor wired below
 			if err != nil {
 				log.Printf("[main] bot init failed: %v", err)
 			} else {
-				go tgBot.Run()
+				notifier = tgBot
 			}
 		}
 	}
 
+	tr := trader.New(signetClient, walletID, port, notifier, cfg.SolanaRPC, scorerURL)
+
+	// Now that trader exists, wire it into the bot as executor
+	if tgBot != nil {
+		tgBot.SetExecutor(tr)
+		go tgBot.Run()
+	}
+
 	// Daily stats ticker
-	go dailyStats(tg, port)
+	go dailyStats(tgBot, port)
 
 	// HTTP server
 	mux := http.NewServeMux()
@@ -88,14 +97,14 @@ func main() {
 	mux.HandleFunc("POST /stop", func(w http.ResponseWriter, r *http.Request) {
 		log.Println("[main] /stop called — closing all positions")
 		tr.ExitAll(models.ExitManual)
-		tg.Alert("Bot stopped manually. All positions closed.")
+		notifier.Alert("Bot stopped manually. All positions closed.")
 		fmt.Fprint(w, `{"status":"stopped"}`)
 	})
 
 	// POST /resume — unpause after daily loss limit
 	mux.HandleFunc("POST /resume", func(w http.ResponseWriter, r *http.Request) {
 		port.Resume()
-		tg.Alert("Bot resumed.")
+		notifier.Alert("Bot resumed.")
 		fmt.Fprint(w, `{"status":"resumed"}`)
 	})
 
@@ -110,21 +119,34 @@ func main() {
 	log.Printf("   Max positions: %d", cfg.MaxConcurrentPositions)
 	log.Printf("   Daily loss limit: %.0f%%", cfg.MaxDailyLossPercent*100)
 
-	tg.Alert("🐦 Hummingbird is online and watching pump.fun")
+	notifier.Alert("🐦 Hummingbird is online and watching pump.fun")
 
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatalf("[main] server error: %v", err)
 	}
 }
 
-func dailyStats(tg *alerts.Telegram, port *portfolio.Portfolio) {
+func dailyStats(tgBot *bot.Bot, port *portfolio.Portfolio) {
 	for {
 		now := time.Now()
-		// Fire at midnight
 		next := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, now.Location())
 		time.Sleep(time.Until(next))
 
-		stats := port.Stats()
-		tg.DailyStats(stats.Wins, stats.Losses, stats.TodayPnL, stats.WinRate)
+		if tgBot != nil {
+			tgBot.DailyStats(port.Stats())
+		}
 	}
+}
+
+// noopNotifier is used when Telegram is not configured.
+type noopNotifier struct{}
+
+func (noopNotifier) Entered(p *models.Position) {
+	log.Printf("[notify] entered %s | %.3f SOL", p.Mint[:8], p.EntryAmountSOL)
+}
+func (noopNotifier) Exited(c *models.ClosedPosition) {
+	log.Printf("[notify] exited %s | P&L %+.4f SOL", c.Mint[:8], c.PnLSOL)
+}
+func (noopNotifier) Alert(text string) {
+	log.Printf("[notify] %s", text)
 }

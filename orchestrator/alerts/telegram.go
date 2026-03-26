@@ -11,6 +11,13 @@ import (
 	"github.com/iamdecatalyst/hummingbird/orchestrator/models"
 )
 
+// Notifier is implemented by anything that can push trade notifications.
+type Notifier interface {
+	Entered(p *models.Position)
+	Exited(c *models.ClosedPosition)
+	Alert(text string)
+}
+
 type Telegram struct {
 	token  string
 	chatID string
