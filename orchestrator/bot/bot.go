@@ -38,9 +38,11 @@ type Bot struct {
 	config    BotConfig
 
 	// multi-tenant callbacks (nil = single-tenant)
-	resolve func(chatID int64) (nexusID string, port *portfolio.Portfolio, exec Executor, ok bool)
-	onLink  func(nexusID string, chatID int64)
-	onStop  func(nexusID string)
+	resolve     func(chatID int64) (nexusID string, port *portfolio.Portfolio, exec Executor, ok bool)
+	onLink      func(nexusID string, chatID int64)
+	onStop      func(nexusID string)
+	onGetConfig func(nexusID string) BotConfig
+	onSetConfig func(nexusID string, cfg BotConfig)
 
 	// deep-link token store (both modes)
 	mu         sync.Mutex
@@ -70,25 +72,31 @@ func New(token string, chatID int64, port *portfolio.Portfolio, exec Executor) (
 }
 
 // NewMultiTenant creates a bot for multi-tenant mode.
-// resolve: given a Telegram chat_id, return the user's portfolio + executor
-// onLink:  called when a deep-link token is validated (save the chat_id to DB)
-// onStop:  called when a user stops their bot via Telegram (remove instance)
+// resolve:      given a Telegram chat_id, return the user's portfolio + executor
+// onLink:       called when a deep-link token is validated (save the chat_id to DB)
+// onStop:       called when a user stops their bot via Telegram (remove instance)
+// onGetConfig:  load per-user config from persistent storage
+// onSetConfig:  save per-user config to persistent storage
 func NewMultiTenant(
 	token string,
 	resolve func(int64) (string, *portfolio.Portfolio, Executor, bool),
 	onLink func(string, int64),
 	onStop func(string),
+	onGetConfig func(string) BotConfig,
+	onSetConfig func(string, BotConfig),
 ) (*Bot, error) {
 	api, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
 		return nil, err
 	}
 	return &Bot{
-		api:        api,
-		resolve:    resolve,
-		onLink:     onLink,
-		onStop:     onStop,
-		linkTokens: make(map[string]linkEntry),
+		api:         api,
+		resolve:     resolve,
+		onLink:      onLink,
+		onStop:      onStop,
+		onGetConfig: onGetConfig,
+		onSetConfig: onSetConfig,
+		linkTokens:  make(map[string]linkEntry),
 		config: BotConfig{
 			SniperEnabled:   true,
 			ScalperEnabled:  true,
@@ -96,6 +104,10 @@ func NewMultiTenant(
 			MaxPositions:    5,
 			StopLossPercent: 0.25,
 			DailyLossLimit:  0.30,
+			TakeProfit1x:    2.0,
+			TakeProfit2x:    5.0,
+			TakeProfit3x:    10.0,
+			TimeoutMinutes:  8,
 		},
 	}, nil
 }
@@ -155,6 +167,30 @@ func (b *Bot) ctx(chatID int64) (nexusID string, port *portfolio.Portfolio, exec
 		return "", b.portfolio, b.executor, b.portfolio != nil
 	}
 	return b.resolve(chatID)
+}
+
+// getConfig returns the config for the user associated with chatID.
+// In single-tenant mode, returns b.config. In multi-tenant mode, loads from DB.
+func (b *Bot) getConfig(chatID int64) BotConfig {
+	if b.onGetConfig != nil {
+		nexusID, _, _, ok := b.ctx(chatID)
+		if ok && nexusID != "" {
+			return b.onGetConfig(nexusID)
+		}
+	}
+	return b.config
+}
+
+// setConfig saves the config for the user associated with chatID.
+func (b *Bot) setConfig(chatID int64, cfg BotConfig) {
+	if b.onSetConfig != nil {
+		nexusID, _, _, ok := b.ctx(chatID)
+		if ok && nexusID != "" {
+			b.onSetConfig(nexusID, cfg)
+			return
+		}
+	}
+	b.config = cfg
 }
 
 // ── Commands ──────────────────────────────────────────────────────────────────
@@ -292,11 +328,21 @@ func (b *Bot) handleCallback(cq *tgbotapi.CallbackQuery) {
 		}
 		b.editMain(cid, mid)
 	case "sniper_toggle":
-		b.config.SniperEnabled = !b.config.SniperEnabled
+		cfg := b.getConfig(cid)
+		cfg.SniperEnabled = !cfg.SniperEnabled
+		b.setConfig(cid, cfg)
 		b.editConfig(cid, mid)
 	case "scalper_toggle":
-		b.config.ScalperEnabled = !b.config.ScalperEnabled
+		cfg := b.getConfig(cid)
+		cfg.ScalperEnabled = !cfg.ScalperEnabled
+		b.setConfig(cid, cfg)
 		b.editConfig(cid, mid)
+	case "noop":
+		// display-only button in config keyboard — do nothing
+	default:
+		if strings.HasPrefix(cq.Data, "cfg:") {
+			b.handleCfgCallback(cid, mid, cq.Data)
+		}
 	case "refresh_main":
 		b.editMain(cid, mid)
 	case "refresh_stats":
@@ -305,6 +351,78 @@ func (b *Bot) handleCallback(cq *tgbotapi.CallbackQuery) {
 		b.editPositions(cid, mid)
 	}
 }
+
+// ── Config +/- handler ────────────────────────────────────────────────────────
+
+// handleCfgCallback handles "cfg:{field}:{dn|up}" callback data.
+func (b *Bot) handleCfgCallback(cid int64, mid int, data string) {
+	parts := strings.SplitN(data, ":", 3)
+	if len(parts) != 3 {
+		return
+	}
+	field, dir := parts[1], parts[2]
+	cfg := b.getConfig(cid)
+
+	switch field {
+	case "pos":
+		step := 0.05
+		if dir == "up" {
+			cfg.MaxPositionSOL = round2(min64(cfg.MaxPositionSOL+step, 5.0))
+		} else {
+			cfg.MaxPositionSOL = round2(max64(cfg.MaxPositionSOL-step, 0.01))
+		}
+	case "maxpos":
+		if dir == "up" {
+			if cfg.MaxPositions < 20 { cfg.MaxPositions++ }
+		} else {
+			if cfg.MaxPositions > 1 { cfg.MaxPositions-- }
+		}
+	case "sl":
+		step := 0.05
+		if dir == "up" {
+			cfg.StopLossPercent = round2(min64(cfg.StopLossPercent+step, 0.90))
+		} else {
+			cfg.StopLossPercent = round2(max64(cfg.StopLossPercent-step, 0.05))
+		}
+	case "tp1":
+		step := 0.5
+		if dir == "up" {
+			cfg.TakeProfit1x = round1(min64(cfg.TakeProfit1x+step, 10.0))
+		} else {
+			cfg.TakeProfit1x = round1(max64(cfg.TakeProfit1x-step, 1.2))
+		}
+	case "tp2":
+		step := 0.5
+		if dir == "up" {
+			cfg.TakeProfit2x = round1(min64(cfg.TakeProfit2x+step, 20.0))
+		} else {
+			cfg.TakeProfit2x = round1(max64(cfg.TakeProfit2x-step, 1.5))
+		}
+	case "tp3":
+		step := 1.0
+		if dir == "up" {
+			cfg.TakeProfit3x = round1(min64(cfg.TakeProfit3x+step, 50.0))
+		} else {
+			cfg.TakeProfit3x = round1(max64(cfg.TakeProfit3x-step, 2.0))
+		}
+	case "timeout":
+		if dir == "up" {
+			if cfg.TimeoutMinutes < 60 { cfg.TimeoutMinutes++ }
+		} else {
+			if cfg.TimeoutMinutes > 1 { cfg.TimeoutMinutes-- }
+		}
+	default:
+		return
+	}
+
+	b.setConfig(cid, cfg)
+	b.editConfig(cid, mid)
+}
+
+func min64(a, b float64) float64 { if a < b { return a }; return b }
+func max64(a, b float64) float64 { if a > b { return a }; return b }
+func round2(v float64) float64   { return float64(int(v*100+0.5)) / 100 }
+func round1(v float64) float64   { return float64(int(v*10+0.5)) / 10 }
 
 // ── New message senders ───────────────────────────────────────────────────────
 
@@ -339,7 +457,8 @@ func (b *Bot) sendPositions(chatID int64) {
 }
 
 func (b *Bot) sendConfig(chatID int64) {
-	b.send(chatID, renderConfig(b.config), configKB(b.config))
+	cfg := b.getConfig(chatID)
+	b.send(chatID, renderConfig(cfg), configKB(cfg))
 }
 
 func (b *Bot) sendStopConfirm(chatID int64) {
@@ -379,7 +498,8 @@ func (b *Bot) editPositions(cid int64, mid int) {
 }
 
 func (b *Bot) editConfig(cid int64, mid int) {
-	b.editText(cid, mid, renderConfig(b.config), configKB(b.config))
+	cfg := b.getConfig(cid)
+	b.editText(cid, mid, renderConfig(cfg), configKB(cfg))
 }
 
 func (b *Bot) editStopConfirm(cid int64, mid int) {
@@ -455,17 +575,65 @@ func positionsKB() *tgbotapi.InlineKeyboardMarkup {
 }
 
 func configKB(cfg BotConfig) *tgbotapi.InlineKeyboardMarkup {
-	sniperBtn := "Sniper  ✅ ON"
+	sniperBtn := "Sniper ✅ ON"
 	if !cfg.SniperEnabled {
-		sniperBtn = "Sniper  ❌ OFF"
+		sniperBtn = "Sniper ❌ OFF"
 	}
-	scalperBtn := "Scalper  ✅ ON"
+	scalperBtn := "Scalper ✅ ON"
 	if !cfg.ScalperEnabled {
-		scalperBtn = "Scalper  ❌ OFF"
+		scalperBtn = "Scalper ❌ OFF"
 	}
+	tp1 := cfg.TakeProfit1x; if tp1 <= 0 { tp1 = 2.0 }
+	tp2 := cfg.TakeProfit2x; if tp2 <= 0 { tp2 = 5.0 }
+	tp3 := cfg.TakeProfit3x; if tp3 <= 0 { tp3 = 10.0 }
+	timeout := cfg.TimeoutMinutes; if timeout <= 0 { timeout = 8 }
+
 	kb := tgbotapi.NewInlineKeyboardMarkup(
-		[]tgbotapi.InlineKeyboardButton{btn(sniperBtn, "sniper_toggle")},
-		[]tgbotapi.InlineKeyboardButton{btn(scalperBtn, "scalper_toggle")},
+		// Toggles
+		[]tgbotapi.InlineKeyboardButton{btn(sniperBtn, "sniper_toggle"), btn(scalperBtn, "scalper_toggle")},
+		// Position size
+		[]tgbotapi.InlineKeyboardButton{
+			btn("─ Position", "cfg:pos:dn"),
+			btn(fmt.Sprintf("%.2f SOL", cfg.MaxPositionSOL), "noop"),
+			btn("Position +", "cfg:pos:up"),
+		},
+		// Max positions
+		[]tgbotapi.InlineKeyboardButton{
+			btn("─ Max pos", "cfg:maxpos:dn"),
+			btn(fmt.Sprintf("%d slots", cfg.MaxPositions), "noop"),
+			btn("Max pos +", "cfg:maxpos:up"),
+		},
+		// Stop loss
+		[]tgbotapi.InlineKeyboardButton{
+			btn("─ Stop loss", "cfg:sl:dn"),
+			btn(fmt.Sprintf("%.0f%% SL", cfg.StopLossPercent*100), "noop"),
+			btn("Stop loss +", "cfg:sl:up"),
+		},
+		// Take profit 1
+		[]tgbotapi.InlineKeyboardButton{
+			btn("─ TP1", "cfg:tp1:dn"),
+			btn(fmt.Sprintf("%.1fx TP1", tp1), "noop"),
+			btn("TP1 +", "cfg:tp1:up"),
+		},
+		// Take profit 2
+		[]tgbotapi.InlineKeyboardButton{
+			btn("─ TP2", "cfg:tp2:dn"),
+			btn(fmt.Sprintf("%.1fx TP2", tp2), "noop"),
+			btn("TP2 +", "cfg:tp2:up"),
+		},
+		// Take profit 3
+		[]tgbotapi.InlineKeyboardButton{
+			btn("─ TP3", "cfg:tp3:dn"),
+			btn(fmt.Sprintf("%.1fx TP3", tp3), "noop"),
+			btn("TP3 +", "cfg:tp3:up"),
+		},
+		// Timeout
+		[]tgbotapi.InlineKeyboardButton{
+			btn("─ Timeout", "cfg:timeout:dn"),
+			btn(fmt.Sprintf("%dmin", timeout), "noop"),
+			btn("Timeout +", "cfg:timeout:up"),
+		},
+		// Back
 		[]tgbotapi.InlineKeyboardButton{btn("◀ Menu", "menu")},
 	)
 	return &kb

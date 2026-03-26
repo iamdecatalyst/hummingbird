@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -13,6 +14,38 @@ import (
 
 	_ "github.com/lib/pq"
 )
+
+// UserConfig holds per-user trading settings.
+type UserConfig struct {
+	SniperEnabled   bool    `json:"sniper_enabled"`
+	ScalperEnabled  bool    `json:"scalper_enabled"`
+	MaxPositionSOL  float64 `json:"max_position_sol"`
+	MaxPositions    int     `json:"max_positions"`
+	StopLossPercent float64 `json:"stop_loss_percent"` // 0.25 = 25%
+	DailyLossLimit  float64 `json:"daily_loss_limit"`  // 0.30 = 30%
+	TakeProfit1x    float64 `json:"take_profit_1x"`    // price multiple, e.g. 2.0
+	TakeProfit2x    float64 `json:"take_profit_2x"`
+	TakeProfit3x    float64 `json:"take_profit_3x"`
+	TimeoutMinutes  int     `json:"timeout_minutes"`
+	MinBalanceSOL   float64 `json:"min_balance_sol"`
+}
+
+// DefaultUserConfig returns sane defaults for new users.
+func DefaultUserConfig() *UserConfig {
+	return &UserConfig{
+		SniperEnabled:   true,
+		ScalperEnabled:  true,
+		MaxPositionSOL:  0.10,
+		MaxPositions:    5,
+		StopLossPercent: 0.25,
+		DailyLossLimit:  0.30,
+		TakeProfit1x:    2.0,
+		TakeProfit2x:    5.0,
+		TakeProfit3x:    10.0,
+		TimeoutMinutes:  8,
+		MinBalanceSOL:   0.0,
+	}
+}
 
 type DB struct {
 	sql           *sql.DB
@@ -79,7 +112,49 @@ func (d *DB) migrate() error {
 	if _, err := d.sql.Exec(`ALTER TABLE hb_users ADD COLUMN IF NOT EXISTS main_wallet_id TEXT NOT NULL DEFAULT ''`); err != nil {
 		return err
 	}
-	_, err := d.sql.Exec(`ALTER TABLE hb_users ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT NOT NULL DEFAULT ''`)
+	if _, err := d.sql.Exec(`ALTER TABLE hb_users ADD COLUMN IF NOT EXISTS telegram_chat_id TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
+	// Per-user trading config (JSON blob — easy to extend without further migrations)
+	_, err := d.sql.Exec(`
+		CREATE TABLE IF NOT EXISTS hb_user_configs (
+			nexus_user_id TEXT PRIMARY KEY,
+			config_json   JSONB NOT NULL DEFAULT '{}'
+		)
+	`)
+	return err
+}
+
+// GetUserConfig loads per-user config, falling back to defaults if not set.
+func (d *DB) GetUserConfig(nexusUserID string) (*UserConfig, error) {
+	var raw []byte
+	err := d.sql.QueryRow(
+		`SELECT config_json FROM hb_user_configs WHERE nexus_user_id=$1`, nexusUserID,
+	).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return DefaultUserConfig(), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	cfg := DefaultUserConfig()
+	if err := json.Unmarshal(raw, cfg); err != nil {
+		return DefaultUserConfig(), nil
+	}
+	return cfg, nil
+}
+
+// SetUserConfig saves per-user config.
+func (d *DB) SetUserConfig(nexusUserID string, cfg *UserConfig) error {
+	raw, err := json.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	_, err = d.sql.Exec(`
+		INSERT INTO hb_user_configs (nexus_user_id, config_json)
+		VALUES ($1, $2)
+		ON CONFLICT (nexus_user_id) DO UPDATE SET config_json=$2
+	`, nexusUserID, raw)
 	return err
 }
 

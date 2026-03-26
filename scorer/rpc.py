@@ -1,11 +1,17 @@
 """
 Shared async Solana RPC client.
 One httpx.AsyncClient reused across all checks — no per-request connection overhead.
+Global semaphore caps concurrent in-flight RPC calls to avoid rate limiting.
 """
+import asyncio
 import httpx
 from config import RPC_HTTP
 
 _client: httpx.AsyncClient | None = None
+# Cap concurrent RPC calls across the whole scorer process.
+# QuickNode free tier allows ~25 req/s; we score multiple tokens concurrently
+# so we limit the burst rather than the rate.
+_semaphore = asyncio.Semaphore(8)
 
 
 def get_client() -> httpx.AsyncClient:
@@ -21,13 +27,14 @@ def get_client() -> httpx.AsyncClient:
 
 async def rpc(method: str, params: list) -> dict:
     """Fire a single JSON-RPC call, return the full response dict."""
-    client = get_client()
-    resp = await client.post(
-        "/",
-        json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params},
-    )
-    resp.raise_for_status()
-    return resp.json()
+    async with _semaphore:
+        client = get_client()
+        resp = await client.post(
+            "/",
+            json={"jsonrpc": "2.0", "id": 1, "method": method, "params": params},
+        )
+        resp.raise_for_status()
+        return resp.json()
 
 
 async def get_account_info(pubkey: str, encoding: str = "base64") -> dict | None:

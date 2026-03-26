@@ -103,8 +103,10 @@ async fn solana_once(
     tokio::spawn(async move {
         let fetcher = TransactionFetcher::new(http);
         while let Some((signature, slot)) = rx.recv().await {
+            // Small delay to avoid hammering the public RPC rate limit
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
             let timestamp_ms = now_ms();
-            match fetcher.fetch_accounts(&signature).await {
+            match fetcher.fetch_accounts(&signature, &platform).await {
                 Ok(Some(accounts)) => {
                     let token = TokenDetected {
                         mint: accounts.mint.clone(),

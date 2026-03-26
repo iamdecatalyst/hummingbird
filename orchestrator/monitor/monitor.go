@@ -16,15 +16,28 @@ import (
 const (
 	priceInterval     = 2 * time.Second
 	walletInterval    = 5 * time.Second
-	positionTimeout   = 8 * time.Minute
-
-	stopLossPercent   = -0.25 // -25%
-	earlyStopPercent  = -0.15 // -15% + volume dying
-	takeProfit1x      = 2.0   // 2x → sell 40%
-	takeProfit2x      = 5.0   // 5x → sell 40%
-	takeProfit3x      = 10.0  // 10x → sell remainder
-	emergencyDumpDrop = -0.15 // -15% in <10s = emergency
+	emergencyDumpDrop = -0.15 // -15% in <10s = emergency (always hard limit)
 )
+
+// MonitorConfig holds per-user exit parameters.
+type MonitorConfig struct {
+	StopLossPercent float64 // e.g. 0.25 (stored positive; applied as negative)
+	TakeProfit1x    float64 // price multiple for first partial exit, e.g. 2.0
+	TakeProfit2x    float64
+	TakeProfit3x    float64
+	TimeoutMinutes  int
+}
+
+// DefaultMonitorConfig returns the original hardcoded defaults.
+func DefaultMonitorConfig() MonitorConfig {
+	return MonitorConfig{
+		StopLossPercent: 0.25,
+		TakeProfit1x:    2.0,
+		TakeProfit2x:    5.0,
+		TakeProfit3x:    10.0,
+		TimeoutMinutes:  8,
+	}
+}
 
 // ExitSignal is sent back to the trader when an exit condition is triggered.
 type ExitSignal struct {
@@ -39,14 +52,16 @@ type Monitor struct {
 	solanaRPC  string
 	exitCh     chan<- ExitSignal
 	httpClient *http.Client
+	cfg        MonitorConfig
 }
 
-func New(pos *models.Position, solanaRPC string, exitCh chan<- ExitSignal) *Monitor {
+func New(pos *models.Position, solanaRPC string, exitCh chan<- ExitSignal, cfg MonitorConfig) *Monitor {
 	return &Monitor{
-		pos:       pos,
-		solanaRPC: solanaRPC,
-		exitCh:    exitCh,
+		pos:        pos,
+		solanaRPC:  solanaRPC,
+		exitCh:     exitCh,
 		httpClient: &http.Client{Timeout: 3 * time.Second},
+		cfg:        cfg,
 	}
 }
 
@@ -55,7 +70,11 @@ func New(pos *models.Position, solanaRPC string, exitCh chan<- ExitSignal) *Moni
 func (m *Monitor) Watch(ctx context.Context) {
 	priceTicker := time.NewTicker(priceInterval)
 	walletTicker := time.NewTicker(walletInterval)
-	timeout := time.NewTimer(positionTimeout)
+	timeoutMins := m.cfg.TimeoutMinutes
+	if timeoutMins <= 0 {
+		timeoutMins = 8
+	}
+	timeout := time.NewTimer(time.Duration(timeoutMins) * time.Minute)
 	defer priceTicker.Stop()
 	defer walletTicker.Stop()
 	defer timeout.Stop()
@@ -102,7 +121,8 @@ func (m *Monitor) Watch(ctx context.Context) {
 			ratio := price / m.pos.EntryPriceSOL
 
 			// Stop loss
-			if ratio <= (1 + stopLossPercent) {
+			slThreshold := 1.0 - m.cfg.StopLossPercent
+			if ratio <= slThreshold {
 				m.exit(models.ExitStopLoss, 0)
 				return
 			}
@@ -110,17 +130,17 @@ func (m *Monitor) Watch(ctx context.Context) {
 			// Take profit — staged exits
 			switch m.pos.TakeProfitLevel {
 			case 0:
-				if ratio >= takeProfit1x {
+				if ratio >= m.cfg.TakeProfit1x {
 					m.pos.TakeProfitLevel = 1
 					m.exit(models.ExitTakeProfit, 0.40) // sell 40%, keep watching
 				}
 			case 1:
-				if ratio >= takeProfit2x {
+				if ratio >= m.cfg.TakeProfit2x {
 					m.pos.TakeProfitLevel = 2
 					m.exit(models.ExitTakeProfit, 0.40) // sell another 40%
 				}
 			case 2:
-				if ratio >= takeProfit3x {
+				if ratio >= m.cfg.TakeProfit3x {
 					m.exit(models.ExitTakeProfit, 0) // sell everything
 					return
 				}

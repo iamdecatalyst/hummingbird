@@ -11,8 +11,9 @@ import {
   Pulse, SignOut, Copy, Check, Wallet, Key,
   ArrowUp, ArrowDown, Lightning, Warning, Info,
   Eye, EyeSlash, X, Plus, QrCode, PaperPlaneTilt, CaretDown,
-  TelegramLogo,
+  TelegramLogo, SlidersHorizontal, Spinner,
 } from '@phosphor-icons/react'
+import type { UserConfig } from '../lib/api'
 import type { WalletEntry } from '../lib/api'
 import { useOrchestrator } from '../hooks/useOrchestrator'
 import { api } from '../lib/api'
@@ -112,6 +113,7 @@ const TABS = [
   { id: 'overview', label: 'Overview', icon: <ChartBar size={14} weight="duotone" /> },
   { id: 'trades',   label: 'Trades',   icon: <ArrowsLeftRight size={14} weight="duotone" /> },
   { id: 'logs',     label: 'Logs',     icon: <Terminal size={14} weight="duotone" /> },
+  { id: 'config',   label: 'Config',   icon: <SlidersHorizontal size={14} weight="duotone" /> },
 ]
 
 function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpenCredentials, onOpenWallets, onOpenTelegram, telegramConnected, userName, userUsername, userAvatar }: {
@@ -1346,6 +1348,221 @@ function TabLogs() {
   )
 }
 
+// ── Config tab ────────────────────────────────────────────────────────────────
+
+function ConfigRow({ label, sub, value, onDec, onInc, display }: {
+  label: string; sub?: string; value?: number | boolean | string
+  onDec?: () => void; onInc?: () => void; display?: string
+}) {
+  return (
+    <div className="flex items-center justify-between py-3 border-b border-white/[0.04] last:border-0">
+      <div>
+        <p className="font-mono text-xs text-white">{label}</p>
+        {sub && <p className="font-mono text-[10px] text-[#444] mt-0.5">{sub}</p>}
+      </div>
+      {onDec && onInc ? (
+        <div className="flex items-center gap-2">
+          <button onClick={onDec}
+            className="w-7 h-7 rounded-lg flex items-center justify-center font-mono text-sm text-[#666] hover:text-white hover:bg-white/8 transition-colors">
+            −
+          </button>
+          <span className="font-mono text-xs text-[#00A8FF] min-w-[72px] text-center">{display ?? String(value)}</span>
+          <button onClick={onInc}
+            className="w-7 h-7 rounded-lg flex items-center justify-center font-mono text-sm text-[#666] hover:text-white hover:bg-white/8 transition-colors">
+            +
+          </button>
+        </div>
+      ) : (
+        <span className="font-mono text-xs text-[#666]">{display ?? String(value)}</span>
+      )}
+    </div>
+  )
+}
+
+function ToggleRow({ label, sub, value, onToggle }: {
+  label: string; sub?: string; value: boolean; onToggle: () => void
+}) {
+  return (
+    <div className="flex items-center justify-between py-3 border-b border-white/[0.04] last:border-0">
+      <div>
+        <p className="font-mono text-xs text-white">{label}</p>
+        {sub && <p className="font-mono text-[10px] text-[#444] mt-0.5">{sub}</p>}
+      </div>
+      <button
+        onClick={onToggle}
+        className={`relative w-10 h-5 rounded-full transition-colors ${value ? 'bg-[#00A8FF]/30' : 'bg-white/8'}`}
+      >
+        <span className={`absolute top-0.5 w-4 h-4 rounded-full transition-all ${
+          value ? 'left-[22px] bg-[#00A8FF]' : 'left-0.5 bg-[#444]'
+        }`} />
+      </button>
+    </div>
+  )
+}
+
+function TabConfig() {
+  const [cfg, setCfg]       = useState<UserConfig | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving,  setSaving]  = useState(false)
+  const [saved,   setSaved]   = useState(false)
+  const [error,   setError]   = useState('')
+
+  useEffect(() => {
+    api.config().then(setCfg).catch(() => {}).finally(() => setLoading(false))
+  }, [])
+
+  const update = (patch: Partial<UserConfig>) => {
+    setCfg(prev => prev ? { ...prev, ...patch } : prev)
+    setSaved(false)
+  }
+
+  const step = (field: keyof UserConfig, delta: number, min: number, max: number, decimals = 2) => {
+    if (!cfg) return
+    const raw = (cfg[field] as number) + delta
+    const clamped = Math.max(min, Math.min(max, raw))
+    const rounded = parseFloat(clamped.toFixed(decimals))
+    update({ [field]: rounded })
+  }
+
+  const handleSave = async () => {
+    if (!cfg) return
+    setSaving(true); setError('')
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { wallet_id: _, ...body } = cfg
+      await api.saveConfig(body)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Save failed')
+    } finally { setSaving(false) }
+  }
+
+  if (loading || !cfg) {
+    return (
+      <div className="p-6 flex items-center justify-center h-64">
+        <Spinner size={20} className="text-[#333] animate-spin" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-6 max-w-2xl">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="font-mono font-bold text-xl text-white">Config</h1>
+          <p className="font-mono text-xs text-[#555] mt-0.5">Per-trade and portfolio settings</p>
+        </div>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl font-mono text-xs font-bold transition-all disabled:opacity-50"
+          style={{ background: saved ? 'rgba(74,222,128,0.12)' : 'rgba(0,168,255,0.12)', color: saved ? '#4ADE80' : '#00A8FF' }}
+        >
+          {saving ? <Spinner size={12} className="animate-spin" /> : null}
+          {saved ? '✓ Saved' : 'Save'}
+        </button>
+      </div>
+
+      {error && <p className="font-mono text-xs text-[#EF4444] mb-4">{error}</p>}
+
+      {/* Modes */}
+      <div className="neu-tile p-5 mb-4">
+        <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-3">Trading Modes</p>
+        <ToggleRow label="Sniper" sub="High-score tokens (≥75) — larger position" value={cfg.sniper_enabled} onToggle={() => update({ sniper_enabled: !cfg.sniper_enabled })} />
+        <ToggleRow label="Scalper" sub="Lower-score tokens — smaller position, quick exits" value={cfg.scalper_enabled} onToggle={() => update({ scalper_enabled: !cfg.scalper_enabled })} />
+      </div>
+
+      {/* Position sizing */}
+      <div className="neu-tile p-5 mb-4">
+        <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-3">Position Sizing</p>
+        <ConfigRow
+          label="Max position size"
+          sub="SOL per trade"
+          value={cfg.max_position_sol}
+          display={`${cfg.max_position_sol.toFixed(2)} SOL`}
+          onDec={() => step('max_position_sol', -0.05, 0.01, 5.0, 2)}
+          onInc={() => step('max_position_sol', +0.05, 0.01, 5.0, 2)}
+        />
+        <ConfigRow
+          label="Max concurrent positions"
+          sub="Open trades at once"
+          value={cfg.max_positions}
+          display={`${cfg.max_positions}`}
+          onDec={() => step('max_positions', -1, 1, 20, 0)}
+          onInc={() => step('max_positions', +1, 1, 20, 0)}
+        />
+        <ConfigRow
+          label="Min wallet balance"
+          sub="Stop trading below this"
+          value={cfg.min_balance_sol}
+          display={`${cfg.min_balance_sol.toFixed(2)} SOL`}
+          onDec={() => step('min_balance_sol', -0.1, 0.0, 10.0, 2)}
+          onInc={() => step('min_balance_sol', +0.1, 0.0, 10.0, 2)}
+        />
+      </div>
+
+      {/* Risk */}
+      <div className="neu-tile p-5 mb-4">
+        <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-3">Risk Controls</p>
+        <ConfigRow
+          label="Stop loss"
+          sub="Exit immediately below this"
+          value={cfg.stop_loss_pct}
+          display={`−${(cfg.stop_loss_pct * 100).toFixed(0)}%`}
+          onDec={() => step('stop_loss_pct', -0.05, 0.05, 0.90, 2)}
+          onInc={() => step('stop_loss_pct', +0.05, 0.05, 0.90, 2)}
+        />
+        <ConfigRow
+          label="Daily loss limit"
+          sub="Pause bot when portfolio drops this much"
+          value={cfg.daily_loss_limit}
+          display={`−${(cfg.daily_loss_limit * 100).toFixed(0)}%`}
+          onDec={() => step('daily_loss_limit', -0.05, 0.05, 0.90, 2)}
+          onInc={() => step('daily_loss_limit', +0.05, 0.05, 0.90, 2)}
+        />
+        <ConfigRow
+          label="Position timeout"
+          sub="Force-exit after this long"
+          value={cfg.timeout_minutes}
+          display={`${cfg.timeout_minutes} min`}
+          onDec={() => step('timeout_minutes', -1, 1, 60, 0)}
+          onInc={() => step('timeout_minutes', +1, 1, 60, 0)}
+        />
+      </div>
+
+      {/* Take profit */}
+      <div className="neu-tile p-5 mb-4">
+        <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-3">Take Profit — Staged Exits</p>
+        <ConfigRow
+          label="TP1 — sell 40%"
+          sub="First partial exit at this price multiple"
+          value={cfg.take_profit_1x}
+          display={`${cfg.take_profit_1x.toFixed(1)}x`}
+          onDec={() => step('take_profit_1x', -0.5, 1.2, 10.0, 1)}
+          onInc={() => step('take_profit_1x', +0.5, 1.2, 10.0, 1)}
+        />
+        <ConfigRow
+          label="TP2 — sell 40%"
+          sub="Second partial exit"
+          value={cfg.take_profit_2x}
+          display={`${cfg.take_profit_2x.toFixed(1)}x`}
+          onDec={() => step('take_profit_2x', -0.5, 1.5, 20.0, 1)}
+          onInc={() => step('take_profit_2x', +0.5, 1.5, 20.0, 1)}
+        />
+        <ConfigRow
+          label="TP3 — sell rest"
+          sub="Full exit at this multiple"
+          value={cfg.take_profit_3x}
+          display={`${cfg.take_profit_3x.toFixed(1)}x`}
+          onDec={() => step('take_profit_3x', -1.0, 2.0, 50.0, 1)}
+          onInc={() => step('take_profit_3x', +1.0, 2.0, 50.0, 1)}
+        />
+      </div>
+    </div>
+  )
+}
+
 function _TabConfigRemoved({ userName, userUsername, userAvatar, botActive }: {
   userName?: string; userUsername?: string; userAvatar?: string; botActive?: boolean
 }) {
@@ -1555,6 +1772,7 @@ export default function Dashboard({ onLogout, walletId, userName, userUsername, 
       {tab === 'overview' && <TabOverview stats={stats} positions={positions} closed={closed} online={online} error={error} />}
       {tab === 'trades'   && <TabTrades positions={positions} closed={closed} />}
       {tab === 'logs'     && <TabLogs />}
+      {tab === 'config'   && <TabConfig />}
 
       {showCredentials && (
         <CredentialsModal

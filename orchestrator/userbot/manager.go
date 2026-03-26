@@ -10,8 +10,10 @@ import (
 	signet "github.com/VYLTH/signet-sdk-go/signet"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/alerts"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/config"
+	"github.com/iamdecatalyst/hummingbird/orchestrator/db"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/eventlog"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/models"
+	"github.com/iamdecatalyst/hummingbird/orchestrator/monitor"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/portfolio"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/trader"
 )
@@ -48,7 +50,7 @@ func short(s string) string {
 }
 
 // Start creates (or replaces) a bot instance, ensuring a default wallet exists.
-func (m *Manager) Start(userID, apiKey, apiSecret, telegramChatID string) error {
+func (m *Manager) Start(userID, apiKey, apiSecret, telegramChatID string, userCfg *db.UserConfig) error {
 	client := signet.NewClient(apiKey, apiSecret).WithBaseURL(m.cfg.SignetBaseURL)
 
 	walletName := fmt.Sprintf("hummingbird-%s", short(userID))
@@ -56,18 +58,29 @@ func (m *Manager) Start(userID, apiKey, apiSecret, telegramChatID string) error 
 	if err != nil {
 		return fmt.Errorf("wallet setup: %w", err)
 	}
-	return m.startInstance(userID, apiKey, apiSecret, walletID, telegramChatID)
+	return m.startInstance(userID, apiKey, apiSecret, walletID, telegramChatID, userCfg)
 }
 
 // StartWithWallet creates (or replaces) a bot instance using a specific wallet ID.
-func (m *Manager) StartWithWallet(userID, apiKey, apiSecret, walletID, telegramChatID string) error {
-	return m.startInstance(userID, apiKey, apiSecret, walletID, telegramChatID)
+func (m *Manager) StartWithWallet(userID, apiKey, apiSecret, walletID, telegramChatID string, userCfg *db.UserConfig) error {
+	return m.startInstance(userID, apiKey, apiSecret, walletID, telegramChatID, userCfg)
 }
 
-func (m *Manager) startInstance(userID, apiKey, apiSecret, walletID, telegramChatID string) error {
+func (m *Manager) startInstance(userID, apiKey, apiSecret, walletID, telegramChatID string, userCfg *db.UserConfig) error {
+	if userCfg == nil {
+		userCfg = db.DefaultUserConfig()
+	}
 	client := signet.NewClient(apiKey, apiSecret).WithBaseURL(m.cfg.SignetBaseURL)
 
-	port := portfolio.New(1.0, m.cfg.MaxConcurrentPositions, m.cfg.MaxDailyLossPercent)
+	maxPos := userCfg.MaxPositions
+	if maxPos <= 0 {
+		maxPos = m.cfg.MaxConcurrentPositions
+	}
+	dailyLoss := userCfg.DailyLossLimit
+	if dailyLoss <= 0 {
+		dailyLoss = m.cfg.MaxDailyLossPercent
+	}
+	port := portfolio.New(1.0, maxPos, dailyLoss)
 
 	var n alerts.Notifier
 	if telegramChatID != "" && m.cfg.TelegramToken != "" {
@@ -76,7 +89,15 @@ func (m *Manager) startInstance(userID, apiKey, apiSecret, walletID, telegramCha
 		n = noopNotifier{userID}
 	}
 
-	tr := trader.New(client, walletID, port, n, m.cfg.SolanaRPC, "http://localhost:8001")
+	monCfg := monitor.MonitorConfig{
+		StopLossPercent: userCfg.StopLossPercent,
+		TakeProfit1x:    userCfg.TakeProfit1x,
+		TakeProfit2x:    userCfg.TakeProfit2x,
+		TakeProfit3x:    userCfg.TakeProfit3x,
+		TimeoutMinutes:  userCfg.TimeoutMinutes,
+	}
+
+	tr := trader.New(client, walletID, port, n, m.cfg.SolanaRPC, "http://localhost:8001", monCfg)
 
 	inst := &Instance{
 		UserID:   userID,

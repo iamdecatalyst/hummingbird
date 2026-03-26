@@ -26,7 +26,7 @@ async def score(token: TokenDetected) -> ScoreResult:
     results = await asyncio.gather(
         dev_wallet.check(token.dev_wallet),
         supply.check(token.mint, token.dev_wallet),
-        bonding.check(token.bonding_curve),
+        bonding.check(token.bonding_curve, token.platform),
         contract.check(token.mint, token.bonding_curve),
         social.check(token.mint),
         return_exceptions=True,

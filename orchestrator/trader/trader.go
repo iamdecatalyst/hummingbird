@@ -23,12 +23,13 @@ var _ alerts.Notifier = (*alerts.Telegram)(nil)
 
 // Trader executes trades via Signet and manages position lifecycle.
 type Trader struct {
-	signet        *signet.Client
-	walletID  string
-	portfolio *portfolio.Portfolio
-	telegram      alerts.Notifier
-	solanaRPC     string
-	scorerURL     string // for scalp-closed callbacks
+	signet     *signet.Client
+	walletID   string
+	portfolio  *portfolio.Portfolio
+	telegram   alerts.Notifier
+	solanaRPC  string
+	scorerURL  string // for scalp-closed callbacks
+	monitorCfg monitor.MonitorConfig
 
 	exitCh    chan monitor.ExitSignal
 	cancelFns sync.Map // mint → context.CancelFunc
@@ -41,15 +42,17 @@ func New(
 	tg alerts.Notifier,
 	solanaRPC string,
 	scorerURL string,
+	monitorCfg monitor.MonitorConfig,
 ) *Trader {
 	t := &Trader{
-		signet:    signetClient,
-		walletID:  walletID,
-		portfolio: port,
-		telegram:  tg,
-		solanaRPC: solanaRPC,
-		scorerURL: scorerURL,
-		exitCh:    make(chan monitor.ExitSignal, 32),
+		signet:     signetClient,
+		walletID:   walletID,
+		portfolio:  port,
+		telegram:   tg,
+		solanaRPC:  solanaRPC,
+		scorerURL:  scorerURL,
+		monitorCfg: monitorCfg,
+		exitCh:     make(chan monitor.ExitSignal, 32),
 	}
 
 	go t.processExits()
@@ -113,7 +116,7 @@ func (t *Trader) enter(result *models.ScoreResult) {
 	// Start post-entry monitor
 	ctx, cancel := context.WithCancel(context.Background())
 	t.cancelFns.Store(result.Mint, cancel)
-	m := monitor.New(pos, t.solanaRPC, t.exitCh)
+	m := monitor.New(pos, t.solanaRPC, t.exitCh, t.monitorCfg)
 	go m.Watch(ctx)
 }
 

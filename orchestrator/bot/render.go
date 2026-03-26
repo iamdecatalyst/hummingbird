@@ -162,6 +162,14 @@ func renderConfig(cfg BotConfig) string {
 	sniperStatus := statusToggle(cfg.SniperEnabled)
 	scalperStatus := statusToggle(cfg.ScalperEnabled)
 	riskLabel, riskEmoji := riskDisplay(cfg.MaxPositionSOL)
+	tp1 := cfg.TakeProfit1x
+	if tp1 <= 0 { tp1 = 2.0 }
+	tp2 := cfg.TakeProfit2x
+	if tp2 <= 0 { tp2 = 5.0 }
+	tp3 := cfg.TakeProfit3x
+	if tp3 <= 0 { tp3 = 10.0 }
+	timeout := cfg.TimeoutMinutes
+	if timeout <= 0 { timeout = 8 }
 
 	return strings.Join([]string{
 		"⚙️ <b>CONFIGURATION</b>",
@@ -173,10 +181,17 @@ func renderConfig(cfg BotConfig) string {
 		boxMid,
 		row("Risk level", fmt.Sprintf("%s  %s", riskEmoji, riskLabel)),
 		row("Max position", fmt.Sprintf("%.2f SOL", cfg.MaxPositionSOL)),
-		row("Max concurrent", fmt.Sprintf("%d", cfg.MaxPositions)),
+		row("Max concurrent", fmt.Sprintf("%d positions", cfg.MaxPositions)),
 		row("Stop loss", fmt.Sprintf("%.0f%%", cfg.StopLossPercent*100)),
 		row("Daily loss limit", fmt.Sprintf("%.0f%%", cfg.DailyLossLimit*100)),
+		boxMid,
+		row("Take profit 1", fmt.Sprintf("%.1fx  → sell 40%%", tp1)),
+		row("Take profit 2", fmt.Sprintf("%.1fx  → sell 40%%", tp2)),
+		row("Take profit 3", fmt.Sprintf("%.1fx  → sell rest", tp3)),
+		row("Timeout", fmt.Sprintf("%d min", timeout)),
 		boxBot,
+		"",
+		"<i>Use ± buttons below to adjust values.</i>",
 	}, "\n")
 }
 
@@ -280,8 +295,13 @@ type BotConfig struct {
 	ScalperEnabled  bool
 	MaxPositionSOL  float64
 	MaxPositions    int
-	StopLossPercent float64
-	DailyLossLimit  float64
+	StopLossPercent float64 // 0.25 = 25%
+	DailyLossLimit  float64 // 0.30 = 30%
+	TakeProfit1x    float64 // price multiple, e.g. 2.0
+	TakeProfit2x    float64
+	TakeProfit3x    float64
+	TimeoutMinutes  int
+	MinBalanceSOL   float64
 }
 
 var _ = math.Abs // avoid unused import

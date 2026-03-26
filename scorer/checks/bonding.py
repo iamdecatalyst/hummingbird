@@ -22,7 +22,12 @@ MAX_SCORE = 20
 LAMPORTS_PER_SOL = 1_000_000_000
 
 
-async def check(bonding_curve: str) -> CheckResult:
+async def check(bonding_curve: str, platform: str = "pump_fun") -> CheckResult:
+    # Only pump_fun uses the standard bonding curve byte layout.
+    # Other platforms use different on-chain structures — return neutral score.
+    if platform != "pump_fun":
+        return CheckResult(score=10, max_score=MAX_SCORE, reason=f"{platform}: bonding curve check skipped (neutral)")
+
     try:
         account = await get_account_info(bonding_curve, encoding="base64")
         return _score(account)

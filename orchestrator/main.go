@@ -18,6 +18,7 @@ import (
 	"github.com/iamdecatalyst/hummingbird/orchestrator/db"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/eventlog"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/models"
+	"github.com/iamdecatalyst/hummingbird/orchestrator/monitor"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/portfolio"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/trader"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/userbot"
@@ -86,7 +87,7 @@ func startSingleTenant(cfg *config.Config, mux *http.ServeMux) {
 		}
 	}
 
-	tr := trader.New(signetClient, walletID, port, notifier, cfg.SolanaRPC, "http://localhost:8001")
+	tr := trader.New(signetClient, walletID, port, notifier, cfg.SolanaRPC, "http://localhost:8001", monitor.DefaultMonitorConfig())
 
 	if tgBot != nil {
 		tgBot.SetExecutor(tr)
@@ -209,17 +210,49 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 				if user != nil && user.MainWalletID != "" {
 					walletID = user.MainWalletID
 				}
+				userCfg, _ := database.GetUserConfig(nexusID)
 				mgr.Stop(nexusID)
 				if walletID != "" {
-					mgr.StartWithWallet(nexusID, apiKey, apiSecret, walletID, chatStr)
+					mgr.StartWithWallet(nexusID, apiKey, apiSecret, walletID, chatStr, userCfg)
 				} else {
-					mgr.Start(nexusID, apiKey, apiSecret, chatStr)
+					mgr.Start(nexusID, apiKey, apiSecret, chatStr, userCfg)
 				}
 				log.Printf("[bot] linked chat %s to user %s", chatStr, nexusID[:8])
 			},
 			// onStop: remove instance from manager
 			func(nexusID string) {
 				mgr.Stop(nexusID)
+			},
+			// onGetConfig: load per-user config from DB as BotConfig
+			func(nexusID string) bot.BotConfig {
+				return dbCfgToBotCfg(database, nexusID)
+			},
+			// onSetConfig: save BotConfig back to DB
+			func(nexusID string, bcfg bot.BotConfig) {
+				uc := botCfgToDBCfg(bcfg)
+				if err := database.SetUserConfig(nexusID, uc); err != nil {
+					log.Printf("[bot] setConfig failed for %s: %v", nexusID[:8], err)
+				}
+				// Restart user instance to pick up new settings
+				apiKey, apiSecret, err := database.GetSignetCredentials(nexusID)
+				if err != nil {
+					return
+				}
+				user, _ := database.GetUser(nexusID)
+				chatID := ""
+				if user != nil {
+					chatID = user.TelegramChatID
+				}
+				walletID := ""
+				if user != nil && user.MainWalletID != "" {
+					walletID = user.MainWalletID
+				}
+				mgr.Stop(nexusID)
+				if walletID != "" {
+					mgr.StartWithWallet(nexusID, apiKey, apiSecret, walletID, chatID, uc)
+				} else {
+					mgr.Start(nexusID, apiKey, apiSecret, chatID, uc)
+				}
 			},
 		)
 		if err != nil {
@@ -243,10 +276,11 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 				log.Printf("[main] skip resume for user %s: %v", u.NexusUserID[:8], err)
 				continue
 			}
+			userCfg, _ := database.GetUserConfig(u.NexusUserID)
 			if u.MainWalletID != "" {
-				err = mgr.StartWithWallet(u.NexusUserID, apiKey, apiSecret, u.MainWalletID, u.TelegramChatID)
+				err = mgr.StartWithWallet(u.NexusUserID, apiKey, apiSecret, u.MainWalletID, u.TelegramChatID, userCfg)
 			} else {
-				err = mgr.Start(u.NexusUserID, apiKey, apiSecret, u.TelegramChatID)
+				err = mgr.Start(u.NexusUserID, apiKey, apiSecret, u.TelegramChatID, userCfg)
 			}
 			if err != nil {
 				log.Printf("[main] resume failed for user %s: %v", u.NexusUserID[:8], err)
@@ -409,7 +443,8 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 			if user != nil {
 				chatID = user.TelegramChatID
 			}
-			mgr.Start(nexusID, req.APIKey, req.APISecret, chatID)
+			userCfg, _ := database.GetUserConfig(nexusID)
+			mgr.Start(nexusID, req.APIKey, req.APISecret, chatID, userCfg)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -499,17 +534,76 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
+		userCfg, _ := database.GetUserConfig(nexusID)
+		if userCfg == nil {
+			userCfg = db.DefaultUserConfig()
+		}
 		inst := mgr.Get(nexusID)
 		walletID := ""
 		if inst != nil {
 			walletID = inst.WalletID
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(struct {
-			MaxConcurrentPositions int     `json:"max_concurrent_positions"`
-			MaxDailyLossPercent    float64 `json:"max_daily_loss_percent"`
-			WalletID               string  `json:"wallet_id"`
-		}{cfg.MaxConcurrentPositions, cfg.MaxDailyLossPercent, walletID})
+		json.NewEncoder(w).Encode(map[string]any{
+			"wallet_id":        walletID,
+			"sniper_enabled":   userCfg.SniperEnabled,
+			"scalper_enabled":  userCfg.ScalperEnabled,
+			"max_position_sol": userCfg.MaxPositionSOL,
+			"max_positions":    userCfg.MaxPositions,
+			"stop_loss_pct":    userCfg.StopLossPercent,
+			"daily_loss_limit": userCfg.DailyLossLimit,
+			"take_profit_1x":   userCfg.TakeProfit1x,
+			"take_profit_2x":   userCfg.TakeProfit2x,
+			"take_profit_3x":   userCfg.TakeProfit3x,
+			"timeout_minutes":  userCfg.TimeoutMinutes,
+			"min_balance_sol":  userCfg.MinBalanceSOL,
+		})
+	})
+
+	mux.HandleFunc("PUT /config", func(w http.ResponseWriter, r *http.Request) {
+		nexusID, err := requireAuth(r)
+		if err != nil {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		var req db.UserConfig
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error":"bad request"}`, http.StatusBadRequest)
+			return
+		}
+		// Sanitise bounds
+		if req.MaxPositionSOL < 0.01 { req.MaxPositionSOL = 0.01 }
+		if req.MaxPositionSOL > 5.0  { req.MaxPositionSOL = 5.0 }
+		if req.MaxPositions   < 1    { req.MaxPositions = 1 }
+		if req.MaxPositions   > 20   { req.MaxPositions = 20 }
+		if req.StopLossPercent < 0.05 { req.StopLossPercent = 0.05 }
+		if req.StopLossPercent > 0.90 { req.StopLossPercent = 0.90 }
+		if req.DailyLossLimit  < 0.05 { req.DailyLossLimit = 0.05 }
+		if req.DailyLossLimit  > 0.90 { req.DailyLossLimit = 0.90 }
+		if req.TakeProfit1x < 1.2   { req.TakeProfit1x = 1.2 }
+		if req.TakeProfit2x < 1.5   { req.TakeProfit2x = 1.5 }
+		if req.TakeProfit3x < 2.0   { req.TakeProfit3x = 2.0 }
+		if req.TimeoutMinutes < 1   { req.TimeoutMinutes = 1 }
+		if req.TimeoutMinutes > 60  { req.TimeoutMinutes = 60 }
+		if err := database.SetUserConfig(nexusID, &req); err != nil {
+			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+			return
+		}
+		// Restart bot instance with new config
+		apiKey, apiSecret, cErr := database.GetSignetCredentials(nexusID)
+		if cErr == nil {
+			user, _ := database.GetUser(nexusID)
+			chatID := ""; walletIDr := ""
+			if user != nil { chatID = user.TelegramChatID; walletIDr = user.MainWalletID }
+			mgr.Stop(nexusID)
+			if walletIDr != "" {
+				mgr.StartWithWallet(nexusID, apiKey, apiSecret, walletIDr, chatID, &req)
+			} else {
+				mgr.Start(nexusID, apiKey, apiSecret, chatID, &req)
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"status":"saved"}`)
 	})
 
 	mux.HandleFunc("POST /stop", func(w http.ResponseWriter, r *http.Request) {
@@ -537,7 +631,8 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 				if user != nil {
 					chatID = user.TelegramChatID
 				}
-				mgr.Start(nexusID, apiKey, apiSecret, chatID)
+				userCfg, _ := database.GetUserConfig(nexusID)
+				mgr.Start(nexusID, apiKey, apiSecret, chatID, userCfg)
 			}
 		} else {
 			inst.Port.Resume()
@@ -611,9 +706,10 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 			if user != nil {
 				chatID = user.TelegramChatID
 			}
+			userCfg, _ := database.GetUserConfig(nexusID)
 			mgr.Stop(nexusID)
 			database.SetMainWallet(nexusID, walletID)
-			mgr.StartWithWallet(nexusID, apiKey, apiSecret, walletID, chatID)
+			mgr.StartWithWallet(nexusID, apiKey, apiSecret, walletID, chatID, userCfg)
 		} else {
 			database.SetMainWallet(nexusID, walletID)
 		}
@@ -754,6 +850,44 @@ func fetchSOLBalance(baseURL, apiKey, apiSecret, walletID string) float64 {
 	return result.SOL
 }
 
+// ── Config conversion helpers ─────────────────────────────────────────────────
+
+func dbCfgToBotCfg(database *db.DB, nexusID string) bot.BotConfig {
+	uc, _ := database.GetUserConfig(nexusID)
+	if uc == nil {
+		uc = db.DefaultUserConfig()
+	}
+	return bot.BotConfig{
+		SniperEnabled:   uc.SniperEnabled,
+		ScalperEnabled:  uc.ScalperEnabled,
+		MaxPositionSOL:  uc.MaxPositionSOL,
+		MaxPositions:    uc.MaxPositions,
+		StopLossPercent: uc.StopLossPercent,
+		DailyLossLimit:  uc.DailyLossLimit,
+		TakeProfit1x:    uc.TakeProfit1x,
+		TakeProfit2x:    uc.TakeProfit2x,
+		TakeProfit3x:    uc.TakeProfit3x,
+		TimeoutMinutes:  uc.TimeoutMinutes,
+		MinBalanceSOL:   uc.MinBalanceSOL,
+	}
+}
+
+func botCfgToDBCfg(bcfg bot.BotConfig) *db.UserConfig {
+	return &db.UserConfig{
+		SniperEnabled:   bcfg.SniperEnabled,
+		ScalperEnabled:  bcfg.ScalperEnabled,
+		MaxPositionSOL:  bcfg.MaxPositionSOL,
+		MaxPositions:    bcfg.MaxPositions,
+		StopLossPercent: bcfg.StopLossPercent,
+		DailyLossLimit:  bcfg.DailyLossLimit,
+		TakeProfit1x:    bcfg.TakeProfit1x,
+		TakeProfit2x:    bcfg.TakeProfit2x,
+		TakeProfit3x:    bcfg.TakeProfit3x,
+		TimeoutMinutes:  bcfg.TimeoutMinutes,
+		MinBalanceSOL:   bcfg.MinBalanceSOL,
+	}
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 func dailyStats(tgBot *bot.Bot, port *portfolio.Portfolio) {
@@ -770,7 +904,7 @@ func dailyStats(tgBot *bot.Bot, port *portfolio.Portfolio) {
 func withCORS(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

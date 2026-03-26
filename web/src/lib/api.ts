@@ -61,6 +61,21 @@ export interface WalletEntry {
   balance_sol: number
 }
 
+export interface UserConfig {
+  wallet_id?:       string
+  sniper_enabled:   boolean
+  scalper_enabled:  boolean
+  max_position_sol: number
+  max_positions:    number
+  stop_loss_pct:    number
+  daily_loss_limit: number
+  take_profit_1x:   number
+  take_profit_2x:   number
+  take_profit_3x:   number
+  timeout_minutes:  number
+  min_balance_sol:  number
+}
+
 function getToken(): string | null {
   return localStorage.getItem('hb_token')
 }
@@ -140,6 +155,16 @@ export const api = {
 
   cliToken(): Promise<{ token: string }> {
     return post('/auth/cli-token')
+  },
+
+  // Per-user trading config
+  config(): Promise<UserConfig> { return get('/config') },
+  saveConfig(cfg: Omit<UserConfig, 'wallet_id'>): Promise<{ status: string }> {
+    return fetch(`${BASE}/config`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify(cfg),
+    }).then(r => r.json())
   },
 
   deleteSignet(): Promise<void> {

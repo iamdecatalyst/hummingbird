@@ -1,6 +1,6 @@
 {
   "name": "@decatalyst/hummingbird",
-  "version": "1.1.8",
+  "version": "1.2.8",
   "description": "Autonomous pump.fun trading agent — CLI",
   "keywords": [
     "solana",
@@ -20,11 +20,11 @@
     "hummingbird": "./bin/hummingbird.js"
   },
   "optionalDependencies": {
-    "@decatalyst/hummingbird-linux-x64": "1.1.8",
-    "@decatalyst/hummingbird-linux-arm64": "1.1.8",
-    "@decatalyst/hummingbird-darwin-x64": "1.1.8",
-    "@decatalyst/hummingbird-darwin-arm64": "1.1.8",
-    "@decatalyst/hummingbird-win32-x64": "1.1.8"
+    "@decatalyst/hummingbird-linux-x64": "1.2.8",
+    "@decatalyst/hummingbird-linux-arm64": "1.2.8",
+    "@decatalyst/hummingbird-darwin-x64": "1.2.8",
+    "@decatalyst/hummingbird-darwin-arm64": "1.2.8",
+    "@decatalyst/hummingbird-win32-x64": "1.2.8"
   },
   "engines": {
     "node": ">=14"
