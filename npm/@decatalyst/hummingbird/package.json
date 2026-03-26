@@ -1,6 +1,6 @@
 {
   "name": "@decatalyst/hummingbird",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "Autonomous pump.fun trading agent — CLI",
   "keywords": ["solana", "trading", "pump.fun", "cli", "defi"],
   "homepage": "https://github.com/iamdecatalyst/hummingbird",
@@ -13,15 +13,12 @@
   "bin": {
     "hummingbird": "./bin/hummingbird.js"
   },
-  "scripts": {
-    "postinstall": "node bin/hummingbird.js --version 2>/dev/null || true"
-  },
   "optionalDependencies": {
-    "@decatalyst/hummingbird-linux-x64":   "1.0.0",
-    "@decatalyst/hummingbird-linux-arm64":  "1.0.0",
-    "@decatalyst/hummingbird-darwin-x64":   "1.0.0",
-    "@decatalyst/hummingbird-darwin-arm64":  "1.0.0",
-    "@decatalyst/hummingbird-win32-x64":    "1.0.0"
+    "@decatalyst/hummingbird-linux-x64":    "1.1.3",
+    "@decatalyst/hummingbird-linux-arm64":  "1.1.3",
+    "@decatalyst/hummingbird-darwin-x64":   "1.1.3",
+    "@decatalyst/hummingbird-darwin-arm64": "1.1.3",
+    "@decatalyst/hummingbird-win32-x64":    "1.1.3"
   },
   "engines": {
     "node": ">=14"

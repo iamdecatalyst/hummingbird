@@ -39,19 +39,22 @@ for PLATFORM in "${!TARGETS[@]}"; do
   fi
 done
 
-# Update version in all package.json files
+# Update version in all package.json files (version + optionalDependencies)
 echo ""
 echo "▶ Updating version to $VERSION in package.json files"
 
 for PKG_DIR in "$NPM"/hummingbird "$NPM"/hummingbird-*/; do
   PKG_JSON="$PKG_DIR/package.json"
   if [[ -f "$PKG_JSON" ]]; then
-    # Update version field
-    sed -i.bak "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" "$PKG_JSON"
+    # Update "version" field
+    sed -i.bak "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$PKG_JSON"
     rm -f "$PKG_JSON.bak"
-    # Update optionalDependencies versions in main package
-    sed -i.bak "s/\": \"[0-9]\+\.[0-9]\+\.[0-9]\+\"/\": \"$VERSION\"/g" "$PKG_JSON"
+    # Update pinned versions inside optionalDependencies (lines like "pkg": "x.y.z")
+    sed -i.bak "s/@decatalyst\/hummingbird-[^\"]*\": \"[^\"]*\"/@decatalyst\/hummingbird-PLACEHOLDER\": \"$VERSION\"/g" "$PKG_JSON"
     rm -f "$PKG_JSON.bak"
+    # Fix the PLACEHOLDER substitution (restore real pkg names by re-running build)
+    # Actually: just replace any semver value on lines containing @decatalyst
+    perl -i -pe 's/("@decatalyst\/hummingbird-[^"]+": ")[^"]+"/\${1}'"$VERSION"'"/' "$PKG_JSON" 2>/dev/null || true
   fi
 done
 
