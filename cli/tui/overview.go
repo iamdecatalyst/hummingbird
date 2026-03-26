@@ -27,23 +27,15 @@ type OverviewModel struct {
 	fetched bool
 }
 
-// NewOverviewModel creates a new overview view.
 func NewOverviewModel(c *client.Client) OverviewModel {
 	sp := spinner.New()
-	sp.Spinner = spinner.Points
+	sp.Spinner = spinner.Dot
 	sp.Style = lipgloss.NewStyle().Foreground(ColorAccent)
-
-	return OverviewModel{
-		spinner: sp,
-		client:  c,
-	}
+	return OverviewModel{spinner: sp, client: c}
 }
 
-func (m OverviewModel) Init() tea.Cmd {
-	return nil
-}
+func (m OverviewModel) Init() tea.Cmd { return nil }
 
-// Fetch starts a stats fetch. Called when the tab is activated.
 func (m OverviewModel) Fetch() (OverviewModel, tea.Cmd) {
 	m.loading = true
 	m.err = nil
@@ -60,14 +52,12 @@ func (m OverviewModel) Update(msg tea.Msg) (OverviewModel, tea.Cmd) {
 		if msg.String() == "r" && !m.loading {
 			return m.Fetch()
 		}
-
 	case overviewMsg:
 		m.loading = false
 		m.fetched = true
 		m.stats = msg.stats
 		m.err = msg.err
 		return m, nil
-
 	case spinner.TickMsg:
 		if m.loading {
 			var cmd tea.Cmd
@@ -75,96 +65,90 @@ func (m OverviewModel) Update(msg tea.Msg) (OverviewModel, tea.Cmd) {
 			return m, cmd
 		}
 	}
-
 	return m, nil
 }
 
 func (m OverviewModel) View() string {
 	var b strings.Builder
 
-	b.WriteString("  " + StyleTitle.Render("◎ Overview"))
-	b.WriteString("\n\n")
-
-	if m.loading {
-		b.WriteString("  " + m.spinner.View() + StyleMuted.Render("  Fetching stats..."))
+	if m.loading && !m.fetched {
+		b.WriteString("  " + m.spinner.View() + StyleMuted.Render("  connecting..."))
 		return b.String()
 	}
 
 	if m.err != nil {
-		b.WriteString("  " + StyleError.Render("✗ "+m.err.Error()))
-		b.WriteString("\n\n  " + StyleMuted.Render("Press r to retry"))
+		b.WriteString("  " + StyleError.Render("✗  " + m.err.Error()))
+		b.WriteString("\n\n  " + StyleHelp.Render("r  retry"))
 		return b.String()
 	}
 
 	if m.stats != nil {
+		if m.loading {
+			b.WriteString("  " + m.spinner.View() + "\n\n")
+		}
 		b.WriteString(renderOverview(m.stats))
-		b.WriteString("\n\n  " + StyleHelp.Render("Press r to refresh"))
+		b.WriteString("\n\n  " + StyleHelp.Render("r  refresh   auto-refreshes every 5s"))
 	} else {
-		b.WriteString("  " + StyleMuted.Render("Loading..."))
+		b.WriteString("  " + StyleMuted.Render("loading..."))
 	}
 
 	return b.String()
 }
 
 func renderOverview(s *client.Stats) string {
-	// Status line
-	var statusLabel, statusDot string
-	if s.Paused {
-		statusDot = StyleYellow.Render("●")
-		statusLabel = StyleYellow.Bold(true).Render("PAUSED")
+	var b strings.Builder
+
+	// ── Status ──────────────────────────────────────────
+	var dot, statusText string
+	if !s.Configured {
+		dot = StyleRed.Render("●")
+		statusText = StyleRed.Bold(true).Render("NOT CONFIGURED")
+	} else if s.Paused {
+		dot = StyleYellow.Render("●")
+		statusText = StyleYellow.Bold(true).Render("PAUSED")
 		if s.PauseReason != "" {
-			statusLabel += "  " + StyleMuted.Render(s.PauseReason)
+			statusText += "  " + StyleMuted.Render("· " + s.PauseReason)
 		}
-	} else if !s.Configured {
-		statusDot = StyleRed.Render("●")
-		statusLabel = StyleRed.Bold(true).Render("NOT CONFIGURED")
 	} else {
-		statusDot = StyleGreen.Render("●")
-		statusLabel = StyleGreen.Bold(true).Render("LIVE")
+		dot = StyleGreen.Render("●")
+		statusText = StyleGreen.Bold(true).Render("LIVE")
 	}
-	statusLine := fmt.Sprintf("  %s  %s", statusDot, statusLabel)
+	b.WriteString(fmt.Sprintf("  %s  %s\n\n", dot, statusText))
 
-	// Stats grid
-	colW := 20
+	// ── Metrics grid ────────────────────────────────────
+	w := 22
 
-	todayPnL := fmt.Sprintf("%.4f SOL", s.TodayPnL)
-	totalPnL := fmt.Sprintf("%.4f SOL", s.TotalPnL)
-	winRate := fmt.Sprintf("%.1f%%", s.WinRate)
-	openPos := fmt.Sprintf("%d", s.OpenPositions)
+	todayStr := fmt.Sprintf("%.4f SOL", s.TodayPnL)
+	totalStr := fmt.Sprintf("%.4f SOL", s.TotalPnL)
+	winRateStr := fmt.Sprintf("%.1f%%", s.WinRate)
+	openStr := fmt.Sprintf("%d", s.OpenPositions)
 
-	todayStyle := PnLStyle(s.TodayPnL)
-	totalStyle := PnLStyle(s.TotalPnL)
-
-	row1Labels := fmt.Sprintf("  %s%s%s%s",
-		StyleMuted.Width(colW).Render("TODAY P&L"),
-		StyleMuted.Width(colW).Render("TOTAL P&L"),
-		StyleMuted.Width(colW).Render("WIN RATE"),
-		StyleMuted.Width(colW).Render("OPEN POSITIONS"),
+	labels := fmt.Sprintf("  %s%s%s%s",
+		StyleMuted.Width(w).Render("TODAY P&L"),
+		StyleMuted.Width(w).Render("TOTAL P&L"),
+		StyleMuted.Width(w).Render("WIN RATE"),
+		StyleMuted.Width(w).Render("POSITIONS"),
 	)
-	row1Values := fmt.Sprintf("  %s%s%s%s",
-		todayStyle.Width(colW).Render(todayPnL),
-		totalStyle.Width(colW).Render(totalPnL),
-		StyleValue.Width(colW).Render(winRate),
-		StyleValue.Width(colW).Render(openPos),
+	values := fmt.Sprintf("  %s%s%s%s",
+		PnLStyle(s.TodayPnL).Width(w).Bold(true).Render(todayStr),
+		PnLStyle(s.TotalPnL).Width(w).Bold(true).Render(totalStr),
+		StyleValue.Width(w).Bold(true).Render(winRateStr),
+		StyleValue.Width(w).Bold(true).Render(openStr),
 	)
 
-	divider := "  " + StyleDivider.Render(strings.Repeat("─", colW*4))
+	b.WriteString(labels + "\n")
+	b.WriteString(values + "\n")
+	b.WriteString("\n  " + StyleDivider.Render(strings.Repeat("─", w*4-2)) + "\n\n")
 
-	// Trade counts
-	winsLabel := StyleMuted.Render("Wins: ")
-	winsVal := StyleGreen.Render(fmt.Sprintf("%d", s.Wins))
-	lossLabel := StyleMuted.Render("  Losses: ")
-	lossVal := StyleRed.Render(fmt.Sprintf("%d", s.Losses))
-	totalLabel := StyleMuted.Render("  Total Trades: ")
-	totalVal := StyleValue.Render(fmt.Sprintf("%d", s.TotalTrades))
+	// ── Trade counters ───────────────────────────────────
+	b.WriteString(fmt.Sprintf("  %s%s  %s%s  %s%s",
+		StyleMuted.Render("wins "),   StyleGreen.Bold(true).Render(fmt.Sprintf("%d", s.Wins)),
+		StyleMuted.Render("losses "), StyleRed.Bold(true).Render(fmt.Sprintf("%d", s.Losses)),
+		StyleMuted.Render("total "),  StyleValue.Bold(true).Render(fmt.Sprintf("%d", s.TotalTrades)),
+	))
+	b.WriteString("\n")
 
-	tradeLine := "  " + winsLabel + winsVal + lossLabel + lossVal + totalLabel + totalVal
-
-	grid := row1Labels + "\n" + row1Values + "\n\n" + divider + "\n" + tradeLine
-
-	content := statusLine + "\n\n" + grid
-
-	return StyleBox.Render(content)
+	return StyleBox.Render(b.String())
 }
 
 // OverviewOnce runs a one-shot stats fetch and returns a formatted string.
@@ -176,7 +160,5 @@ func OverviewOnce(c *client.Client) (string, error) {
 	return renderOverview(stats), nil
 }
 
-// statsStyle returns appropriate style for a lipgloss width-formatted value.
-func statsStyle(val float64) lipgloss.Style {
-	return PnLStyle(val)
-}
+// suppress unused
+var _ = lipgloss.NewStyle

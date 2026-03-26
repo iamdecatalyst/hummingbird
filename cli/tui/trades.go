@@ -33,7 +33,7 @@ type TradesModel struct {
 // NewTradesModel creates a new trades view.
 func NewTradesModel(c *client.Client) TradesModel {
 	sp := spinner.New()
-	sp.Spinner = spinner.Points
+	sp.Spinner = spinner.Dot
 	sp.Style = lipgloss.NewStyle().Foreground(ColorAccent)
 
 	return TradesModel{
@@ -241,5 +241,4 @@ func PositionsOnce(c *client.Client) (string, error) {
 	return renderTrades(open, closed), nil
 }
 
-// helper to suppress unused import warning
-var _ = lipgloss.NewStyle
+var _ = lipgloss.NewStyle // suppress unused import

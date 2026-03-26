@@ -11,40 +11,30 @@ import (
 	"github.com/iamdecatalyst/hummingbird/cli/client"
 )
 
-// logsMsg is sent when the logs fetch completes.
 type logsMsg struct {
 	logs []client.LogEntry
 	err  error
 }
 
-// LogsModel is the logs tab view.
 type LogsModel struct {
-	spinner  spinner.Model
-	client   *client.Client
-	logs     []client.LogEntry
-	err      error
-	loading  bool
-	fetched  bool
+	spinner   spinner.Model
+	client    *client.Client
+	logs      []client.LogEntry
+	err       error
+	loading   bool
+	fetched   bool
 	scrollOff int
 }
 
-// NewLogsModel creates a new logs view.
 func NewLogsModel(c *client.Client) LogsModel {
 	sp := spinner.New()
-	sp.Spinner = spinner.Points
+	sp.Spinner = spinner.Dot
 	sp.Style = lipgloss.NewStyle().Foreground(ColorAccent)
-
-	return LogsModel{
-		spinner: sp,
-		client:  c,
-	}
+	return LogsModel{spinner: sp, client: c}
 }
 
-func (m LogsModel) Init() tea.Cmd {
-	return nil
-}
+func (m LogsModel) Init() tea.Cmd { return nil }
 
-// Fetch starts a logs fetch. Called when the tab is activated.
 func (m LogsModel) Fetch() (LogsModel, tea.Cmd) {
 	m.loading = true
 	m.err = nil
@@ -71,8 +61,13 @@ func (m LogsModel) Update(msg tea.Msg) (LogsModel, tea.Cmd) {
 			if m.scrollOff > 0 {
 				m.scrollOff--
 			}
+		case "g":
+			m.scrollOff = 0
+		case "G":
+			if len(m.logs) > 50 {
+				m.scrollOff = len(m.logs) - 50
+			}
 		}
-
 	case logsMsg:
 		m.loading = false
 		m.fetched = true
@@ -80,7 +75,6 @@ func (m LogsModel) Update(msg tea.Msg) (LogsModel, tea.Cmd) {
 		m.err = msg.err
 		m.scrollOff = 0
 		return m, nil
-
 	case spinner.TickMsg:
 		if m.loading {
 			var cmd tea.Cmd
@@ -88,45 +82,44 @@ func (m LogsModel) Update(msg tea.Msg) (LogsModel, tea.Cmd) {
 			return m, cmd
 		}
 	}
-
 	return m, nil
 }
 
 func (m LogsModel) View() string {
 	var b strings.Builder
 
-	b.WriteString("  " + StyleTitle.Render("◎ Event Log"))
-	b.WriteString("\n\n")
-
-	if m.loading {
-		b.WriteString("  " + m.spinner.View() + StyleMuted.Render("  Fetching logs..."))
+	if m.loading && !m.fetched {
+		b.WriteString("  " + m.spinner.View() + StyleMuted.Render("  loading event log..."))
 		return b.String()
 	}
 
 	if m.err != nil {
-		b.WriteString("  " + StyleError.Render("✗ "+m.err.Error()))
-		b.WriteString("\n\n  " + StyleMuted.Render("Press r to retry"))
-		return b.String()
-	}
-
-	if !m.fetched {
-		b.WriteString("  " + StyleMuted.Render("Loading..."))
+		b.WriteString("  " + StyleError.Render("✗  " + m.err.Error()))
+		b.WriteString("\n\n  " + StyleHelp.Render("r  retry"))
 		return b.String()
 	}
 
 	b.WriteString(renderLogs(m.logs, m.scrollOff))
-	b.WriteString("\n\n  " + StyleHelp.Render("↑↓ / j k: scroll   r: refresh"))
+	b.WriteString("\n\n  " + StyleHelp.Render("↑↓ / j k  scroll   g  top   G  bottom   r  refresh"))
 
 	return b.String()
 }
 
-// logEntryStyle returns the appropriate style for a log entry type.
-func logEntryStyle(entryType string) lipgloss.Style {
-	switch strings.ToUpper(entryType) {
+var logTypeGlyph = map[string]string{
+	"ENTER": "▶",
+	"EXIT":  "◀",
+	"START": "▲",
+	"STOP":  "▼",
+	"ALERT": "!",
+	"INFO":  "·",
+}
+
+func logEntryStyle(t string) lipgloss.Style {
+	switch strings.ToUpper(t) {
 	case "ENTER", "START":
 		return StyleGreen
 	case "EXIT":
-		return lipgloss.NewStyle().Foreground(ColorAccent)
+		return StyleAccent
 	case "STOP":
 		return StyleYellow
 	case "ALERT":
@@ -137,45 +130,50 @@ func logEntryStyle(entryType string) lipgloss.Style {
 }
 
 func renderLogEntry(e client.LogEntry) string {
-	typeStyle := logEntryStyle(e.Type)
-	typeTag := typeStyle.Bold(true).Width(8).Render(e.Type)
+	upper := strings.ToUpper(e.Type)
+	style := logEntryStyle(upper)
 
-	timeStr := StyleMuted.Render(e.Time)
+	glyph, ok := logTypeGlyph[upper]
+	if !ok {
+		glyph = "·"
+	}
 
-	var details strings.Builder
+	tag := style.Bold(true).Render(fmt.Sprintf("%s %-5s", glyph, upper))
+	ts  := StyleMuted.Render(e.Time)
+
+	var extra strings.Builder
 	if e.Token != "" {
-		details.WriteString(StyleMuted.Render(" token=") + StyleValue.Render(shortMint(e.Token)))
+		extra.WriteString("  " + StyleMuted.Render("token=") + StyleValue.Render(shortMint(e.Token)))
 	}
 	if e.AmtSOL != 0 {
-		details.WriteString(StyleMuted.Render(" amt=") + StyleValue.Render(fmt.Sprintf("%.4f SOL", e.AmtSOL)))
+		extra.WriteString("  " + StyleMuted.Render("amt=") + StyleValue.Render(fmt.Sprintf("%.4f◎", e.AmtSOL)))
 	}
 	if e.PnLSOL != 0 {
-		pnlStyle := PnLStyle(e.PnLSOL)
-		details.WriteString(StyleMuted.Render(" pnl=") + pnlStyle.Render(fmt.Sprintf("%+.4f SOL", e.PnLSOL)))
+		extra.WriteString("  " + StyleMuted.Render("pnl=") + PnLStyle(e.PnLSOL).Bold(true).Render(fmt.Sprintf("%+.4f◎", e.PnLSOL)))
 	}
 	if e.PnLPct != 0 {
-		pnlStyle := PnLStyle(e.PnLPct)
-		details.WriteString(pnlStyle.Render(fmt.Sprintf(" (%+.1f%%)", e.PnLPct)))
+		extra.WriteString(PnLStyle(e.PnLPct).Render(fmt.Sprintf(" (%+.1f%%)", e.PnLPct)))
 	}
 	if e.Reason != "" {
-		details.WriteString(StyleMuted.Render(" reason=") + StyleValue.Render(e.Reason))
+		extra.WriteString("  " + StyleMuted.Render("·") + " " + StyleValue.Render(e.Reason))
 	}
 
 	msg := ""
 	if e.Message != "" {
-		msg = "  " + StyleValue.Render(e.Message)
+		msg = "  " + StyleMuted.Render(e.Message)
 	}
 
-	return fmt.Sprintf("  %s  %s%s%s", timeStr, typeTag, details.String(), msg)
+	return fmt.Sprintf("  %s  %s%s%s", ts, tag, extra.String(), msg)
 }
 
 func renderLogs(logs []client.LogEntry, scrollOff int) string {
 	if len(logs) == 0 {
-		return StyleBox.Render("  " + StyleMuted.Render("No log entries"))
+		return StyleBox.Render("  " + StyleMuted.Render("no events yet"))
 	}
 
-	maxDisplay := 50
-	// Newest first
+	const maxDisplay = 50
+
+	// Reverse so newest is at top
 	reversed := make([]client.LogEntry, len(logs))
 	for i, e := range logs {
 		reversed[len(logs)-1-i] = e
@@ -189,16 +187,24 @@ func renderLogs(logs []client.LogEntry, scrollOff int) string {
 	if start > len(reversed) {
 		start = len(reversed)
 	}
-	visible := reversed[start:end]
 
 	var b strings.Builder
-	for _, e := range visible {
-		b.WriteString(renderLogEntry(e))
-		b.WriteString("\n")
+
+	// Header row
+	b.WriteString(fmt.Sprintf("  %s  %s\n",
+		StyleMuted.Width(19).Render("TIME"),
+		StyleMuted.Render("EVENT"),
+	))
+	b.WriteString("  " + StyleDivider.Render(strings.Repeat("─", 72)) + "\n")
+
+	for _, e := range reversed[start:end] {
+		b.WriteString(renderLogEntry(e) + "\n")
 	}
 
 	if len(logs) > maxDisplay {
-		b.WriteString("\n  " + StyleMuted.Render(fmt.Sprintf("Showing %d–%d of %d entries", start+1, end, len(logs))))
+		b.WriteString("\n  " + StyleMuted.Render(fmt.Sprintf(
+			"%d–%d of %d  ·  ↑↓ to scroll", start+1, end, len(logs),
+		)))
 	}
 
 	return StyleBox.Render(b.String())

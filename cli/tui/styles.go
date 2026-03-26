@@ -4,52 +4,55 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Hummingbird blue monochrome theme colors
+// Monochrome blue-on-black theme
 var (
 	ColorAccent  = lipgloss.Color("#00A8FF")
 	ColorBg      = lipgloss.Color("#0d0d0d")
 	ColorSurface = lipgloss.Color("#141414")
-	ColorBorder  = lipgloss.Color("#1a1a1a")
+	ColorBorder  = lipgloss.Color("#222222")
 	ColorMuted   = lipgloss.Color("#555555")
-	ColorText    = lipgloss.Color("#ffffff")
+	ColorText    = lipgloss.Color("#e0e0e0")
 	ColorGreen   = lipgloss.Color("#4ADE80")
 	ColorRed     = lipgloss.Color("#EF4444")
 	ColorYellow  = lipgloss.Color("#F59E0B")
-	ColorDim     = lipgloss.Color("#333333")
+	ColorDim     = lipgloss.Color("#2a2a2a")
+	ColorSubtle  = lipgloss.Color("#383838")
 )
 
-// Styles
 var (
 	StyleBanner = lipgloss.NewStyle().
 			Foreground(ColorAccent).
 			Bold(true)
 
 	StyleBannerSub = lipgloss.NewStyle().
-			Foreground(ColorMuted).
-			Italic(true)
+			Foreground(ColorMuted)
 
 	StyleBannerVersion = lipgloss.NewStyle().
 				Foreground(ColorDim)
 
 	StyleTab = lipgloss.NewStyle().
-			Padding(0, 2).
+			Padding(0, 1).
 			Foreground(ColorMuted)
 
 	StyleActiveTab = lipgloss.NewStyle().
-			Padding(0, 2).
+			Padding(0, 1).
 			Foreground(ColorAccent).
 			Bold(true)
 
 	StyleTabSep = lipgloss.NewStyle().
-			Foreground(ColorBorder)
+			Foreground(ColorSubtle)
 
 	StyleBox = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
+			Border(lipgloss.NormalBorder()).
 			BorderForeground(ColorBorder).
 			Padding(1, 2)
 
 	StyleTitle = lipgloss.NewStyle().
 			Foreground(ColorAccent).
+			Bold(true)
+
+	StyleSection = lipgloss.NewStyle().
+			Foreground(ColorMuted).
 			Bold(true)
 
 	StyleLabel = lipgloss.NewStyle().
@@ -72,8 +75,7 @@ var (
 			Foreground(ColorMuted)
 
 	StyleHelp = lipgloss.NewStyle().
-			Foreground(ColorDim).
-			Italic(true)
+			Foreground(ColorSubtle)
 
 	StyleError = lipgloss.NewStyle().
 			Foreground(ColorRed).
@@ -81,6 +83,17 @@ var (
 
 	StyleDivider = lipgloss.NewStyle().
 			Foreground(ColorBorder)
+
+	StyleAccent = lipgloss.NewStyle().
+			Foreground(ColorAccent)
+
+	StyleConfirmWarning = lipgloss.NewStyle().
+				Foreground(ColorYellow).
+				Bold(true)
+
+	StyleSuccess = lipgloss.NewStyle().
+			Foreground(ColorGreen).
+			Bold(true)
 )
 
 // PnLStyle returns the appropriate style for a P&L value.

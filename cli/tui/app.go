@@ -2,8 +2,10 @@ package tui
 
 import (
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/iamdecatalyst/hummingbird/cli/client"
 )
@@ -11,20 +13,10 @@ import (
 // Version is the CLI version shown in the banner.
 const Version = "v1.0.0"
 
-const banner = `
-  ██╗  ██╗██╗   ██╗███╗   ███╗███╗   ███╗██╗███╗   ██╗ ██████╗ ██████╗ ██╗██████╗ ██████╗
-  ██║  ██║██║   ██║████╗ ████║████╗ ████║██║████╗  ██║██╔════╝ ██╔══██╗██║██╔══██╗██╔══██╗
-  ███████║██║   ██║██╔████╔██║██╔████╔██║██║██╔██╗ ██║██║  ███╗██████╔╝██║██████╔╝██║  ██║
-  ██╔══██║██║   ██║██║╚██╔╝██║██║╚██╔╝██║██║██║╚██╗██║██║   ██║██╔══██╗██║██╔══██╗██║  ██║
-  ██║  ██║╚██████╔╝██║ ╚═╝ ██║██║ ╚═╝ ██║██║██║ ╚████║╚██████╔╝██████╔╝██║██║  ██║██████╔╝
-  ╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚═════╝ ╚═╝╚═╝  ╚═╝╚═════╝ `
+// tickMsg fires on the auto-refresh interval.
+type tickMsg struct{}
 
-const bird = `
-    .
-   /|\     Pump.fun Trading Agent
-  / | \    by Vylth · VYLTH Strategies
- /__|__\
-    |`
+const refreshInterval = 5 * time.Second
 
 // Tab represents a view tab.
 type Tab int
@@ -33,9 +25,10 @@ const (
 	TabOverview Tab = iota
 	TabTrades
 	TabLogs
+	TabControls
 )
 
-const tabCount = 3
+const tabCount = 4
 
 // Model is the main application model.
 type Model struct {
@@ -43,6 +36,7 @@ type Model struct {
 	overview  OverviewModel
 	trades    TradesModel
 	logs      LogsModel
+	controls  ControlsModel
 	width     int
 	height    int
 }
@@ -54,14 +48,20 @@ func NewModel(c *client.Client) Model {
 		overview:  NewOverviewModel(c),
 		trades:    NewTradesModel(c),
 		logs:      NewLogsModel(c),
+		controls:  NewControlsModel(c),
 	}
 }
 
 func (m Model) Init() tea.Cmd {
-	// Fetch overview immediately on launch
 	var cmd tea.Cmd
 	m.overview, cmd = m.overview.Fetch()
-	return cmd
+	return tea.Batch(cmd, tickCmd())
+}
+
+func tickCmd() tea.Cmd {
+	return tea.Tick(refreshInterval, func(time.Time) tea.Msg {
+		return tickMsg{}
+	})
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -71,13 +71,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		return m, nil
 
+	case tickMsg:
+		// Auto-refresh overview stats in background; schedule next tick
+		var cmd tea.Cmd
+		if m.activeTab == TabOverview {
+			m.overview, cmd = m.overview.Fetch()
+		}
+		return m, tea.Batch(cmd, tickCmd())
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
-		case "tab", "right":
+		case "tab", "right", "l":
 			return m.switchTab((m.activeTab + 1) % tabCount)
-		case "shift+tab", "left":
+		case "shift+tab", "left", "h":
 			return m.switchTab((m.activeTab + tabCount - 1) % tabCount)
 		case "1":
 			return m.switchTab(TabOverview)
@@ -85,6 +93,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.switchTab(TabTrades)
 		case "3":
 			return m.switchTab(TabLogs)
+		case "4":
+			return m.switchTab(TabControls)
 		}
 	}
 
@@ -97,6 +107,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.trades, cmd = m.trades.Update(msg)
 	case TabLogs:
 		m.logs, cmd = m.logs.Update(msg)
+	case TabControls:
+		m.controls, cmd = m.controls.Update(msg)
 	}
 
 	return m, cmd
@@ -119,6 +131,10 @@ func (m Model) switchTab(tab Tab) (Model, tea.Cmd) {
 		if !m.logs.fetched {
 			m.logs, cmd = m.logs.Fetch()
 		}
+	case TabControls:
+		if !m.controls.fetched {
+			m.controls, cmd = m.controls.Fetch()
+		}
 	}
 
 	return m, cmd
@@ -127,37 +143,20 @@ func (m Model) switchTab(tab Tab) (Model, tea.Cmd) {
 func (m Model) View() string {
 	var b strings.Builder
 
-	// Banner + bird side by side
-	bannerLines := strings.Split(StyleBanner.Render(banner), "\n")
-	birdLines := strings.Split(StyleBannerSub.Render(bird), "\n")
-
-	// Pad to same height
-	for len(birdLines) < len(bannerLines) {
-		birdLines = append(birdLines, "")
-	}
-
-	for i, line := range bannerLines {
-		b.WriteString(line)
-		if i < len(birdLines) {
-			b.WriteString("   " + birdLines[i])
-		}
-		b.WriteString("\n")
-	}
-
-	// Version
-	b.WriteString("  " + StyleBannerVersion.Render(Version) + "\n")
+	b.WriteString(renderBanner(m.width))
 	b.WriteString("\n")
 
 	// Tab bar
 	sep := StyleTabSep.Render("│")
 	tabs := []string{
-		renderTab(TabOverview, m.activeTab, "1", "Overview"),
-		renderTab(TabTrades, m.activeTab, "2", "Trades"),
-		renderTab(TabLogs, m.activeTab, "3", "Logs"),
+		renderTab(TabOverview,  m.activeTab, "1", "overview"),
+		renderTab(TabTrades,    m.activeTab, "2", "trades"),
+		renderTab(TabLogs,      m.activeTab, "3", "logs"),
+		renderTab(TabControls,  m.activeTab, "4", "controls"),
 	}
 	b.WriteString("  " + strings.Join(tabs, " "+sep+" "))
 	b.WriteString("\n")
-	barWidth := 50
+	barWidth := 60
 	if m.width > 0 {
 		barWidth = m.width - 4
 	}
@@ -172,19 +171,78 @@ func (m Model) View() string {
 		b.WriteString(m.trades.View())
 	case TabLogs:
 		b.WriteString(m.logs.View())
+	case TabControls:
+		b.WriteString(m.controls.View())
 	}
 
 	// Footer
 	b.WriteString("\n\n")
-	b.WriteString("  " + StyleHelp.Render("← → tab: switch tabs   1 overview · 2 trades · 3 logs   q: quit"))
+	hint := "← → / h l / tab: switch   1-4: jump to tab   r: refresh   q: quit"
+	b.WriteString("  " + StyleHelp.Render(hint))
 
 	return b.String()
 }
 
-func renderTab(tab, active Tab, num, name string) string {
-	label := "[" + num + "] " + name
-	if tab == active {
-		return StyleActiveTab.Render(label)
+func renderBanner(termWidth int) string {
+	bird := `   ──.
+  /  ◉ \──
+  \    /   >────
+   '──'`
+
+	title := lipgloss.NewStyle().
+		Foreground(ColorAccent).
+		Bold(true).
+		Render("hummingbird")
+
+	sub := lipgloss.NewStyle().
+		Foreground(ColorMuted).
+		Render("autonomous pump.fun trading agent")
+
+	ver := lipgloss.NewStyle().
+		Foreground(ColorDim).
+		Render(Version + "  ·  by VYLTH Strategies · @iamdecatalyst")
+
+	birdLines   := strings.Split(lipgloss.NewStyle().Foreground(ColorAccent).Render(bird), "\n")
+	detailLines := []string{
+		"",
+		"  " + title,
+		"  " + sub,
+		"  " + ver,
 	}
-	return StyleTab.Render(label)
+
+	width := termWidth - 2
+	if width < 60 {
+		width = 60
+	}
+	divider := lipgloss.NewStyle().Foreground(ColorDim).Render(strings.Repeat("─", width))
+
+	var b strings.Builder
+	b.WriteString("\n  " + divider + "\n")
+
+	maxLines := len(birdLines)
+	if len(detailLines) > maxLines {
+		maxLines = len(detailLines)
+	}
+	for i := 0; i < maxLines; i++ {
+		bl := ""
+		if i < len(birdLines) {
+			bl = birdLines[i]
+		}
+		dl := ""
+		if i < len(detailLines) {
+			dl = detailLines[i]
+		}
+		b.WriteString("  " + bl + dl + "\n")
+	}
+
+	b.WriteString("  " + divider)
+	return b.String()
+}
+
+func renderTab(tab, active Tab, num, name string) string {
+	label := num + "  " + name
+	if tab == active {
+		return StyleActiveTab.Render("▸ " + label)
+	}
+	return StyleTab.Render("  " + label)
 }

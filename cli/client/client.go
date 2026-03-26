@@ -99,6 +99,39 @@ type ModeResponse struct {
 	MultiTenant bool `json:"multi_tenant"`
 }
 
+func (c *Client) doPost(path string) error {
+	url := c.BaseURL + path
+
+	req, err := http.NewRequest("POST", url, nil)
+	if err != nil {
+		return fmt.Errorf("creating request: %w", err)
+	}
+	if c.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
+	}
+	return nil
+}
+
+// Stop pauses the trading bot.
+func (c *Client) Stop() error { return c.doPost("/stop") }
+
+// Resume unpauses the trading bot.
+func (c *Client) Resume() error { return c.doPost("/resume") }
+
+// Start activates the bot (first launch).
+func (c *Client) Start() error { return c.doPost("/start") }
+
 func (c *Client) doRequest(path string) ([]byte, error) {
 	url := c.BaseURL + path
 
