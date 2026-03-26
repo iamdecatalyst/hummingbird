@@ -118,6 +118,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) switchTab(tab Tab) (Model, tea.Cmd) {
 	m.activeTab = tab
 
+	cmds := []tea.Cmd{tea.ClearScreen}
+
 	var cmd tea.Cmd
 	switch tab {
 	case TabOverview:
@@ -138,7 +140,10 @@ func (m Model) switchTab(tab Tab) (Model, tea.Cmd) {
 		}
 	}
 
-	return m, cmd
+	if cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+	return m, tea.Batch(cmds...)
 }
 
 func (m Model) View() string {
