@@ -9,7 +9,7 @@ import {
 import { useOrchestrator } from '../hooks/useOrchestrator'
 import type { ClosedPosition, Position } from '../lib/api'
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function held(openedAt: string): string {
   const ms = Date.now() - new Date(openedAt).getTime()
@@ -43,29 +43,28 @@ function CopyField({ label, value }: { label: string; value: string }) {
   )
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ── Stat card ─────────────────────────────────────────────────────────────────
 
-function StatCard({
-  label, value, sub, positive, accent,
-}: { label: string; value: string; sub?: string; positive?: boolean; accent?: boolean }) {
+function StatCard({ label, value, sub, positive, accent }: {
+  label: string; value: string; sub?: string; positive?: boolean; accent?: boolean
+}) {
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="neu-tile p-5">
       <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-2">{label}</p>
       <p className={`font-mono text-2xl font-bold ${
-        accent    ? 'text-[#00A8FF]' :
+        accent ? 'text-[#00A8FF]' :
         positive === true  ? 'text-[#4ADE80]' :
         positive === false ? 'text-[#EF4444]' :
         'text-white'
-      }`}>
-        {value}
-      </p>
+      }`}>{value}</p>
       {sub && <p className="font-mono text-xs text-[#555] mt-1">{sub}</p>}
     </motion.div>
   )
 }
 
+// ── Position card ─────────────────────────────────────────────────────────────
+
 function PositionCard({ pos }: { pos: Position }) {
-  const heldStr = held(pos.opened_at)
   const pnlPct = pos.peak_price_sol > 0
     ? ((pos.peak_price_sol - pos.entry_price_sol) / pos.entry_price_sol * 100).toFixed(1)
     : null
@@ -76,7 +75,7 @@ function PositionCard({ pos }: { pos: Position }) {
           <span className="font-mono text-sm text-white font-bold">{shortMint(pos.mint)}</span>
           <span className="ml-2 font-mono text-xs text-[#00A8FF]">{pos.score >= 75 ? 'SNIPER' : 'SCALPER'}</span>
         </div>
-        <span className="font-mono text-xs text-[#555]">{heldStr}</span>
+        <span className="font-mono text-xs text-[#555]">{held(pos.opened_at)}</span>
       </div>
       <div className="grid grid-cols-3 gap-3">
         <div>
@@ -98,12 +97,20 @@ function PositionCard({ pos }: { pos: Position }) {
   )
 }
 
-function Sidebar({
-  active, paused, onTabChange, onStop, onResume, onLogout, walletId, userName, userAvatar,
-}: {
-  active: string
+// ── Top nav ───────────────────────────────────────────────────────────────────
+
+const TABS = [
+  { id: 'overview',  label: 'Overview',  icon: <ChartBar size={14} weight="duotone" /> },
+  { id: 'positions', label: 'Positions', icon: <MapPin size={14} weight="duotone" /> },
+  { id: 'history',   label: 'History',   icon: <ClockCounterClockwise size={14} weight="duotone" /> },
+  { id: 'config',    label: 'Config',    icon: <Gear size={14} weight="duotone" /> },
+]
+
+function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, walletId, userName, userAvatar }: {
+  tab: string
+  setTab: (t: string) => void
   paused: boolean
-  onTabChange: (tab: string) => void
+  online: boolean
   onStop: () => void
   onResume: () => void
   onLogout?: () => void
@@ -111,75 +118,97 @@ function Sidebar({
   userName?: string
   userAvatar?: string
 }) {
-  const navItems = [
-    { id: 'overview',  label: 'Overview',  icon: <ChartBar size={16} weight="duotone" /> },
-    { id: 'positions', label: 'Positions', icon: <MapPin size={16} weight="duotone" /> },
-    { id: 'history',   label: 'History',   icon: <ClockCounterClockwise size={16} weight="duotone" /> },
-    { id: 'config',    label: 'Config',    icon: <Gear size={16} weight="duotone" /> },
-  ]
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+
   return (
-    <aside className="w-56 shrink-0 flex flex-col gap-1 pt-4 border-r border-white/5">
-      <div className="px-4 mb-6">
-        <Link to="/" className="flex items-center gap-2 group">
-          <img src="/logo.png" alt="" className="w-6 h-6 object-contain"
-            style={{ filter: 'drop-shadow(0 0 6px rgba(0,168,255,0.4))' }} />
-          <span className="font-mono text-sm font-bold text-white group-hover:text-[#00A8FF] transition-colors">
-            HUMMINGBIRD
-          </span>
-        </Link>
-        <div className="flex items-center gap-2 mt-2">
-          {paused
-            ? <><span className="w-2 h-2 rounded-full bg-[#F59E0B]" /><span className="font-mono text-xs text-[#F59E0B]">PAUSED</span></>
-            : <><span className="status-dot-live" /><span className="font-mono text-xs text-[#00A8FF]">LIVE</span></>
-          }
-        </div>
+    <nav className="sticky top-0 z-20 bg-[#0d0d0d]/90 backdrop-blur-md border-b border-white/5 px-6 h-14 flex items-center gap-4">
+      {/* Logo */}
+      <Link to="/" className="flex items-center gap-2 shrink-0 group mr-2">
+        <img src="/logo.png" alt="" className="w-6 h-6 object-contain"
+          style={{ filter: 'drop-shadow(0 0 6px rgba(0,168,255,0.4))' }} />
+        <span className="font-mono text-sm font-bold text-white group-hover:text-[#00A8FF] transition-colors hidden sm:block">
+          HUMMINGBIRD
+        </span>
+      </Link>
+
+      {/* Tabs */}
+      <div className="flex items-center gap-1 flex-1">
+        {TABS.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-xs transition-all duration-150 ${
+              tab === t.id
+                ? 'bg-white/8 text-white'
+                : 'text-[#555] hover:text-[#a0a0a0] hover:bg-white/4'
+            }`}
+          >
+            {t.icon}
+            <span className="hidden sm:block">{t.label}</span>
+          </button>
+        ))}
       </div>
 
-      {navItems.map(item => (
-        <button key={item.id}
-          onClick={() => onTabChange(item.id)}
-          className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-left font-mono text-sm transition-all duration-200 ${
-            active === item.id
-              ? 'bg-[#141414] text-white shadow-[3px_3px_8px_rgba(0,0,0,0.7),-3px_-3px_8px_rgba(40,40,40,0.12)]'
-              : 'text-[#666] hover:text-[#a0a0a0] hover:bg-[#111]'
-          }`}
-        >
-          <span>{item.icon}</span><span>{item.label}</span>
-        </button>
-      ))}
+      {/* Right side */}
+      <div className="flex items-center gap-2 shrink-0">
+        {/* Live status */}
+        <span className={`flex items-center gap-1.5 font-mono text-xs px-2.5 py-1 rounded-lg ${
+          online ? 'text-[#4ADE80]' : 'text-[#EF4444]'
+        }`}>
+          <Pulse size={12} weight="bold" />
+          <span className="hidden sm:block">{online ? 'live' : 'offline'}</span>
+        </span>
 
-      <div className="mt-auto px-4 pb-4 pt-8 flex flex-col gap-2">
+        {/* Stop / Resume */}
         {paused
-          ? <button onClick={onResume} className="hb-btn text-xs py-2 justify-center gap-1.5"><Play size={13} weight="fill" /> Resume</button>
-          : <button onClick={onStop}   className="neu-btn-ghost text-xs py-2 justify-center gap-1.5"><Stop size={13} weight="fill" /> Stop All</button>
+          ? <button onClick={onResume} className="flex items-center gap-1.5 font-mono text-xs px-3 py-1.5 rounded-lg bg-[#4ADE80]/10 text-[#4ADE80] hover:bg-[#4ADE80]/20 transition-colors">
+              <Play size={12} weight="fill" /><span className="hidden sm:block">Resume</span>
+            </button>
+          : <button onClick={onStop} className="flex items-center gap-1.5 font-mono text-xs px-3 py-1.5 rounded-lg bg-white/5 text-[#666] hover:bg-white/8 hover:text-[#a0a0a0] transition-colors">
+              <Stop size={12} weight="fill" /><span className="hidden sm:block">Stop</span>
+            </button>
         }
+
+        {/* User avatar */}
         {onLogout && (
-          <div className="border-t border-white/5 pt-3 mt-1">
-            <div className="flex items-center gap-2 mb-2">
+          <div className="relative">
+            <button
+              onClick={() => setUserMenuOpen(v => !v)}
+              className="flex items-center gap-2 pl-2 pr-3 py-1 rounded-lg hover:bg-white/5 transition-colors"
+            >
               {userAvatar
                 ? <img src={userAvatar} className="w-6 h-6 rounded-full object-cover ring-1 ring-white/10" alt="" />
                 : <div className="w-6 h-6 rounded-full bg-[#1a1a1a] border border-white/10 flex items-center justify-center">
-                    <span className="font-mono text-[10px] text-[#555]">{(userName || 'U')[0].toUpperCase()}</span>
+                    <span className="font-mono text-[10px] text-[#666]">{(userName || 'U')[0].toUpperCase()}</span>
                   </div>
               }
-              <span className="font-mono text-[11px] text-[#666] truncate">
-                {userName || (walletId ? `${walletId.slice(0, 8)}…` : 'User')}
+              <span className="font-mono text-xs text-[#666] hidden md:block max-w-[120px] truncate">
+                {userName || (walletId ? `${walletId.slice(0, 6)}…` : 'User')}
               </span>
-            </div>
-            <button
-              onClick={onLogout}
-              className="flex items-center gap-2 text-[#444] hover:text-[#EF4444] font-mono text-xs transition-colors w-full"
-            >
-              <SignOut size={13} /> Sign out
             </button>
+
+            {userMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setUserMenuOpen(false)} />
+                <div className="absolute right-0 top-full mt-1.5 z-20 w-44 neu-card rounded-xl py-1 shadow-2xl">
+                  <button
+                    onClick={() => { setUserMenuOpen(false); onLogout() }}
+                    className="flex items-center gap-2 w-full px-4 py-2.5 font-mono text-xs text-[#666] hover:text-[#EF4444] hover:bg-white/4 transition-colors"
+                  >
+                    <SignOut size={13} /> Sign out
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
-    </aside>
+    </nav>
   )
 }
 
-// Build chart from closed positions (cumulative P&L by hour)
+// ── Tab views ─────────────────────────────────────────────────────────────────
+
 function buildChart(closed: ClosedPosition[]) {
   if (closed.length === 0) return []
   const today = new Date().toDateString()
@@ -196,64 +225,45 @@ function buildChart(closed: ClosedPosition[]) {
   }).filter((_, h) => h <= new Date().getHours())
 }
 
-// ── Tab views ─────────────────────────────────────────────────────────────────
-
-function TabOverview({ stats, positions, closed, online, error, stop, resume }: {
+function TabOverview({ stats, positions, closed, online, error }: {
   stats: ReturnType<typeof useOrchestrator>['stats']
   positions: Position[]
   closed: ClosedPosition[]
   online: boolean
   error: string | null
-  stop: () => void
-  resume: () => void
 }) {
   const [time, setTime] = useState(new Date())
   useEffect(() => {
-    const t = setInterval(() => setTime(new Date()), 1000)
-    return () => clearInterval(t)
+    const id = setInterval(() => setTime(new Date()), 1000)
+    return () => clearInterval(id)
   }, [])
 
-  const s = stats ?? {
-    open_positions: 0, total_trades: 0, wins: 0, losses: 0,
-    win_rate: 0, today_pnl: 0, total_pnl: 0, paused: false, pause_reason: '', configured: false,
-  }
+  const s = stats ?? { open_positions: 0, total_trades: 0, wins: 0, losses: 0, win_rate: 0, today_pnl: 0, total_pnl: 0, paused: false, pause_reason: '', configured: true }
   const chartData = buildChart(closed)
 
   return (
-    <>
-      <div className="flex items-center justify-between mb-8">
+    <div className="p-6 max-w-6xl mx-auto">
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="font-mono font-bold text-2xl text-white">Overview</h1>
-          <p className="font-mono text-xs text-[#555] mt-1">
-            {time.toISOString().replace('T', ' ').slice(0, 19)} UTC
-          </p>
+          <h1 className="font-mono font-bold text-xl text-white">Overview</h1>
+          <p className="font-mono text-xs text-[#555] mt-0.5">{time.toISOString().replace('T', ' ').slice(0, 19)} UTC</p>
         </div>
-        <div className="flex items-center gap-3">
-          <span className={`flex items-center gap-1.5 neu-card-inset px-3 py-1.5 rounded-xl font-mono text-xs ${online ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
-            <Pulse size={13} weight="bold" />
-            {online ? 'live' : 'offline'}
-          </span>
-          <span className="neu-card-inset px-3 py-1.5 rounded-xl font-mono text-xs text-[#00A8FF]">
-            {s.open_positions} open
-          </span>
-        </div>
+        {!online && error && (
+          <div className="neu-card-inset px-4 py-2 rounded-xl">
+            <span className="font-mono text-xs text-[#EF4444]">⚠ {error}</span>
+          </div>
+        )}
       </div>
 
-      {error && (
-        <div className="mb-6 neu-card-inset px-4 py-3 rounded-xl flex items-center gap-3">
-          <span className="font-mono text-xs text-[#EF4444]">⚠ Orchestrator offline — {error}</span>
-        </div>
-      )}
-
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Today P&L" value={`${s.today_pnl >= 0 ? '+' : ''}${s.today_pnl.toFixed(3)} SOL`} sub="↑ from midnight" positive={s.today_pnl >= 0} />
+        <StatCard label="Today P&L" value={`${s.today_pnl >= 0 ? '+' : ''}${s.today_pnl.toFixed(3)} SOL`} sub="from midnight" positive={s.today_pnl >= 0} />
         <StatCard label="Total P&L"  value={`${s.total_pnl >= 0 ? '+' : ''}${s.total_pnl.toFixed(3)} SOL`} sub={`${s.total_trades} trades`} positive={s.total_pnl >= 0} />
         <StatCard label="Win Rate"   value={`${s.win_rate.toFixed(0)}%`} sub={`W:${s.wins}  L:${s.losses}`} accent />
         <StatCard label="Open"       value={`${s.open_positions}`} sub="positions" />
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="lg:col-span-2 neu-tile p-5">
+      <div className="grid lg:grid-cols-3 gap-6 mb-6">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="lg:col-span-2 neu-tile p-5">
           <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-4">Today P&L — SOL</p>
           {chartData.length > 1 ? (
             <ResponsiveContainer width="100%" height={180}>
@@ -271,21 +281,21 @@ function TabOverview({ stats, positions, closed, online, error, stop, resume }: 
           )}
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="neu-tile p-5">
-          <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-4">Open Positions ({positions.length})</p>
-          <div className="space-y-3">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="neu-tile p-5">
+          <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-4">Open ({positions.length})</p>
+          <div className="space-y-3 max-h-[220px] overflow-y-auto">
             {positions.map(pos => <PositionCard key={pos.id} pos={pos} />)}
             {positions.length === 0 && (
-              <p className="font-mono text-xs text-[#444] text-center py-6">Scanning for entries...</p>
+              <p className="font-mono text-xs text-[#444] text-center py-8">Scanning for entries...</p>
             )}
           </div>
         </motion.div>
       </div>
 
-      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="neu-tile p-5 mt-6">
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="neu-tile p-5">
         <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-4">Recent Trades</p>
         {closed.length === 0 ? (
-          <p className="font-mono text-xs text-[#444] text-center py-6">No trades yet.</p>
+          <p className="font-mono text-xs text-[#444] text-center py-8">No trades yet.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -319,19 +329,19 @@ function TabOverview({ stats, positions, closed, online, error, stop, resume }: 
           </div>
         )}
       </motion.div>
-    </>
+    </div>
   )
 }
 
 function TabPositions({ positions }: { positions: Position[] }) {
   return (
-    <>
-      <div className="mb-8">
-        <h1 className="font-mono font-bold text-2xl text-white">Positions</h1>
-        <p className="font-mono text-xs text-[#555] mt-1">{positions.length} open right now</p>
+    <div className="p-6 max-w-6xl mx-auto">
+      <div className="mb-6">
+        <h1 className="font-mono font-bold text-xl text-white">Positions</h1>
+        <p className="font-mono text-xs text-[#555] mt-0.5">{positions.length} open</p>
       </div>
       {positions.length === 0 ? (
-        <div className="neu-tile p-12 text-center">
+        <div className="neu-tile p-16 text-center">
           <p className="font-mono text-[#444] text-sm">No open positions.</p>
           <p className="font-mono text-[#333] text-xs mt-1">The bot is scanning for entries.</p>
         </div>
@@ -340,16 +350,16 @@ function TabPositions({ positions }: { positions: Position[] }) {
           {positions.map(pos => <PositionCard key={pos.id} pos={pos} />)}
         </div>
       )}
-    </>
+    </div>
   )
 }
 
 function TabHistory({ closed }: { closed: ClosedPosition[] }) {
   return (
-    <>
-      <div className="mb-8">
-        <h1 className="font-mono font-bold text-2xl text-white">History</h1>
-        <p className="font-mono text-xs text-[#555] mt-1">{closed.length} closed trades</p>
+    <div className="p-6 max-w-6xl mx-auto">
+      <div className="mb-6">
+        <h1 className="font-mono font-bold text-xl text-white">History</h1>
+        <p className="font-mono text-xs text-[#555] mt-0.5">{closed.length} trades total</p>
       </div>
       <div className="neu-tile p-5">
         {closed.length === 0 ? (
@@ -392,25 +402,21 @@ function TabHistory({ closed }: { closed: ClosedPosition[] }) {
           </div>
         )}
       </div>
-    </>
+    </div>
   )
 }
 
 function TabConfig({ walletId, userName, userAvatar, botActive }: {
-  walletId?: string
-  userName?: string
-  userAvatar?: string
-  botActive?: boolean
+  walletId?: string; userName?: string; userAvatar?: string; botActive?: boolean
 }) {
   return (
-    <>
-      <div className="mb-8">
-        <h1 className="font-mono font-bold text-2xl text-white">Config</h1>
-        <p className="font-mono text-xs text-[#555] mt-1">Your account and bot configuration</p>
+    <div className="p-6 max-w-6xl mx-auto">
+      <div className="mb-6">
+        <h1 className="font-mono font-bold text-xl text-white">Config</h1>
+        <p className="font-mono text-xs text-[#555] mt-0.5">Account & bot configuration</p>
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
-        {/* Profile */}
         <div className="neu-tile p-6 space-y-4">
           <div className="flex items-center gap-3 pb-4 border-b border-white/5">
             {userAvatar
@@ -424,7 +430,6 @@ function TabConfig({ walletId, userName, userAvatar, botActive }: {
               <p className="font-mono text-xs text-[#555]">VYLTH Nexus account</p>
             </div>
           </div>
-
           <div className="flex items-center gap-2">
             <Wallet size={14} className="text-[#555] shrink-0" />
             <p className="font-mono text-xs text-[#555] uppercase tracking-widest">Signet Wallet</p>
@@ -435,34 +440,29 @@ function TabConfig({ walletId, userName, userAvatar, botActive }: {
           }
         </div>
 
-        {/* Bot status */}
         <div className="neu-tile p-6 space-y-4">
           <p className="font-mono text-xs text-[#555] uppercase tracking-widest pb-4 border-b border-white/5">Bot Status</p>
-
           <div className="flex items-center justify-between">
             <span className="font-mono text-xs text-[#666]">Status</span>
             <span className={`font-mono text-xs px-2.5 py-1 rounded-full ${botActive ? 'bg-[#4ADE80]/10 text-[#4ADE80]' : 'bg-[#EF4444]/10 text-[#EF4444]'}`}>
               {botActive ? 'Running' : 'Stopped'}
             </span>
           </div>
-
           <div className="flex items-center justify-between">
             <span className="font-mono text-xs text-[#666]">Network</span>
             <span className="font-mono text-xs text-[#a0a0a0]">Solana Mainnet</span>
           </div>
-
           <div className="flex items-center justify-between">
             <span className="font-mono text-xs text-[#666]">DEX</span>
             <span className="font-mono text-xs text-[#a0a0a0]">pump.fun / Raydium</span>
           </div>
-
-          <div className="flex items-center gap-2 mt-2 pt-4 border-t border-white/5">
+          <div className="flex items-center gap-2 pt-4 border-t border-white/5">
             <Key size={14} className="text-[#555] shrink-0" />
             <p className="font-mono text-xs text-[#555]">Signet credentials encrypted at rest</p>
           </div>
         </div>
       </div>
-    </>
+    </div>
   )
 }
 
@@ -498,7 +498,7 @@ export default function Dashboard({ onLogout, walletId, userName, userAvatar }: 
           <img src="/logo.png" alt="Hummingbird" className="w-20 h-20 object-contain mx-auto mb-6"
             style={{ filter: 'drop-shadow(0 0 20px rgba(0,168,255,0.4))' }} />
           <h1 className="font-mono font-bold text-white text-2xl mb-2">Not configured</h1>
-          <p className="text-[#666] text-sm mb-8">Signet credentials missing — set them in your <code className="text-[#00A8FF] bg-white/5 px-1.5 py-0.5 rounded">.env</code> and restart.</p>
+          <p className="text-[#666] text-sm mb-8">Signet credentials missing.</p>
           <a href="https://signet.vylth.com" target="_blank" rel="noopener noreferrer" className="hb-btn text-sm">
             Get Signet API key →
           </a>
@@ -507,17 +507,15 @@ export default function Dashboard({ onLogout, walletId, userName, userAvatar }: 
     )
   }
 
-  const s = stats ?? {
-    open_positions: 0, total_trades: 0, wins: 0, losses: 0,
-    win_rate: 0, today_pnl: 0, total_pnl: 0, paused: false, pause_reason: '', configured: true,
-  }
+  const s = stats ?? { open_positions: 0, total_trades: 0, wins: 0, losses: 0, win_rate: 0, today_pnl: 0, total_pnl: 0, paused: false, pause_reason: '', configured: true }
 
   return (
-    <div className="min-h-screen bg-[#0d0d0d] flex">
-      <Sidebar
-        active={tab}
+    <div className="min-h-screen bg-[#0d0d0d]">
+      <TopNav
+        tab={tab}
+        setTab={setTab}
         paused={s.paused}
-        onTabChange={setTab}
+        online={online}
         onStop={stop}
         onResume={resume}
         onLogout={onLogout}
@@ -526,16 +524,10 @@ export default function Dashboard({ onLogout, walletId, userName, userAvatar }: 
         userAvatar={userAvatar}
       />
 
-      <main className="flex-1 overflow-y-auto p-6">
-        {tab === 'overview'  && <TabOverview stats={stats} positions={positions} closed={closed} online={online} error={error} stop={stop} resume={resume} />}
-        {tab === 'positions' && <TabPositions positions={positions} />}
-        {tab === 'history'   && <TabHistory closed={closed} />}
-        {tab === 'config'    && <TabConfig walletId={walletId} userName={userName} userAvatar={userAvatar} botActive={stats?.configured} />}
-
-        <div className="mt-4 font-mono text-xs text-[#333] text-center">
-          Polling every 3s · {import.meta.env.VITE_API_URL ?? 'localhost:8002'}
-        </div>
-      </main>
+      {tab === 'overview'  && <TabOverview stats={stats} positions={positions} closed={closed} online={online} error={error} />}
+      {tab === 'positions' && <TabPositions positions={positions} />}
+      {tab === 'history'   && <TabHistory closed={closed} />}
+      {tab === 'config'    && <TabConfig walletId={walletId} userName={userName} userAvatar={userAvatar} botActive={stats?.configured} />}
     </div>
   )
 }
