@@ -30,7 +30,7 @@ for PLATFORM in "${!TARGETS[@]}"; do
   printf "  %-24s → npm/@decatalyst/%s/bin/%s\n" "$GOOS/$GOARCH" "$PKG" "$BINARY"
 
   (cd "$CLI" && GOOS=$GOOS GOARCH=$GOARCH CGO_ENABLED=0 \
-    go build -ldflags="-s -w -X main.version=$VERSION" \
+    go build -ldflags="-s -w -X github.com/iamdecatalyst/hummingbird/cli/tui.Version=v$VERSION" \
     -o "$OUT" .)
 
   # Make Unix binaries executable

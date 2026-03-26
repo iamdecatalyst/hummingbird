@@ -11,7 +11,8 @@ import (
 )
 
 // Version is the CLI version shown in the banner.
-const Version = "v1.0.0"
+// Overridden at build time via: -X github.com/iamdecatalyst/hummingbird/cli/tui.Version=x.y.z
+var Version = "dev"
 
 // tickMsg fires on the auto-refresh interval.
 type tickMsg struct{}

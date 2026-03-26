@@ -207,6 +207,12 @@ func handleLogin() {
 			fmt.Fprintln(os.Stderr, "\n  "+cp(cRed, "✗  no token entered — aborted"))
 			os.Exit(1)
 		}
+	} else {
+		dots := strings.Repeat("●", min(len(strings.TrimSpace(tokenInput))/8, 12))
+		if dots == "" {
+			dots = "●"
+		}
+		fmt.Println("  " + cp(cGreen, "✓") + "  " + cp(cDim, dots) + cp(cMuted, fmt.Sprintf("  %d chars", len(strings.TrimSpace(tokenInput)))))
 	}
 
 	if err := client.SaveCredentials(apiURL, strings.TrimSpace(tokenInput)); err != nil {
