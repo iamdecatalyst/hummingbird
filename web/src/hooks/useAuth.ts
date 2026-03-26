@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react'
 import { api, type MeResponse } from '../lib/api'
 
 export interface AuthState {
-  token:    string | null
-  me:       MeResponse | null
-  loading:  boolean
-  signin:   (apiKey: string, apiSecret: string) => Promise<void>
-  logout:   () => void
+  token:     string | null
+  me:        MeResponse | null
+  loading:   boolean
+  nexusSignin: (accessToken: string) => Promise<{ has_signet: boolean; user: MeResponse }>
+  logout:    () => void
+  refreshMe: () => Promise<void>
 }
 
 export function useAuth(): AuthState {
@@ -22,10 +23,14 @@ export function useAuth(): AuthState {
       .finally(() => setLoading(false))
   }, [token])
 
-  const signin = async (apiKey: string, apiSecret: string) => {
-    const res = await api.signin(apiKey, apiSecret)
+  const nexusSignin = async (accessToken: string) => {
+    const res = await api.nexusSignin(accessToken)
     localStorage.setItem('hb_token', res.token)
     setToken(res.token)
+    const meData = res.user as unknown as MeResponse
+    meData.has_signet = res.has_signet
+    setMe(meData)
+    return { has_signet: res.has_signet, user: meData }
   }
 
   const logout = () => {
@@ -34,5 +39,13 @@ export function useAuth(): AuthState {
     setMe(null)
   }
 
-  return { token, me, loading, signin, logout }
+  const refreshMe = async () => {
+    if (!token) return
+    try {
+      const updated = await api.me()
+      setMe(updated)
+    } catch { /* ignore */ }
+  }
+
+  return { token, me, loading, nexusSignin, logout, refreshMe }
 }

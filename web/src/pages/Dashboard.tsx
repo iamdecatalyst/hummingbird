@@ -63,8 +63,8 @@ function PositionCard({ pos }: { pos: Position }) {
 }
 
 function Sidebar({
-  active, paused, onStop, onResume, onLogout, walletId,
-}: { active: string; paused: boolean; onStop: () => void; onResume: () => void; onLogout?: () => void; walletId?: string }) {
+  active, paused, onStop, onResume, onLogout, walletId, userName, userAvatar,
+}: { active: string; paused: boolean; onStop: () => void; onResume: () => void; onLogout?: () => void; walletId?: string; userName?: string; userAvatar?: string }) {
   const navItems = [
     { id: 'overview',  label: 'Overview',  icon: <ChartBar size={16} weight="duotone" /> },
     { id: 'positions', label: 'Positions', icon: <MapPin size={16} weight="duotone" /> },
@@ -108,11 +108,15 @@ function Sidebar({
         }
         {onLogout && (
           <div className="border-t border-white/5 pt-3 mt-1">
-            {walletId && (
-              <div className="font-mono text-[10px] text-[#333] mb-2 truncate" title={walletId}>
-                {walletId.slice(0, 8)}…{walletId.slice(-6)}
-              </div>
-            )}
+            <div className="flex items-center gap-2 mb-2">
+              {userAvatar
+                ? <img src={userAvatar} className="w-5 h-5 rounded-full object-cover" alt="" />
+                : <div className="w-5 h-5 rounded-full bg-[#1a1a1a] border border-white/10" />
+              }
+              <span className="font-mono text-[10px] text-[#444] truncate">
+                {userName || (walletId ? `${walletId.slice(0,6)}…` : 'User')}
+              </span>
+            </div>
             <button
               onClick={onLogout}
               className="flex items-center gap-2 text-[#444] hover:text-[#EF4444] font-mono text-xs transition-colors w-full"
@@ -146,11 +150,13 @@ function buildChart(closed: ClosedPosition[]) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 interface DashboardProps {
-  onLogout?: () => void
-  walletId?: string
+  onLogout?:   () => void
+  walletId?:   string
+  userName?:   string
+  userAvatar?: string
 }
 
-export default function Dashboard({ onLogout, walletId }: DashboardProps) {
+export default function Dashboard({ onLogout, walletId, userName, userAvatar }: DashboardProps) {
   const { stats, positions, closed, online, loading, error, stop, resume } = useOrchestrator()
   const [time, setTime] = useState(new Date())
 
@@ -232,6 +238,8 @@ export default function Dashboard({ onLogout, walletId }: DashboardProps) {
         onResume={resume}
         onLogout={onLogout}
         walletId={walletId}
+        userName={userName}
+        userAvatar={userAvatar}
       />
 
       <main className="flex-1 overflow-y-auto p-6">

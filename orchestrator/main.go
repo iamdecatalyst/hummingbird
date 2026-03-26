@@ -152,38 +152,40 @@ func startSingleTenant(cfg *config.Config, mux *http.ServeMux) {
 }
 
 // ── Multi-tenant mode ─────────────────────────────────────────────────────────
-// Identity = Signet wallet ID. The API key+secret IS the login — no passwords.
-// Flow: user enters key+secret → we verify against Signet → wallet ID = account → JWT issued.
+// Identity = Nexus user ID (VYLTH SSO).
+// Flow: user clicks "Continue with Nexus" → OAuth → Nexus access token sent to backend
+//       → backend validates via Nexus profile API → upsert user → issue our JWT.
+// First login: prompt for Signet API key once → encrypted in DB → bot starts.
+// Subsequent logins: Nexus → JWT → bot resumes from stored credentials.
 
 func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 	database, err := db.New(cfg.DatabaseURL, cfg.EncryptionKey)
 	if err != nil {
 		log.Fatalf("[main] db init failed: %v", err)
 	}
-	log.Printf("[main] Postgres connected, multi-tenant mode active")
+	log.Printf("[main] Postgres connected, multi-tenant mode active (Nexus SSO)")
 
 	mgr := userbot.NewManager(cfg)
 
-	// Resume bots for all existing users on startup
+	// Resume bots for all configured users on startup
 	go func() {
-		ids, err := database.AllWalletIDs()
+		ids, err := database.AllConfiguredUsers()
 		if err != nil {
 			log.Printf("[main] failed to load users: %v", err)
 			return
 		}
-		for _, wid := range ids {
-			apiKey, apiSecret, err := database.GetCredentials(wid)
+		for _, uid := range ids {
+			apiKey, apiSecret, err := database.GetSignetCredentials(uid)
 			if err != nil {
-				log.Printf("[main] skip resume for %s: %v", wid[:8], err)
+				log.Printf("[main] skip resume for user %s: %v", uid[:8], err)
 				continue
 			}
-			if err := mgr.Start(wid, apiKey, apiSecret); err != nil {
-				log.Printf("[main] resume failed for %s: %v", wid[:8], err)
+			if err := mgr.Start(uid, apiKey, apiSecret); err != nil {
+				log.Printf("[main] resume failed for user %s: %v", uid[:8], err)
 			}
 		}
 	}()
 
-	// requireAuth extracts and validates the JWT, returns wallet ID
 	requireAuth := func(r *http.Request) (string, error) {
 		h := r.Header.Get("Authorization")
 		if !strings.HasPrefix(h, "Bearer ") {
@@ -192,9 +194,107 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 		return auth.ParseToken(strings.TrimPrefix(h, "Bearer "), cfg.JWTSecret)
 	}
 
-	// POST /auth/signin — Signet key+secret IS the login. No passwords.
-	// Verifies credentials against Signet, creates/updates account, returns JWT.
-	mux.HandleFunc("POST /auth/signin", func(w http.ResponseWriter, r *http.Request) {
+	// validateNexusToken calls the Nexus profile endpoint to verify the token
+	// and returns the user's Nexus profile.
+	validateNexusToken := func(accessToken string) (id, firstName, lastName, email, avatar string, err error) {
+		req, _ := http.NewRequest("GET", "https://auth.vylth.com/api/nexus/account/profile", nil)
+		req.Header.Set("Authorization", "Bearer "+accessToken)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return "", "", "", "", "", fmt.Errorf("nexus unreachable: %w", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return "", "", "", "", "", fmt.Errorf("invalid nexus token (status %d)", resp.StatusCode)
+		}
+		var profile struct {
+			ID        string `json:"id"`
+			Email     string `json:"email"`
+			FirstName string `json:"first_name"`
+			LastName  string `json:"last_name"`
+			Avatar    string `json:"avatar_url"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&profile); err != nil {
+			return "", "", "", "", "", fmt.Errorf("decode profile: %w", err)
+		}
+		return profile.ID, profile.FirstName, profile.LastName, profile.Email, profile.Avatar, nil
+	}
+
+	// POST /auth/nexus — exchange Nexus access token for a Hummingbird JWT.
+	// Called by the frontend after the Nexus OAuth callback.
+	mux.HandleFunc("POST /auth/nexus", func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			AccessToken string `json:"access_token"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.AccessToken == "" {
+			http.Error(w, `{"error":"access_token required"}`, http.StatusBadRequest)
+			return
+		}
+
+		nexusID, firstName, lastName, email, avatar, err := validateNexusToken(req.AccessToken)
+		if err != nil {
+			log.Printf("[auth/nexus] validation failed: %v", err)
+			http.Error(w, `{"error":"invalid Nexus token"}`, http.StatusUnauthorized)
+			return
+		}
+
+		// Upsert profile (updates name/avatar on every login)
+		if err := database.UpsertProfile(nexusID, firstName, lastName, email, avatar); err != nil {
+			log.Printf("[auth/nexus] upsert failed for %s: %v", nexusID[:8], err)
+			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+			return
+		}
+
+		user, _ := database.GetUser(nexusID)
+		token, _ := auth.IssueToken(nexusID, cfg.JWTSecret)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"token":      token,
+			"has_signet": user != nil && user.HasSignet,
+			"user": map[string]string{
+				"id":         nexusID,
+				"first_name": firstName,
+				"last_name":  lastName,
+				"email":      email,
+				"avatar":     avatar,
+			},
+		})
+	})
+
+	// GET /auth/me
+	mux.HandleFunc("GET /auth/me", func(w http.ResponseWriter, r *http.Request) {
+		nexusID, err := requireAuth(r)
+		if err != nil {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		user, err := database.GetUser(nexusID)
+		if err != nil || user == nil {
+			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+			return
+		}
+		inst := mgr.Get(nexusID)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"id":         user.NexusUserID,
+			"first_name": user.FirstName,
+			"last_name":  user.LastName,
+			"email":      user.Email,
+			"avatar":     user.Avatar,
+			"has_signet": user.HasSignet,
+			"wallet_id":  user.WalletID,
+			"bot_active": inst != nil,
+		})
+	})
+
+	// POST /auth/setup-signet — first-time Signet key entry after Nexus login.
+	mux.HandleFunc("POST /auth/setup-signet", func(w http.ResponseWriter, r *http.Request) {
+		nexusID, err := requireAuth(r)
+		if err != nil {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
 		var req struct {
 			APIKey    string `json:"api_key"`
 			APISecret string `json:"api_secret"`
@@ -204,80 +304,58 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 			return
 		}
 
-		// Verify credentials by actually connecting to Signet
-		walletName := "hummingbird-trader"
+		// Verify credentials + get wallet ID
 		client := signet.NewClient(req.APIKey, req.APISecret).WithBaseURL(cfg.SignetBaseURL)
+		walletName := fmt.Sprintf("hb-%s", nexusID[:8])
 		walletID, err := trader.EnsureWallet(client, walletName)
 		if err != nil {
-			http.Error(w, `{"error":"invalid Signet credentials"}`, http.StatusUnauthorized)
+			http.Error(w, `{"error":"invalid Signet credentials"}`, http.StatusBadRequest)
 			return
 		}
 
-		// Save encrypted credentials (upsert — same wallet ID = same account)
-		if err := database.Upsert(walletID, req.APIKey, req.APISecret); err != nil {
-			log.Printf("[signin] db upsert failed for %s: %v", walletID[:8], err)
+		if err := database.SetSignetCredentials(nexusID, req.APIKey, req.APISecret, walletID); err != nil {
 			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 			return
 		}
 
-		// Start the bot for this user
-		if mgr.Get(walletID) == nil {
-			if err := mgr.Start(walletID, req.APIKey, req.APISecret); err != nil {
-				log.Printf("[signin] bot start failed for %s: %v", walletID[:8], err)
-			}
+		// Start the bot
+		if mgr.Get(nexusID) == nil {
+			mgr.Start(nexusID, req.APIKey, req.APISecret)
 		}
 
-		token, _ := auth.IssueToken(walletID, cfg.JWTSecret)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
-			"token":     token,
-			"wallet_id": walletID,
-		})
+		fmt.Fprint(w, `{"status":"ok","bot_active":true}`)
 	})
 
-	// GET /auth/me — who am I?
-	mux.HandleFunc("GET /auth/me", func(w http.ResponseWriter, r *http.Request) {
-		walletID, err := requireAuth(r)
-		if err != nil {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
-			return
-		}
-		inst := mgr.Get(walletID)
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{
-			"wallet_id":  walletID,
-			"bot_active": inst != nil,
-		})
-	})
-
-	// Per-user trading endpoints
+	// Per-user trading endpoints (keyed by Nexus user ID)
 
 	mux.HandleFunc("GET /stats", func(w http.ResponseWriter, r *http.Request) {
-		walletID, err := requireAuth(r)
+		nexusID, err := requireAuth(r)
 		if err != nil {
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
-		inst := mgr.Get(walletID)
+		inst := mgr.Get(nexusID)
 		type statsResp struct {
 			portfolio.Stats
 			Configured bool `json:"configured"`
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if inst == nil {
-			json.NewEncoder(w).Encode(statsResp{portfolio.Stats{}, false})
+			user, _ := database.GetUser(nexusID)
+			json.NewEncoder(w).Encode(statsResp{portfolio.Stats{}, user != nil && user.HasSignet})
 			return
 		}
 		json.NewEncoder(w).Encode(statsResp{inst.Port.Stats(), true})
 	})
 
 	mux.HandleFunc("GET /positions", func(w http.ResponseWriter, r *http.Request) {
-		walletID, err := requireAuth(r)
+		nexusID, err := requireAuth(r)
 		if err != nil {
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
-		inst := mgr.Get(walletID)
+		inst := mgr.Get(nexusID)
 		w.Header().Set("Content-Type", "application/json")
 		if inst == nil {
 			json.NewEncoder(w).Encode([]*models.Position{})
@@ -287,12 +365,12 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 	})
 
 	mux.HandleFunc("GET /closed", func(w http.ResponseWriter, r *http.Request) {
-		walletID, err := requireAuth(r)
+		nexusID, err := requireAuth(r)
 		if err != nil {
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
-		inst := mgr.Get(walletID)
+		inst := mgr.Get(nexusID)
 		w.Header().Set("Content-Type", "application/json")
 		if inst == nil {
 			json.NewEncoder(w).Encode([]*models.ClosedPosition{})
@@ -302,27 +380,26 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 	})
 
 	mux.HandleFunc("POST /stop", func(w http.ResponseWriter, r *http.Request) {
-		walletID, err := requireAuth(r)
+		nexusID, err := requireAuth(r)
 		if err != nil {
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
-		mgr.Stop(walletID)
+		mgr.Stop(nexusID)
 		fmt.Fprint(w, `{"status":"stopped"}`)
 	})
 
 	mux.HandleFunc("POST /resume", func(w http.ResponseWriter, r *http.Request) {
-		walletID, err := requireAuth(r)
+		nexusID, err := requireAuth(r)
 		if err != nil {
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
-		inst := mgr.Get(walletID)
+		inst := mgr.Get(nexusID)
 		if inst == nil {
-			// Reload from DB and restart
-			apiKey, apiSecret, err := database.GetCredentials(walletID)
+			apiKey, apiSecret, err := database.GetSignetCredentials(nexusID)
 			if err == nil {
-				mgr.Start(walletID, apiKey, apiSecret)
+				mgr.Start(nexusID, apiKey, apiSecret)
 			}
 		} else {
 			inst.Port.Resume()

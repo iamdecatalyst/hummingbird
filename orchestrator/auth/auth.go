@@ -1,25 +1,22 @@
 package auth
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-const tokenTTL = 30 * 24 * time.Hour // 30 days
+const tokenTTL = 30 * 24 * time.Hour
 
 type Claims struct {
-	WalletID string `json:"wid"`
+	NexusUserID string `json:"nid"`
 	jwt.RegisteredClaims
 }
 
-// IssueToken creates a signed JWT for the given wallet ID.
-func IssueToken(walletID, secret string) (string, error) {
+func IssueToken(nexusUserID, secret string) (string, error) {
 	claims := Claims{
-		WalletID: walletID,
+		NexusUserID: nexusUserID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -28,7 +25,6 @@ func IssueToken(walletID, secret string) (string, error) {
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
 }
 
-// ParseToken validates the JWT and returns the wallet ID.
 func ParseToken(tokenStr, secret string) (string, error) {
 	tok, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -43,12 +39,5 @@ func ParseToken(tokenStr, secret string) (string, error) {
 	if !ok || !tok.Valid {
 		return "", errors.New("invalid token")
 	}
-	return claims.WalletID, nil
-}
-
-// RandomID generates a random 16-byte hex string (not used for auth, just helpers).
-func RandomID() string {
-	b := make([]byte, 16)
-	rand.Read(b)
-	return hex.EncodeToString(b)
+	return claims.NexusUserID, nil
 }

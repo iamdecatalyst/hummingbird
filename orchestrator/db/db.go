@@ -16,12 +16,18 @@ import (
 
 type DB struct {
 	sql           *sql.DB
-	encryptionKey []byte // 32 bytes (AES-256)
+	encryptionKey []byte
 }
 
 type User struct {
-	WalletID  string
-	CreatedAt time.Time
+	NexusUserID string
+	FirstName   string
+	LastName    string
+	Email       string
+	Avatar      string
+	HasSignet   bool // true once Signet key has been configured
+	WalletID    string
+	CreatedAt   time.Time
 }
 
 func New(databaseURL, encryptionKeyHex string) (*DB, error) {
@@ -44,20 +50,52 @@ func New(databaseURL, encryptionKeyHex string) (*DB, error) {
 }
 
 func (d *DB) migrate() error {
-	// wallet_id = the Signet wallet ID — stable identity, no passwords needed.
 	_, err := d.sql.Exec(`
-		CREATE TABLE IF NOT EXISTS users (
-			wallet_id     TEXT PRIMARY KEY,
-			signet_key    BYTEA NOT NULL,
-			signet_secret BYTEA NOT NULL,
+		CREATE TABLE IF NOT EXISTS hb_users (
+			nexus_user_id TEXT PRIMARY KEY,
+			first_name    TEXT NOT NULL DEFAULT '',
+			last_name     TEXT NOT NULL DEFAULT '',
+			email         TEXT NOT NULL DEFAULT '',
+			avatar        TEXT NOT NULL DEFAULT '',
+			signet_key    BYTEA,
+			signet_secret BYTEA,
+			wallet_id     TEXT NOT NULL DEFAULT '',
 			created_at    TIMESTAMPTZ DEFAULT NOW()
 		)
 	`)
 	return err
 }
 
-// Upsert saves (or updates) a user's encrypted Signet credentials keyed by wallet ID.
-func (d *DB) Upsert(walletID, apiKey, apiSecret string) error {
+// UpsertProfile creates or updates a user's Nexus profile info.
+func (d *DB) UpsertProfile(nexusUserID, firstName, lastName, email, avatar string) error {
+	_, err := d.sql.Exec(`
+		INSERT INTO hb_users (nexus_user_id, first_name, last_name, email, avatar)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (nexus_user_id) DO UPDATE
+			SET first_name=$2, last_name=$3, email=$4, avatar=$5
+	`, nexusUserID, firstName, lastName, email, avatar)
+	return err
+}
+
+// GetUser fetches a user by Nexus user ID.
+func (d *DB) GetUser(nexusUserID string) (*User, error) {
+	var u User
+	err := d.sql.QueryRow(`
+		SELECT nexus_user_id, first_name, last_name, email, avatar,
+		       (signet_key IS NOT NULL), COALESCE(wallet_id,''), created_at
+		FROM hb_users WHERE nexus_user_id=$1
+	`, nexusUserID).Scan(
+		&u.NexusUserID, &u.FirstName, &u.LastName, &u.Email, &u.Avatar,
+		&u.HasSignet, &u.WalletID, &u.CreatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	return &u, err
+}
+
+// SetSignetCredentials encrypts and saves the user's Signet API key + secret + wallet ID.
+func (d *DB) SetSignetCredentials(nexusUserID, apiKey, apiSecret, walletID string) error {
 	encKey, err := d.encrypt([]byte(apiKey))
 	if err != nil {
 		return err
@@ -67,52 +105,37 @@ func (d *DB) Upsert(walletID, apiKey, apiSecret string) error {
 		return err
 	}
 	_, err = d.sql.Exec(`
-		INSERT INTO users (wallet_id, signet_key, signet_secret)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (wallet_id) DO UPDATE
-			SET signet_key=$2, signet_secret=$3
-	`, walletID, encKey, encSecret)
+		UPDATE hb_users SET signet_key=$1, signet_secret=$2, wallet_id=$3 WHERE nexus_user_id=$4
+	`, encKey, encSecret, walletID, nexusUserID)
 	return err
 }
 
-// GetCredentials decrypts and returns the Signet credentials for a wallet ID.
-func (d *DB) GetCredentials(walletID string) (apiKey, apiSecret string, err error) {
+// GetSignetCredentials decrypts and returns the user's Signet API key + secret.
+func (d *DB) GetSignetCredentials(nexusUserID string) (apiKey, apiSecret string, err error) {
 	var encKey, encSecret []byte
 	err = d.sql.QueryRow(
-		`SELECT signet_key, signet_secret FROM users WHERE wallet_id=$1`, walletID,
+		`SELECT signet_key, signet_secret FROM hb_users WHERE nexus_user_id=$1`, nexusUserID,
 	).Scan(&encKey, &encSecret)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", "", fmt.Errorf("wallet not found")
-	}
 	if err != nil {
 		return "", "", err
 	}
-	rawKey, err := d.decrypt(encKey)
+	if encKey == nil {
+		return "", "", fmt.Errorf("no Signet credentials configured")
+	}
+	raw, err := d.decrypt(encKey)
 	if err != nil {
 		return "", "", err
 	}
-	rawSecret, err := d.decrypt(encSecret)
+	rawS, err := d.decrypt(encSecret)
 	if err != nil {
 		return "", "", err
 	}
-	return string(rawKey), string(rawSecret), nil
+	return string(raw), string(rawS), nil
 }
 
-// GetUser returns basic info for a wallet ID.
-func (d *DB) GetUser(walletID string) (*User, error) {
-	var u User
-	err := d.sql.QueryRow(
-		`SELECT wallet_id, created_at FROM users WHERE wallet_id=$1`, walletID,
-	).Scan(&u.WalletID, &u.CreatedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
-	}
-	return &u, err
-}
-
-// AllWalletIDs returns all wallet IDs (used at startup to resume bots).
-func (d *DB) AllWalletIDs() ([]string, error) {
-	rows, err := d.sql.Query(`SELECT wallet_id FROM users`)
+// AllConfiguredUsers returns nexus_user_id for users who have Signet credentials set.
+func (d *DB) AllConfiguredUsers() ([]string, error) {
+	rows, err := d.sql.Query(`SELECT nexus_user_id FROM hb_users WHERE signet_key IS NOT NULL`)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +150,6 @@ func (d *DB) AllWalletIDs() ([]string, error) {
 	return ids, rows.Err()
 }
 
-// encrypt uses AES-256-GCM. Nonce is prepended to ciphertext.
 func (d *DB) encrypt(plain []byte) ([]byte, error) {
 	block, err := aes.NewCipher(d.encryptionKey)
 	if err != nil {

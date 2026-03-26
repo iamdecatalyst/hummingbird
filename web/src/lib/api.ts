@@ -40,6 +40,12 @@ export interface ClosedPosition extends Position {
 }
 
 export interface MeResponse {
+  id:         string
+  first_name: string
+  last_name:  string
+  email:      string
+  avatar:     string
+  has_signet: boolean
   wallet_id:  string
   bot_active: boolean
 }
@@ -85,9 +91,12 @@ export const api = {
   resume():    Promise<void>                 { return post('/resume') },
   startBot():  Promise<void>                 { return post('/start') },
 
-  // Multi-tenant auth — Signet key+secret IS the login, no passwords
-  signin(api_key: string, api_secret: string) {
-    return post<{ token: string; wallet_id: string }>('/auth/signin', { api_key, api_secret })
+  // Multi-tenant auth — Nexus SSO
+  nexusSignin(access_token: string) {
+    return post<{ token: string; has_signet: boolean; user: { id: string; first_name: string; last_name: string; email: string; avatar: string } }>('/auth/nexus', { access_token })
   },
   me(): Promise<MeResponse> { return get('/auth/me') },
+  setupSignet(api_key: string, api_secret: string) {
+    return post<{ status: string; bot_active: boolean }>('/auth/setup-signet', { api_key, api_secret })
+  },
 }
