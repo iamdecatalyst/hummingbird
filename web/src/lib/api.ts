@@ -24,7 +24,7 @@ export interface Position {
   entry_amount_sol: number
   token_balance:    number
   score:            number
-  opened_at:        string  // ISO timestamp
+  opened_at:        string
   peak_price_sol:   number
   take_profit_level: number
 }
@@ -39,22 +39,55 @@ export interface ClosedPosition extends Position {
   tx_hash:         string
 }
 
+export interface MeResponse {
+  wallet_id:  string
+  bot_active: boolean
+}
+
+function getToken(): string | null {
+  return localStorage.getItem('hb_token')
+}
+
+function authHeaders(): HeadersInit {
+  const token = getToken()
+  return token ? { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+                : { 'Content-Type': 'application/json' }
+}
+
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`)
+  const res = await fetch(`${BASE}${path}`, { headers: authHeaders() })
   if (!res.ok) throw new Error(`${path} → ${res.status}`)
   return res.json() as Promise<T>
 }
 
-async function post(path: string): Promise<void> {
-  const res = await fetch(`${BASE}${path}`, { method: 'POST' })
-  if (!res.ok) throw new Error(`${path} → ${res.status}`)
+async function post<T = void>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(text || `${path} → ${res.status}`)
+  }
+  return res.json() as Promise<T>
 }
 
 export const api = {
-  stats():                    Promise<Stats>           { return get('/stats') },
-  positions():                Promise<Position[]>      { return get('/positions') },
-  closed():                   Promise<ClosedPosition[]> { return get('/closed') },
-  health():                   Promise<{ status: string }> { return get('/health') },
-  stop():                     Promise<void>            { return post('/stop') },
-  resume():                   Promise<void>            { return post('/resume') },
+  // Mode detection
+  mode(): Promise<{ multi_tenant: boolean }> { return get('/mode') },
+
+  // Stats / trading
+  stats():     Promise<Stats>                { return get('/stats') },
+  positions(): Promise<Position[]>           { return get('/positions') },
+  closed():    Promise<ClosedPosition[]>      { return get('/closed') },
+  stop():      Promise<void>                 { return post('/stop') },
+  resume():    Promise<void>                 { return post('/resume') },
+  startBot():  Promise<void>                 { return post('/start') },
+
+  // Multi-tenant auth — Signet key+secret IS the login, no passwords
+  signin(api_key: string, api_secret: string) {
+    return post<{ token: string; wallet_id: string }>('/auth/signin', { api_key, api_secret })
+  },
+  me(): Promise<MeResponse> { return get('/auth/me') },
 }

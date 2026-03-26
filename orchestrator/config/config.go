@@ -6,15 +6,18 @@ import (
 )
 
 type Config struct {
-	// Signet
+	// Mode
+	MultiTenant bool
+
+	// Signet (single-tenant only — optional in multi-tenant)
 	SignetAPIKey    string
 	SignetAPISecret string
 	SignetBaseURL   string
 
-	// Solana RPC (for price + dev wallet polling)
+	// Solana RPC
 	SolanaRPC string
 
-	// Telegram bot
+	// Telegram bot (single-tenant only)
 	TelegramToken  string
 	TelegramChatID string
 
@@ -23,13 +26,20 @@ type Config struct {
 
 	// Risk
 	MaxConcurrentPositions int
-	MaxDailyLossPercent    float64 // e.g. 0.30 = 30%
+	MaxDailyLossPercent    float64
+
+	// Multi-tenant
+	DatabaseURL   string // postgres://...
+	EncryptionKey string // 64 hex chars = 32 bytes for AES-256
+	JWTSecret     string
 }
 
 func Load() *Config {
 	return &Config{
-		SignetAPIKey:    mustEnv("SIGNET_API_KEY"),
-		SignetAPISecret: mustEnv("SIGNET_API_SECRET"),
+		MultiTenant: getBool("MULTI_TENANT", false),
+
+		SignetAPIKey:    getEnv("SIGNET_API_KEY", ""),
+		SignetAPISecret: getEnv("SIGNET_API_SECRET", ""),
 		SignetBaseURL:   getEnv("SIGNET_BASE_URL", "https://api.signet.vylth.com/v1"),
 
 		SolanaRPC: getEnv("RPC_HTTP", "https://api.mainnet-beta.solana.com"),
@@ -41,15 +51,11 @@ func Load() *Config {
 
 		MaxConcurrentPositions: getInt("MAX_CONCURRENT_POSITIONS", 5),
 		MaxDailyLossPercent:    getFloat("MAX_DAILY_LOSS_PERCENT", 0.30),
-	}
-}
 
-func mustEnv(key string) string {
-	v := os.Getenv(key)
-	if v == "" {
-		panic("required env var not set: " + key)
+		DatabaseURL:   getEnv("DATABASE_URL", ""),
+		EncryptionKey: getEnv("ENCRYPTION_KEY", ""),
+		JWTSecret:     getEnv("JWT_SECRET", "change-me-in-production"),
 	}
-	return v
 }
 
 func getEnv(key, fallback string) string {
@@ -57,6 +63,18 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func getBool(key string, fallback bool) bool {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return fallback
+	}
+	return b
 }
 
 func getInt(key string, fallback int) int {

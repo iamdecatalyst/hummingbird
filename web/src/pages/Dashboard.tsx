@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { ChartBar, MapPin, ClockCounterClockwise, Gear, Play, Stop, ArrowLeft, Pulse } from '@phosphor-icons/react'
+import { ChartBar, MapPin, ClockCounterClockwise, Gear, Play, Stop, ArrowLeft, Pulse, SignOut } from '@phosphor-icons/react'
 import { useOrchestrator } from '../hooks/useOrchestrator'
 import type { ClosedPosition, Position } from '../lib/api'
 
@@ -63,8 +63,8 @@ function PositionCard({ pos }: { pos: Position }) {
 }
 
 function Sidebar({
-  active, paused, onStop, onResume,
-}: { active: string; paused: boolean; onStop: () => void; onResume: () => void }) {
+  active, paused, onStop, onResume, onLogout, walletId,
+}: { active: string; paused: boolean; onStop: () => void; onResume: () => void; onLogout?: () => void; walletId?: string }) {
   const navItems = [
     { id: 'overview',  label: 'Overview',  icon: <ChartBar size={16} weight="duotone" /> },
     { id: 'positions', label: 'Positions', icon: <MapPin size={16} weight="duotone" /> },
@@ -106,6 +106,21 @@ function Sidebar({
           ? <button onClick={onResume} className="hb-btn text-xs py-2 justify-center gap-1.5"><Play size={13} weight="fill" /> Resume</button>
           : <button onClick={onStop}   className="neu-btn-ghost text-xs py-2 justify-center gap-1.5"><Stop size={13} weight="fill" /> Stop All</button>
         }
+        {onLogout && (
+          <div className="border-t border-white/5 pt-3 mt-1">
+            {walletId && (
+              <div className="font-mono text-[10px] text-[#333] mb-2 truncate" title={walletId}>
+                {walletId.slice(0, 8)}…{walletId.slice(-6)}
+              </div>
+            )}
+            <button
+              onClick={onLogout}
+              className="flex items-center gap-2 text-[#444] hover:text-[#EF4444] font-mono text-xs transition-colors w-full"
+            >
+              <SignOut size={13} /> Sign out
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   )
@@ -130,7 +145,12 @@ function buildChart(closed: ClosedPosition[]) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-export default function Dashboard() {
+interface DashboardProps {
+  onLogout?: () => void
+  walletId?: string
+}
+
+export default function Dashboard({ onLogout, walletId }: DashboardProps) {
   const { stats, positions, closed, online, loading, error, stop, resume } = useOrchestrator()
   const [time, setTime] = useState(new Date())
 
@@ -210,6 +230,8 @@ export default function Dashboard() {
         paused={s.paused}
         onStop={stop}
         onResume={resume}
+        onLogout={onLogout}
+        walletId={walletId}
       />
 
       <main className="flex-1 overflow-y-auto p-6">
