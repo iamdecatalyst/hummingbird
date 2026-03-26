@@ -2,10 +2,10 @@ package trader
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,12 +23,13 @@ var _ alerts.Notifier = (*alerts.Telegram)(nil)
 
 // Trader executes trades via Signet and manages position lifecycle.
 type Trader struct {
-	signet    *signet.Client
-	walletID  string
-	portfolio *portfolio.Portfolio
-	telegram  alerts.Notifier
-	solanaRPC string
-	scorerURL string // for scalp-closed callbacks
+	signet        *signet.Client
+	walletID      string
+	walletAddress string // Solana address — fetched once at startup for balance polling
+	portfolio     *portfolio.Portfolio
+	telegram      alerts.Notifier
+	solanaRPC     string
+	scorerURL     string // for scalp-closed callbacks
 
 	exitCh    chan monitor.ExitSignal
 	cancelFns sync.Map // mint → context.CancelFunc
@@ -51,6 +52,15 @@ func New(
 		scorerURL: scorerURL,
 		exitCh:    make(chan monitor.ExitSignal, 32),
 	}
+
+	// Fetch wallet address once so we can poll SOL balance for P&L calculation
+	if w, err := signetClient.Wallets.Get(walletID); err == nil {
+		t.walletAddress = w.Address
+		log.Printf("[trader] wallet address: %s", w.Address)
+	} else {
+		log.Printf("[trader] warning: could not fetch wallet address: %v", err)
+	}
+
 	go t.processExits()
 	return t
 }
@@ -142,6 +152,12 @@ func (t *Trader) handleExit(sig monitor.ExitSignal) {
 		}
 	}
 
+	// Snapshot SOL balance before exit so we can compute real P&L
+	var balBefore float64
+	if sig.Partial == 0 {
+		balBefore = t.fetchSOLBalance()
+	}
+
 	tx, err := t.signet.Wallets.Swap(t.walletID, signet.SwapParams{
 		FromToken:       sig.Mint,
 		ToToken:         "SOL",
@@ -157,7 +173,12 @@ func (t *Trader) handleExit(sig monitor.ExitSignal) {
 
 	// Only fully close the position on full exits
 	if sig.Partial == 0 {
-		exitAmount := t.parseSOLAmount(tx)
+		balAfter := t.fetchSOLBalance()
+		exitAmount := balAfter - balBefore
+		if exitAmount <= 0 {
+			// RPC failed or returned stale data — fall back to entry amount
+			exitAmount = pos.EntryAmountSOL
+		}
 		pnl := exitAmount - pos.EntryAmountSOL
 		pnlPct := (pnl / pos.EntryAmountSOL) * 100
 
@@ -206,12 +227,36 @@ func (t *Trader) ExitAll(reason models.ExitReason) {
 	}
 }
 
-func (t *Trader) parseSOLAmount(tx *signet.TransactionResult) float64 {
-	// In a real integration, we'd fetch the wallet balance delta.
-	// For now, return a placeholder — the portfolio P&L is approximate
-	// until we wire up balance polling.
-	_ = tx
-	return 0
+// fetchSOLBalance returns the wallet's current SOL balance via Solana RPC.
+// Returns 0 on failure — callers should handle the zero case as a fallback.
+func (t *Trader) fetchSOLBalance() float64 {
+	if t.walletAddress == "" || t.solanaRPC == "" {
+		return 0
+	}
+
+	body := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"getBalance","params":["%s"]}`, t.walletAddress)
+	req, err := http.NewRequest("POST", t.solanaRPC, strings.NewReader(body))
+	if err != nil {
+		return 0
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Result struct {
+			Value int64 `json:"value"`
+		} `json:"result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return 0
+	}
+	return float64(result.Result.Value) / 1e9 // lamports → SOL
 }
 
 // EnsureWallet creates the Solana trading wallet if it doesn't exist yet.
@@ -237,6 +282,3 @@ func EnsureWallet(client *signet.Client, label string) (string, error) {
 	log.Printf("[trader] created wallet %s (%s)", w.ID, w.Address)
 	return w.ID, nil
 }
-
-// stub to avoid import cycle — remove when balance polling is wired up
-var _ = strconv.FormatFloat
