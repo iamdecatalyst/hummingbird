@@ -210,9 +210,26 @@ func openBrowser(url string) {
 	case "darwin":
 		cmd = exec.Command("open", url)
 	default:
-		cmd = exec.Command("xdg-open", url)
+		// WSL: use explorer.exe to open in the Windows browser
+		if isWSL() {
+			cmd = exec.Command("explorer.exe", url)
+		} else {
+			cmd = exec.Command("xdg-open", url)
+		}
 	}
 	_ = cmd.Start()
+}
+
+func isWSL() bool {
+	if os.Getenv("WSL_DISTRO_NAME") != "" || os.Getenv("WSLENV") != "" {
+		return true
+	}
+	data, err := os.ReadFile("/proc/version")
+	if err != nil {
+		return false
+	}
+	v := strings.ToLower(string(data))
+	return strings.Contains(v, "microsoft") || strings.Contains(v, "wsl")
 }
 
 func handleLogout() {
