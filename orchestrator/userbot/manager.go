@@ -38,11 +38,18 @@ func NewManager(cfg *config.Config) *Manager {
 	}
 }
 
+func short(s string) string {
+	if len(s) > 8 {
+		return s[:8]
+	}
+	return s
+}
+
 // Start creates (or replaces) a bot instance for the user with the given credentials.
 func (m *Manager) Start(userID, apiKey, apiSecret string) error {
 	client := signet.NewClient(apiKey, apiSecret).WithBaseURL(m.cfg.SignetBaseURL)
 
-	walletName := fmt.Sprintf("hummingbird-%s", userID[:8])
+	walletName := fmt.Sprintf("hummingbird-%s", short(userID))
 	walletID, err := trader.EnsureWallet(client, walletName)
 	if err != nil {
 		return fmt.Errorf("wallet setup: %w", err)
@@ -63,7 +70,7 @@ func (m *Manager) Start(userID, apiKey, apiSecret string) error {
 	m.instances[userID] = inst
 	m.mu.Unlock()
 
-	log.Printf("[userbot] started instance for user %s | wallet %s", userID[:8], walletID)
+	log.Printf("[userbot] started instance for user %s | wallet %s", short(userID), walletID)
 	eventlog.Emit(eventlog.Event{
 		Type:    "START",
 		Message: fmt.Sprintf("Bot started — wallet %s", walletID),
@@ -88,7 +95,7 @@ func (m *Manager) Stop(userID string) {
 	m.mu.Unlock()
 	if ok {
 		inst.Trader.ExitAll(models.ExitManual)
-		log.Printf("[userbot] stopped instance for user %s", userID[:8])
+		log.Printf("[userbot] stopped instance for user %s", short(userID))
 		eventlog.Emit(eventlog.Event{Type: "STOP", Message: "Bot stopped manually"})
 	}
 }
@@ -97,26 +104,26 @@ func (m *Manager) Stop(userID string) {
 type noopNotifier struct{ userID string }
 
 func (n noopNotifier) Entered(p *models.Position) {
-	log.Printf("[user:%s] entered %s | %.3f SOL", n.userID[:8], p.Mint[:8], p.EntryAmountSOL)
+	log.Printf("[user:%s] entered %s | %.3f SOL", short(n.userID), short(p.Mint), p.EntryAmountSOL)
 	eventlog.Emit(eventlog.Event{
 		Type:    "ENTER",
 		Token:   p.Mint,
 		AmtSOL:  p.EntryAmountSOL,
-		Message: fmt.Sprintf("Entered %s…  %.3f SOL", p.Mint[:8], p.EntryAmountSOL),
+		Message: fmt.Sprintf("Entered %s…  %.3f SOL", short(p.Mint), p.EntryAmountSOL),
 	})
 }
 func (n noopNotifier) Exited(c *models.ClosedPosition) {
-	log.Printf("[user:%s] exited %s | P&L %+.4f SOL", n.userID[:8], c.Mint[:8], c.PnLSOL)
+	log.Printf("[user:%s] exited %s | P&L %+.4f SOL", short(n.userID), short(c.Mint), c.PnLSOL)
 	eventlog.Emit(eventlog.Event{
 		Type:    "EXIT",
 		Token:   c.Mint,
 		PnLSOL:  c.PnLSOL,
 		PnLPct:  c.PnLPercent,
 		Reason:  string(c.Reason),
-		Message: fmt.Sprintf("Exited %s…  %+.4f SOL (%+.1f%%)", c.Mint[:8], c.PnLSOL, c.PnLPercent),
+		Message: fmt.Sprintf("Exited %s…  %+.4f SOL (%+.1f%%)", short(c.Mint), c.PnLSOL, c.PnLPercent),
 	})
 }
 func (n noopNotifier) Alert(text string) {
-	log.Printf("[user:%s] %s", n.userID[:8], text)
+	log.Printf("[user:%s] %s", short(n.userID), text)
 	eventlog.Emit(eventlog.Event{Type: "ALERT", Message: text})
 }
