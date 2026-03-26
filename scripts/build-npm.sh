@@ -39,24 +39,35 @@ for PLATFORM in "${!TARGETS[@]}"; do
   fi
 done
 
-# Update version in all package.json files (version + optionalDependencies)
+# Update version in all package.json files using Python (sed/perl mangle key names)
 echo ""
 echo "▶ Updating version to $VERSION in package.json files"
 
-for PKG_DIR in "$NPM"/hummingbird "$NPM"/hummingbird-*/; do
-  PKG_JSON="$PKG_DIR/package.json"
-  if [[ -f "$PKG_JSON" ]]; then
-    # Update "version" field
-    sed -i.bak "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" "$PKG_JSON"
-    rm -f "$PKG_JSON.bak"
-    # Update pinned versions inside optionalDependencies (lines like "pkg": "x.y.z")
-    sed -i.bak "s/@decatalyst\/hummingbird-[^\"]*\": \"[^\"]*\"/@decatalyst\/hummingbird-PLACEHOLDER\": \"$VERSION\"/g" "$PKG_JSON"
-    rm -f "$PKG_JSON.bak"
-    # Fix the PLACEHOLDER substitution (restore real pkg names by re-running build)
-    # Actually: just replace any semver value on lines containing @decatalyst
-    perl -i -pe 's/("@decatalyst\/hummingbird-[^"]+": ")[^"]+"/\${1}'"$VERSION"'"/' "$PKG_JSON" 2>/dev/null || true
-  fi
-done
+python3 - "$NPM" "$VERSION" <<'PYEOF'
+import json, sys, pathlib
+
+npm_dir = pathlib.Path(sys.argv[1])
+version = sys.argv[2]
+
+PLATFORM_PKGS = [
+  "@decatalyst/hummingbird-linux-x64",
+  "@decatalyst/hummingbird-linux-arm64",
+  "@decatalyst/hummingbird-darwin-x64",
+  "@decatalyst/hummingbird-darwin-arm64",
+  "@decatalyst/hummingbird-win32-x64",
+]
+
+for pkg_json in npm_dir.rglob("package.json"):
+  with open(pkg_json) as f:
+    pkg = json.load(f)
+  pkg["version"] = version
+  if "optionalDependencies" in pkg:
+    pkg["optionalDependencies"] = {p: version for p in PLATFORM_PKGS}
+  with open(pkg_json, "w") as f:
+    json.dump(pkg, f, indent=2, ensure_ascii=False)
+    f.write("\n")
+  print(f"  updated {pkg_json.relative_to(npm_dir.parent.parent)}")
+PYEOF
 
 echo ""
 echo "✓ Build complete. Run ./scripts/publish-npm.sh $VERSION to publish."
