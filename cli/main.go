@@ -16,14 +16,15 @@ import (
 )
 
 const usageText = `Hummingbird — Pump.fun trading agent CLI
-by Vylth · VYLTH Strategies
+by VYLTH Strategies · @iamdecatalyst
 
 USAGE:
   hummingbird [flags] <command>
-  hummingbird                    Launch interactive TUI
+  hummingbird                    Launch interactive TUI (multi-tenant)
+  hummingbird -url <url>         Launch TUI against a self-hosted instance
 
 COMMANDS:
-  login                   Save API URL + token to ~/.config/hummingbird/credentials
+  login                   Authenticate via Nexus — opens browser, saves token
   logout                  Remove saved credentials
   status                  One-shot: print trading stats
   positions               One-shot: print open and recent closed positions
@@ -34,14 +35,10 @@ FLAGS:
   -token string  JWT token override (or set HUMMINGBIRD_TOKEN env var)
   -h, --help     Show this help message
 
-EXAMPLES:
-  hummingbird
-  hummingbird login
-  hummingbird status
-  hummingbird positions
-  hummingbird logs
+SELF-HOSTED (single-tenant):
+  hummingbird -url http://localhost:8002     no login needed
 
-For full documentation visit: https://hummingbird-api.vylth.com
+For full documentation visit: https://github.com/iamdecatalyst/hummingbird
 `
 
 func printUsage() {
@@ -159,62 +156,30 @@ func handleLogin() {
 	fmt.Println("  ◈ Hummingbird Login")
 	fmt.Println()
 
-	// API URL
-	var apiURL string
+	defaultURL := "https://hummingbird.vylth.com"
 	if savedURL != "" {
-		fmt.Printf("  API URL [%s]: ", savedURL)
-		apiURL = readLineRaw()
-		if apiURL == "" {
-			apiURL = savedURL
-		}
-	} else {
-		fmt.Print("  API URL [http://localhost:8002]: ")
-		apiURL = readLineRaw()
-		if apiURL == "" {
-			apiURL = "http://localhost:8002"
-		}
+		defaultURL = savedURL
+	}
+	fmt.Printf("  API URL [%s]: ", defaultURL)
+	apiURL := readLineRaw()
+	if apiURL == "" {
+		apiURL = defaultURL
 	}
 	apiURL = strings.TrimRight(apiURL, "/")
 
-	// Check if multi-tenant (requires login) or single-tenant (no auth)
-	c := client.New(apiURL, "")
-	mode, err := c.GetMode()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "\n  ✗ Could not reach %s: %v\n", apiURL, err)
-		os.Exit(1)
-	}
-
-	if !mode.MultiTenant {
-		// Single-tenant: no auth needed
-		if err := client.SaveCredentials(apiURL, ""); err != nil {
-			fmt.Fprintf(os.Stderr, "  ✗ Failed to save: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Println()
-		fmt.Println("  ✓ Single-tenant mode — no authentication required.")
-		fmt.Printf("  ✓ Saved to %s\n", client.CredentialsPath())
-		fmt.Println("  → Run 'hummingbird' to launch the TUI.")
-		return
-	}
-
-	// Multi-tenant: open browser to /cli/auth page
+	// Open browser to /cli/auth on the dashboard
 	authURL := apiURL + "/cli/auth"
-	// Try to derive web dashboard URL from API URL
-	// e.g. http://localhost:8002 → show the web URL separately if known
 	fmt.Println()
-	fmt.Println("  Opening your browser to get a CLI token…")
+	fmt.Println("  Opening browser — log in with Nexus and copy your token.")
 	fmt.Printf("  %s\n", authURL)
 	fmt.Println()
-
 	openBrowser(authURL)
 
-	// Prompt for paste
 	if savedToken != "" {
 		fmt.Print("  Paste token (Enter to keep existing): ")
 	} else {
 		fmt.Print("  Paste token: ")
 	}
-
 	tokenInput := readHidden()
 
 	if strings.TrimSpace(tokenInput) == "" {
