@@ -2,7 +2,10 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { ChartBar, MapPin, ClockCounterClockwise, Gear, Play, Stop, ArrowLeft, Pulse, SignOut } from '@phosphor-icons/react'
+import {
+  ChartBar, MapPin, ClockCounterClockwise, Gear, Play, Stop,
+  Pulse, SignOut, Copy, Check, Wallet, Key,
+} from '@phosphor-icons/react'
 import { useOrchestrator } from '../hooks/useOrchestrator'
 import type { ClosedPosition, Position } from '../lib/api'
 
@@ -18,7 +21,27 @@ function held(openedAt: string): string {
   return `${s}s`
 }
 
-function shortMint(mint: string) { return mint.slice(0, 8) }
+function shortMint(mint: string) { return mint.slice(0, 8) + '…' }
+
+function CopyField({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false)
+  const copy = () => {
+    navigator.clipboard.writeText(value)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+  return (
+    <div>
+      <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-1.5">{label}</p>
+      <div className="flex items-center gap-2 neu-card-inset rounded-xl px-3 py-2.5">
+        <span className="font-mono text-xs text-[#a0a0a0] truncate flex-1">{value}</span>
+        <button onClick={copy} className="text-[#444] hover:text-white transition-colors shrink-0">
+          {copied ? <Check size={13} className="text-[#4ADE80]" /> : <Copy size={13} />}
+        </button>
+      </div>
+    </div>
+  )
+}
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -43,28 +66,51 @@ function StatCard({
 
 function PositionCard({ pos }: { pos: Position }) {
   const heldStr = held(pos.opened_at)
+  const pnlPct = pos.peak_price_sol > 0
+    ? ((pos.peak_price_sol - pos.entry_price_sol) / pos.entry_price_sol * 100).toFixed(1)
+    : null
   return (
-    <div className="neu-card-inset p-3 rounded-xl">
-      <div className="flex items-start justify-between mb-1">
-        <span className="font-mono text-xs text-white font-bold">{shortMint(pos.mint)}</span>
-        <span className="font-mono text-xs text-[#00A8FF]">score: {pos.score}</span>
-      </div>
-      <div className="flex items-center justify-between">
-        <span className="font-mono text-xs text-[#00A8FF]">
-          {pos.score >= 75 ? 'SNIPER' : 'SCALPER'}
-        </span>
+    <div className="neu-card-inset p-4 rounded-xl">
+      <div className="flex items-start justify-between mb-2">
+        <div>
+          <span className="font-mono text-sm text-white font-bold">{shortMint(pos.mint)}</span>
+          <span className="ml-2 font-mono text-xs text-[#00A8FF]">{pos.score >= 75 ? 'SNIPER' : 'SCALPER'}</span>
+        </div>
         <span className="font-mono text-xs text-[#555]">{heldStr}</span>
       </div>
-      <div className="font-mono text-xs text-[#555] mt-1">
-        entry: {pos.entry_amount_sol.toFixed(3)} SOL
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <p className="font-mono text-[10px] text-[#444] mb-0.5">ENTRY</p>
+          <p className="font-mono text-xs text-[#a0a0a0]">{pos.entry_amount_sol.toFixed(3)} SOL</p>
+        </div>
+        <div>
+          <p className="font-mono text-[10px] text-[#444] mb-0.5">SCORE</p>
+          <p className="font-mono text-xs text-[#00A8FF]">{pos.score}</p>
+        </div>
+        {pnlPct && (
+          <div>
+            <p className="font-mono text-[10px] text-[#444] mb-0.5">PEAK</p>
+            <p className="font-mono text-xs text-[#4ADE80]">+{pnlPct}%</p>
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
 function Sidebar({
-  active, paused, onStop, onResume, onLogout, walletId, userName, userAvatar,
-}: { active: string; paused: boolean; onStop: () => void; onResume: () => void; onLogout?: () => void; walletId?: string; userName?: string; userAvatar?: string }) {
+  active, paused, onTabChange, onStop, onResume, onLogout, walletId, userName, userAvatar,
+}: {
+  active: string
+  paused: boolean
+  onTabChange: (tab: string) => void
+  onStop: () => void
+  onResume: () => void
+  onLogout?: () => void
+  walletId?: string
+  userName?: string
+  userAvatar?: string
+}) {
   const navItems = [
     { id: 'overview',  label: 'Overview',  icon: <ChartBar size={16} weight="duotone" /> },
     { id: 'positions', label: 'Positions', icon: <MapPin size={16} weight="duotone" /> },
@@ -91,6 +137,7 @@ function Sidebar({
 
       {navItems.map(item => (
         <button key={item.id}
+          onClick={() => onTabChange(item.id)}
           className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-left font-mono text-sm transition-all duration-200 ${
             active === item.id
               ? 'bg-[#141414] text-white shadow-[3px_3px_8px_rgba(0,0,0,0.7),-3px_-3px_8px_rgba(40,40,40,0.12)]'
@@ -110,11 +157,13 @@ function Sidebar({
           <div className="border-t border-white/5 pt-3 mt-1">
             <div className="flex items-center gap-2 mb-2">
               {userAvatar
-                ? <img src={userAvatar} className="w-5 h-5 rounded-full object-cover" alt="" />
-                : <div className="w-5 h-5 rounded-full bg-[#1a1a1a] border border-white/10" />
+                ? <img src={userAvatar} className="w-6 h-6 rounded-full object-cover ring-1 ring-white/10" alt="" />
+                : <div className="w-6 h-6 rounded-full bg-[#1a1a1a] border border-white/10 flex items-center justify-center">
+                    <span className="font-mono text-[10px] text-[#555]">{(userName || 'U')[0].toUpperCase()}</span>
+                  </div>
               }
-              <span className="font-mono text-[10px] text-[#444] truncate">
-                {userName || (walletId ? `${walletId.slice(0,6)}…` : 'User')}
+              <span className="font-mono text-[11px] text-[#666] truncate">
+                {userName || (walletId ? `${walletId.slice(0, 8)}…` : 'User')}
               </span>
             </div>
             <button
@@ -147,6 +196,276 @@ function buildChart(closed: ClosedPosition[]) {
   }).filter((_, h) => h <= new Date().getHours())
 }
 
+// ── Tab views ─────────────────────────────────────────────────────────────────
+
+function TabOverview({ stats, positions, closed, online, error, stop, resume }: {
+  stats: ReturnType<typeof useOrchestrator>['stats']
+  positions: Position[]
+  closed: ClosedPosition[]
+  online: boolean
+  error: string | null
+  stop: () => void
+  resume: () => void
+}) {
+  const [time, setTime] = useState(new Date())
+  useEffect(() => {
+    const t = setInterval(() => setTime(new Date()), 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  const s = stats ?? {
+    open_positions: 0, total_trades: 0, wins: 0, losses: 0,
+    win_rate: 0, today_pnl: 0, total_pnl: 0, paused: false, pause_reason: '', configured: false,
+  }
+  const chartData = buildChart(closed)
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="font-mono font-bold text-2xl text-white">Overview</h1>
+          <p className="font-mono text-xs text-[#555] mt-1">
+            {time.toISOString().replace('T', ' ').slice(0, 19)} UTC
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className={`flex items-center gap-1.5 neu-card-inset px-3 py-1.5 rounded-xl font-mono text-xs ${online ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
+            <Pulse size={13} weight="bold" />
+            {online ? 'live' : 'offline'}
+          </span>
+          <span className="neu-card-inset px-3 py-1.5 rounded-xl font-mono text-xs text-[#00A8FF]">
+            {s.open_positions} open
+          </span>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-6 neu-card-inset px-4 py-3 rounded-xl flex items-center gap-3">
+          <span className="font-mono text-xs text-[#EF4444]">⚠ Orchestrator offline — {error}</span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatCard label="Today P&L" value={`${s.today_pnl >= 0 ? '+' : ''}${s.today_pnl.toFixed(3)} SOL`} sub="↑ from midnight" positive={s.today_pnl >= 0} />
+        <StatCard label="Total P&L"  value={`${s.total_pnl >= 0 ? '+' : ''}${s.total_pnl.toFixed(3)} SOL`} sub={`${s.total_trades} trades`} positive={s.total_pnl >= 0} />
+        <StatCard label="Win Rate"   value={`${s.win_rate.toFixed(0)}%`} sub={`W:${s.wins}  L:${s.losses}`} accent />
+        <StatCard label="Open"       value={`${s.open_positions}`} sub="positions" />
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-6">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="lg:col-span-2 neu-tile p-5">
+          <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-4">Today P&L — SOL</p>
+          {chartData.length > 1 ? (
+            <ResponsiveContainer width="100%" height={180}>
+              <LineChart data={chartData}>
+                <XAxis dataKey="t" tick={{ fontFamily: 'JetBrains Mono', fontSize: 10, fill: '#444' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontFamily: 'JetBrains Mono', fontSize: 10, fill: '#444' }} axisLine={false} tickLine={false} tickFormatter={v => v.toFixed(3)} />
+                <Tooltip contentStyle={{ background: '#141414', border: '1px solid rgba(0,168,255,0.15)', borderRadius: 12, fontFamily: 'JetBrains Mono', fontSize: 12, color: '#fff' }} formatter={(v: number) => [`${v.toFixed(3)} SOL`, 'P&L']} />
+                <Line type="monotone" dataKey="pnl" stroke="#00A8FF" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[180px] flex items-center justify-center">
+              <p className="font-mono text-xs text-[#444]">No trades today yet.</p>
+            </div>
+          )}
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="neu-tile p-5">
+          <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-4">Open Positions ({positions.length})</p>
+          <div className="space-y-3">
+            {positions.map(pos => <PositionCard key={pos.id} pos={pos} />)}
+            {positions.length === 0 && (
+              <p className="font-mono text-xs text-[#444] text-center py-6">Scanning for entries...</p>
+            )}
+          </div>
+        </motion.div>
+      </div>
+
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="neu-tile p-5 mt-6">
+        <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-4">Recent Trades</p>
+        {closed.length === 0 ? (
+          <p className="font-mono text-xs text-[#444] text-center py-6">No trades yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-left border-b border-white/5">
+                  {['Token', 'Mode', 'Entry', 'Exit', 'P&L', 'Reason'].map(h => (
+                    <th key={h} className="font-mono text-xs text-[#444] uppercase tracking-wider pb-3 pr-6">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {closed.slice(0, 10).map((t, i) => (
+                  <tr key={i} className="border-b border-white/[0.03] hover:bg-white/[0.015] transition-colors">
+                    <td className="font-mono text-xs text-white py-3 pr-6">{shortMint(t.mint)}</td>
+                    <td className="font-mono text-xs text-[#00A8FF] py-3 pr-6">{t.score >= 75 ? 'SNIPER' : 'SCALPER'}</td>
+                    <td className="font-mono text-xs text-[#a0a0a0] py-3 pr-6">{t.entry_amount_sol.toFixed(3)}</td>
+                    <td className="font-mono text-xs text-[#a0a0a0] py-3 pr-6">{t.exit_amount_sol.toFixed(3)}</td>
+                    <td className={`font-mono text-xs font-bold py-3 pr-6 ${t.pnl_sol >= 0 ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
+                      {t.pnl_sol >= 0 ? '+' : ''}{t.pnl_sol.toFixed(3)} SOL
+                      <span className="ml-2 font-normal text-[10px] opacity-70">({t.pnl_percent >= 0 ? '+' : ''}{t.pnl_percent.toFixed(0)}%)</span>
+                    </td>
+                    <td className="py-3">
+                      <span className={`font-mono text-xs px-2 py-0.5 rounded-full ${t.reason.startsWith('take') || t.reason === 'scalp' ? 'bg-[#4ADE80]/10 text-[#4ADE80]' : 'bg-[#EF4444]/10 text-[#EF4444]'}`}>
+                        {t.reason.replace('_', ' ').toUpperCase()}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </motion.div>
+    </>
+  )
+}
+
+function TabPositions({ positions }: { positions: Position[] }) {
+  return (
+    <>
+      <div className="mb-8">
+        <h1 className="font-mono font-bold text-2xl text-white">Positions</h1>
+        <p className="font-mono text-xs text-[#555] mt-1">{positions.length} open right now</p>
+      </div>
+      {positions.length === 0 ? (
+        <div className="neu-tile p-12 text-center">
+          <p className="font-mono text-[#444] text-sm">No open positions.</p>
+          <p className="font-mono text-[#333] text-xs mt-1">The bot is scanning for entries.</p>
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {positions.map(pos => <PositionCard key={pos.id} pos={pos} />)}
+        </div>
+      )}
+    </>
+  )
+}
+
+function TabHistory({ closed }: { closed: ClosedPosition[] }) {
+  return (
+    <>
+      <div className="mb-8">
+        <h1 className="font-mono font-bold text-2xl text-white">History</h1>
+        <p className="font-mono text-xs text-[#555] mt-1">{closed.length} closed trades</p>
+      </div>
+      <div className="neu-tile p-5">
+        {closed.length === 0 ? (
+          <p className="font-mono text-xs text-[#444] text-center py-12">No closed trades yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-left border-b border-white/5">
+                  {['Token', 'Mode', 'Entry SOL', 'Exit SOL', 'P&L', '%', 'Reason', 'Closed'].map(h => (
+                    <th key={h} className="font-mono text-xs text-[#444] uppercase tracking-wider pb-3 pr-5">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {closed.map((t, i) => (
+                  <tr key={i} className="border-b border-white/[0.03] hover:bg-white/[0.015] transition-colors">
+                    <td className="font-mono text-xs text-white py-3 pr-5">{shortMint(t.mint)}</td>
+                    <td className="font-mono text-xs text-[#00A8FF] py-3 pr-5">{t.score >= 75 ? 'SNIPER' : 'SCALPER'}</td>
+                    <td className="font-mono text-xs text-[#a0a0a0] py-3 pr-5">{t.entry_amount_sol.toFixed(3)}</td>
+                    <td className="font-mono text-xs text-[#a0a0a0] py-3 pr-5">{t.exit_amount_sol.toFixed(3)}</td>
+                    <td className={`font-mono text-xs font-bold py-3 pr-5 ${t.pnl_sol >= 0 ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
+                      {t.pnl_sol >= 0 ? '+' : ''}{t.pnl_sol.toFixed(3)}
+                    </td>
+                    <td className={`font-mono text-xs py-3 pr-5 ${t.pnl_percent >= 0 ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
+                      {t.pnl_percent >= 0 ? '+' : ''}{t.pnl_percent.toFixed(1)}%
+                    </td>
+                    <td className="py-3 pr-5">
+                      <span className={`font-mono text-xs px-2 py-0.5 rounded-full ${t.reason.startsWith('take') || t.reason === 'scalp' ? 'bg-[#4ADE80]/10 text-[#4ADE80]' : 'bg-[#EF4444]/10 text-[#EF4444]'}`}>
+                        {t.reason.replace('_', ' ').toUpperCase()}
+                      </span>
+                    </td>
+                    <td className="font-mono text-[10px] text-[#444] py-3">
+                      {new Date(t.closed_at).toLocaleTimeString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
+function TabConfig({ walletId, userName, userAvatar, botActive }: {
+  walletId?: string
+  userName?: string
+  userAvatar?: string
+  botActive?: boolean
+}) {
+  return (
+    <>
+      <div className="mb-8">
+        <h1 className="font-mono font-bold text-2xl text-white">Config</h1>
+        <p className="font-mono text-xs text-[#555] mt-1">Your account and bot configuration</p>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Profile */}
+        <div className="neu-tile p-6 space-y-4">
+          <div className="flex items-center gap-3 pb-4 border-b border-white/5">
+            {userAvatar
+              ? <img src={userAvatar} className="w-10 h-10 rounded-full object-cover ring-1 ring-white/10" alt="" />
+              : <div className="w-10 h-10 rounded-full bg-[#141414] border border-white/10 flex items-center justify-center">
+                  <span className="font-mono text-sm text-[#666]">{(userName || 'U')[0].toUpperCase()}</span>
+                </div>
+            }
+            <div>
+              <p className="font-mono text-sm text-white font-bold">{userName || 'User'}</p>
+              <p className="font-mono text-xs text-[#555]">VYLTH Nexus account</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Wallet size={14} className="text-[#555] shrink-0" />
+            <p className="font-mono text-xs text-[#555] uppercase tracking-widest">Signet Wallet</p>
+          </div>
+          {walletId
+            ? <CopyField label="Wallet Address" value={walletId} />
+            : <p className="font-mono text-xs text-[#444]">No wallet connected.</p>
+          }
+        </div>
+
+        {/* Bot status */}
+        <div className="neu-tile p-6 space-y-4">
+          <p className="font-mono text-xs text-[#555] uppercase tracking-widest pb-4 border-b border-white/5">Bot Status</p>
+
+          <div className="flex items-center justify-between">
+            <span className="font-mono text-xs text-[#666]">Status</span>
+            <span className={`font-mono text-xs px-2.5 py-1 rounded-full ${botActive ? 'bg-[#4ADE80]/10 text-[#4ADE80]' : 'bg-[#EF4444]/10 text-[#EF4444]'}`}>
+              {botActive ? 'Running' : 'Stopped'}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="font-mono text-xs text-[#666]">Network</span>
+            <span className="font-mono text-xs text-[#a0a0a0]">Solana Mainnet</span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="font-mono text-xs text-[#666]">DEX</span>
+            <span className="font-mono text-xs text-[#a0a0a0]">pump.fun / Raydium</span>
+          </div>
+
+          <div className="flex items-center gap-2 mt-2 pt-4 border-t border-white/5">
+            <Key size={14} className="text-[#555] shrink-0" />
+            <p className="font-mono text-xs text-[#555]">Signet credentials encrypted at rest</p>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 interface DashboardProps {
@@ -158,82 +477,47 @@ interface DashboardProps {
 
 export default function Dashboard({ onLogout, walletId, userName, userAvatar }: DashboardProps) {
   const { stats, positions, closed, online, loading, error, stop, resume } = useOrchestrator()
-  const [time, setTime] = useState(new Date())
+  const [tab, setTab] = useState('overview')
 
-  useEffect(() => {
-    const t = setInterval(() => setTime(new Date()), 1000)
-    return () => clearInterval(t)
-  }, [])
-
-  const chartData = buildChart(closed)
-
-  // Loading spinner
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center">
         <div className="text-center">
-          <img
-            src="/logo.png"
-            alt="Hummingbird"
-            className="w-16 h-16 object-contain mx-auto mb-4 animate-pulse"
-            style={{ filter: 'drop-shadow(0 0 16px rgba(0,168,255,0.5))' }}
-          />
+          <img src="/logo.png" alt="Hummingbird" className="w-16 h-16 object-contain mx-auto mb-4 animate-pulse"
+            style={{ filter: 'drop-shadow(0 0 16px rgba(0,168,255,0.5))' }} />
           <p className="font-mono text-[#555] text-sm animate-pulse">Connecting to orchestrator...</p>
         </div>
       </div>
     )
   }
 
-  // Unconfigured — show setup instructions
   if (stats && stats.configured === false) {
     return (
       <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center px-6">
         <div className="max-w-lg w-full text-center">
-          <img
-            src="/logo.png"
-            alt="Hummingbird"
-            className="w-20 h-20 object-contain mx-auto mb-6"
-            style={{ filter: 'drop-shadow(0 0 20px rgba(0,168,255,0.4))' }}
-          />
+          <img src="/logo.png" alt="Hummingbird" className="w-20 h-20 object-contain mx-auto mb-6"
+            style={{ filter: 'drop-shadow(0 0 20px rgba(0,168,255,0.4))' }} />
           <h1 className="font-mono font-bold text-white text-2xl mb-2">Not configured</h1>
-          <p className="text-[#666] text-sm mb-8">
-            The orchestrator is running but Signet credentials are missing.
-            Set them in your <code className="text-[#00A8FF] bg-white/5 px-1.5 py-0.5 rounded">.env</code> and restart.
-          </p>
-          <div className="neu-tile p-5 text-left font-mono text-xs leading-relaxed mb-6">
-            <div className="text-[#555] mb-2"># /opt/hummingbird/.env</div>
-            <div><span className="text-[#00A8FF]">SIGNET_API_KEY</span>=<span className="text-[#4ADE80]">your_api_key</span></div>
-            <div><span className="text-[#00A8FF]">SIGNET_API_SECRET</span>=<span className="text-[#4ADE80]">your_api_secret</span></div>
-          </div>
-          <div className="flex gap-3 justify-center">
-            <a
-              href="https://signet.vylth.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hb-btn text-sm"
-            >
-              Get Signet API key →
-            </a>
-            <a href="https://github.com/iamdecatalyst/hummingbird" target="_blank" rel="noopener noreferrer" className="neu-btn-ghost text-sm">
-              View docs
-            </a>
-          </div>
+          <p className="text-[#666] text-sm mb-8">Signet credentials missing — set them in your <code className="text-[#00A8FF] bg-white/5 px-1.5 py-0.5 rounded">.env</code> and restart.</p>
+          <a href="https://signet.vylth.com" target="_blank" rel="noopener noreferrer" className="hb-btn text-sm">
+            Get Signet API key →
+          </a>
         </div>
       </div>
     )
   }
 
-  // Show offline banner but still render with zeros
   const s = stats ?? {
     open_positions: 0, total_trades: 0, wins: 0, losses: 0,
-    win_rate: 0, today_pnl: 0, total_pnl: 0, paused: false, pause_reason: '', configured: false,
+    win_rate: 0, today_pnl: 0, total_pnl: 0, paused: false, pause_reason: '', configured: true,
   }
 
   return (
     <div className="min-h-screen bg-[#0d0d0d] flex">
       <Sidebar
-        active="overview"
+        active={tab}
         paused={s.paused}
+        onTabChange={setTab}
         onStop={stop}
         onResume={resume}
         onLogout={onLogout}
@@ -243,170 +527,13 @@ export default function Dashboard({ onLogout, walletId, userName, userAvatar }: 
       />
 
       <main className="flex-1 overflow-y-auto p-6">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="font-mono font-bold text-2xl text-white">Overview</h1>
-            <p className="font-mono text-xs text-[#555] mt-1">
-              {time.toISOString().replace('T', ' ').slice(0, 19)} UTC
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            {/* Connection status */}
-            <span className={`flex items-center gap-1.5 neu-card-inset px-3 py-1.5 rounded-xl font-mono text-xs ${
-              online ? 'text-[#4ADE80]' : 'text-[#EF4444]'
-            }`}>
-              <Pulse size={13} weight="bold" />
-              {online ? 'live' : 'offline'}
-            </span>
-            <span className="neu-card-inset px-3 py-1.5 rounded-xl font-mono text-xs text-[#00A8FF]">
-              {s.open_positions} open
-            </span>
-          </div>
-        </div>
+        {tab === 'overview'  && <TabOverview stats={stats} positions={positions} closed={closed} online={online} error={error} stop={stop} resume={resume} />}
+        {tab === 'positions' && <TabPositions positions={positions} />}
+        {tab === 'history'   && <TabHistory closed={closed} />}
+        {tab === 'config'    && <TabConfig walletId={walletId} userName={userName} userAvatar={userAvatar} botActive={stats?.configured} />}
 
-        {/* Offline error banner */}
-        {error && (
-          <div className="mb-6 neu-card-inset px-4 py-3 rounded-xl flex items-center gap-3">
-            <span className="font-mono text-xs text-[#EF4444]">⚠</span>
-            <span className="font-mono text-xs text-[#EF4444]">
-              Orchestrator offline — {error}. Showing last known data.
-            </span>
-          </div>
-        )}
-
-        {/* Stat cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <StatCard
-            label="Today P&L"
-            value={`${s.today_pnl >= 0 ? '+' : ''}${s.today_pnl.toFixed(3)} SOL`}
-            sub="↑ from midnight"
-            positive={s.today_pnl >= 0 ? true : false}
-          />
-          <StatCard
-            label="Total P&L"
-            value={`${s.total_pnl >= 0 ? '+' : ''}${s.total_pnl.toFixed(3)} SOL`}
-            sub={`${s.total_trades} trades`}
-            positive={s.total_pnl >= 0 ? true : false}
-          />
-          <StatCard
-            label="Win Rate"
-            value={`${s.win_rate.toFixed(0)}%`}
-            sub={`W:${s.wins}  L:${s.losses}`}
-            accent
-          />
-          <StatCard
-            label="Open Positions"
-            value={`${s.open_positions}`}
-            sub="max 5 concurrent"
-          />
-        </div>
-
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* P&L chart */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="lg:col-span-2 neu-tile p-5"
-          >
-            <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-4">
-              Today P&L — SOL
-            </p>
-            {chartData.length > 1 ? (
-              <ResponsiveContainer width="100%" height={180}>
-                <LineChart data={chartData}>
-                  <XAxis dataKey="t" tick={{ fontFamily: 'JetBrains Mono', fontSize: 10, fill: '#444' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontFamily: 'JetBrains Mono', fontSize: 10, fill: '#444' }} axisLine={false} tickLine={false} tickFormatter={v => v.toFixed(3)} />
-                  <Tooltip
-                    contentStyle={{ background: '#141414', border: '1px solid rgba(0,168,255,0.15)', borderRadius: 12, fontFamily: 'JetBrains Mono', fontSize: 12, color: '#fff' }}
-                    formatter={(v: number) => [`${v.toFixed(3)} SOL`, 'P&L']}
-                  />
-                  <Line type="monotone" dataKey="pnl" stroke="#00A8FF" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-[180px] flex items-center justify-center">
-                <p className="font-mono text-xs text-[#444]">No trades today yet.</p>
-              </div>
-            )}
-          </motion.div>
-
-          {/* Open positions */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="neu-tile p-5"
-          >
-            <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-4">
-              Open Positions ({positions.length})
-            </p>
-            <div className="space-y-3">
-              {positions.map(pos => <PositionCard key={pos.id} pos={pos} />)}
-              {positions.length === 0 && (
-                <p className="font-mono text-xs text-[#444] text-center py-6">
-                  Scanning for entries...
-                </p>
-              )}
-            </div>
-          </motion.div>
-        </div>
-
-        {/* Recent trades table */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="neu-tile p-5 mt-6"
-        >
-          <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-4">
-            Recent Trades
-          </p>
-          {closed.length === 0 ? (
-            <p className="font-mono text-xs text-[#444] text-center py-6">No trades yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="text-left border-b border-white/5">
-                    {['Token', 'Mode', 'Entry', 'Exit', 'P&L', 'Reason'].map(h => (
-                      <th key={h} className="font-mono text-xs text-[#444] uppercase tracking-wider pb-3 pr-6">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {closed.slice(0, 20).map((t, i) => (
-                    <tr key={i} className="border-b border-white/[0.03] hover:bg-white/[0.015] transition-colors">
-                      <td className="font-mono text-xs text-white py-3 pr-6">{shortMint(t.mint)}</td>
-                      <td className="font-mono text-xs text-[#00A8FF] py-3 pr-6">
-                        {t.score >= 75 ? 'SNIPER' : 'SCALPER'}
-                      </td>
-                      <td className="font-mono text-xs text-[#a0a0a0] py-3 pr-6">{t.entry_amount_sol.toFixed(3)}</td>
-                      <td className="font-mono text-xs text-[#a0a0a0] py-3 pr-6">{t.exit_amount_sol.toFixed(3)}</td>
-                      <td className={`font-mono text-xs font-bold py-3 pr-6 ${t.pnl_sol >= 0 ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
-                        {t.pnl_sol >= 0 ? '+' : ''}{t.pnl_sol.toFixed(3)} SOL
-                        <span className="ml-2 font-normal text-[10px] opacity-70">
-                          ({t.pnl_percent >= 0 ? '+' : ''}{t.pnl_percent.toFixed(0)}%)
-                        </span>
-                      </td>
-                      <td className="py-3">
-                        <span className={`font-mono text-xs px-2 py-0.5 rounded-full ${
-                          t.reason.startsWith('take') || t.reason === 'scalp'
-                            ? 'bg-[#4ADE80]/10 text-[#4ADE80]'
-                            : 'bg-[#EF4444]/10 text-[#EF4444]'
-                        }`}>
-                          {t.reason.replace('_', ' ').toUpperCase()}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </motion.div>
-
-        {/* Footer note */}
         <div className="mt-4 font-mono text-xs text-[#333] text-center">
-          Polling every 3s · orchestrator at {import.meta.env.VITE_API_URL ?? 'localhost:8002'}
+          Polling every 3s · {import.meta.env.VITE_API_URL ?? 'localhost:8002'}
         </div>
       </main>
     </div>
