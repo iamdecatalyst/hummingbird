@@ -190,7 +190,8 @@ export default function Hero() {
                 rel="noopener noreferrer"
                 className="neu-btn-ghost"
               >
-                <Star size={15} weight="fill" className="text-[#00A8FF]" /> Star on GitHub
+                <img src="/github.svg" alt="" className="w-4 h-4 opacity-80" />
+                Star on GitHub
               </a>
             </motion.div>
 

@@ -1,43 +1,47 @@
 import { motion } from 'framer-motion'
+import {
+  Globe, Crosshair, TrendUp, ShieldWarning,
+  ChartBar, Robot, Key, GithubLogo,
+} from '@phosphor-icons/react'
 
 const FEATURES = [
   {
-    icon: '🌐',
+    icon: <Globe size={24} weight="duotone" />,
     title: 'Multi-Platform',
     desc: 'Monitors pump.fun, Moonshot, Raydium LaunchLab, Boop.fun on Solana — plus Base, BNB, and more via EVM eth_subscribe.',
   },
   {
-    icon: '🎯',
+    icon: <Crosshair size={24} weight="duotone" />,
     title: 'Sniper + Scalper',
     desc: 'Two modes work together. Sniper catches new launches &lt;100ms. Scalper finds second-wave momentum on 8-25 minute old tokens.',
   },
   {
-    icon: '📈',
+    icon: <TrendUp size={24} weight="duotone" />,
     title: 'Staged Take-Profits',
     desc: 'Sells 40% at 2x, 40% more at 5x, and the rest at 10x. Locks gains progressively so moonshots are never fully sold too early.',
   },
   {
-    icon: '🛡️',
+    icon: <ShieldWarning size={24} weight="duotone" />,
     title: 'Rug Detection',
     desc: 'Exits immediately when dev wallet sells >5% supply, liquidity drops, or price crashes >15% in 10 seconds.',
   },
   {
-    icon: '📊',
+    icon: <ChartBar size={24} weight="duotone" />,
     title: 'Risk Controls',
     desc: 'Max 5 concurrent positions, configurable daily loss limit (default 30%), per-trade stop-loss at -25%.',
   },
   {
-    icon: '🤖',
+    icon: <Robot size={24} weight="duotone" />,
     title: 'Telegram Control',
     desc: 'Full bot with inline keyboards. Real-time P&L, open positions, toggle sniper/scalper on the fly. ASCII dashboard that looks insane.',
   },
   {
-    icon: '🔑',
+    icon: <Key size={24} weight="duotone" />,
     title: 'Powered by Signet',
     desc: 'Uses Signet\'s custodial wallet API for all trade execution — no private keys in config files. Set up in minutes.',
   },
   {
-    icon: '⚡',
+    icon: <GithubLogo size={24} weight="duotone" />,
     title: 'Open Source',
     desc: 'Fully open on GitHub. Run it yourself, fork it, extend it. The scoring engine is the only part you\'ll want to keep private.',
   },

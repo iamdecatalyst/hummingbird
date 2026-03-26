@@ -67,7 +67,7 @@ export default function CTA() {
           {/* Signet callout */}
           <div className="inline-flex items-center gap-3 neu-card-inset px-5 py-3 rounded-2xl">
             <span className="font-mono text-xs text-[#555]">POWERED BY</span>
-            <span className="font-mono text-sm font-bold text-white">Signet</span>
+            <img src="/signet-logo.png" alt="Signet" className="h-5 object-contain" />
             <span className="font-mono text-xs text-[#555]">—</span>
             <a
               href="https://signet.vylth.com"

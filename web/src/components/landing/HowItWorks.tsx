@@ -1,11 +1,13 @@
 import { motion } from 'framer-motion'
+import { Lightning, Brain, Target } from '@phosphor-icons/react'
 
 const STEPS = [
   {
     num: '01',
     lang: 'Rust',
     langColor: '#F74C00',
-    icon: '⚡',
+    langLogo: '/lang-rust.svg',
+    icon: <Lightning size={28} weight="fill" color="#00A8FF" />,
     title: 'Detect',
     subtitle: 'Sub-100ms detection',
     desc: 'WebSocket listener subscribes to Solana program logs. When a new token launches on pump.fun, Moonshot, Raydium LaunchLab, or Boop, the event is captured in under 100ms and sent to the scorer.',
@@ -15,7 +17,8 @@ const STEPS = [
     num: '02',
     lang: 'Python',
     langColor: '#3776AB',
-    icon: '🧠',
+    langLogo: '/lang-python.svg',
+    icon: <Brain size={28} weight="fill" color="#00A8FF" />,
     title: 'Score',
     subtitle: '5 parallel signals',
     desc: 'FastAPI scorer runs 5 async checks in parallel: dev wallet history, token supply distribution, bonding curve fill %, mint authority status, and social metadata — all in under 500ms.',
@@ -25,7 +28,8 @@ const STEPS = [
     num: '03',
     lang: 'Go',
     langColor: '#00ADD8',
-    icon: '🎯',
+    langLogo: '/lang-go.svg',
+    icon: <Target size={28} weight="fill" color="#00A8FF" />,
     title: 'Execute',
     subtitle: 'Signet API · 3% slippage',
     desc: 'Orchestrator receives the score decision and executes buys via Signet. Positions are monitored every 2 seconds — staged take-profits at 2x, 5x, 10x, with stop-loss and rug detection.',
@@ -82,21 +86,22 @@ export default function HowItWorks() {
                   <span className="font-mono text-5xl font-bold text-white/5 leading-none select-none">
                     {step.num}
                   </span>
-                  <span
-                    className="font-mono text-xs font-bold px-2.5 py-1 rounded-full"
+                  <div
+                    className="flex items-center gap-1.5 font-mono text-xs font-bold px-2.5 py-1 rounded-full"
                     style={{
                       background: `${step.langColor}15`,
                       color: step.langColor,
                       boxShadow: `0 0 12px ${step.langColor}20`,
                     }}
                   >
+                    <img src={step.langLogo} alt={step.lang} className="w-3.5 h-3.5 object-contain" />
                     {step.lang}
-                  </span>
+                  </div>
                 </div>
 
                 {/* Icon + title */}
                 <div className="mb-3">
-                  <span className="text-2xl mb-2 block">{step.icon}</span>
+                  <div className="mb-2">{step.icon}</div>
                   <h3 className="font-mono font-bold text-xl text-white mb-0.5">{step.title}</h3>
                   <p className="font-mono text-xs text-[#00A8FF]">{step.subtitle}</p>
                 </div>
