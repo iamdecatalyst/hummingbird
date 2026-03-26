@@ -167,9 +167,16 @@ export default function Hero() {
               transition={{ duration: 0.5, delay: 0.3 }}
               className="flex flex-wrap gap-2 mb-10"
             >
-              {['Rust', 'Python', 'Go', 'Solana', 'Open Source'].map(tag => (
-                <span key={tag} className="font-mono text-xs px-3 py-1.5 rounded-full neu-card-inset text-[#a0a0a0]">
-                  {tag}
+              {[
+                { label: 'Rust',        logo: '/lang-rust.svg' },
+                { label: 'Python',      logo: '/lang-python.svg' },
+                { label: 'Go',          logo: '/lang-go.svg' },
+                { label: 'Solana',      logo: '/lang-solana.svg' },
+                { label: 'Open Source', logo: '/github.svg' },
+              ].map(tag => (
+                <span key={tag.label} className="inline-flex items-center gap-1.5 font-mono text-xs px-3 py-1.5 rounded-full neu-card-inset text-[#a0a0a0]">
+                  <img src={tag.logo} alt="" className="w-3.5 h-3.5 opacity-70 object-contain" />
+                  {tag.label}
                 </span>
               ))}
             </motion.div>
