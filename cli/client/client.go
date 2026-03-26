@@ -48,16 +48,24 @@ func New(baseURL, token string) (*Client, bool) {
 
 // Stats holds the response from GET /stats.
 type Stats struct {
-	OpenPositions int     `json:"open_positions"`
-	TotalTrades   int     `json:"total_trades"`
-	Wins          int     `json:"wins"`
-	Losses        int     `json:"losses"`
-	WinRate       float64 `json:"win_rate"`
-	TodayPnL      float64 `json:"today_pnl"`
-	TotalPnL      float64 `json:"total_pnl"`
-	Paused        bool    `json:"paused"`
-	PauseReason   string  `json:"pause_reason"`
-	Configured    bool    `json:"configured"`
+	OpenPositions    int     `json:"open_positions"`
+	TotalTrades      int     `json:"total_trades"`
+	Wins             int     `json:"wins"`
+	Losses           int     `json:"losses"`
+	WinRate          float64 `json:"win_rate"`
+	TodayPnL         float64 `json:"today_pnl"`
+	TotalPnL         float64 `json:"total_pnl"`
+	WalletBalanceSOL float64 `json:"wallet_balance_sol"`
+	Paused           bool    `json:"paused"`
+	PauseReason      string  `json:"pause_reason"`
+	Configured       bool    `json:"configured"`
+}
+
+// BotConfig holds the response from GET /config.
+type BotConfig struct {
+	MaxConcurrentPositions int     `json:"max_concurrent_positions"`
+	MaxDailyLossPercent    float64 `json:"max_daily_loss_percent"`
+	WalletID               string  `json:"wallet_id"`
 }
 
 // Position holds an open position from GET /positions.
@@ -211,6 +219,19 @@ func (c *Client) GetLogs() ([]LogEntry, error) {
 		return nil, fmt.Errorf("decoding logs: %w", err)
 	}
 	return result, nil
+}
+
+// GetConfig fetches the bot configuration.
+func (c *Client) GetConfig() (*BotConfig, error) {
+	data, err := c.doRequest("/config")
+	if err != nil {
+		return nil, err
+	}
+	var result BotConfig
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, fmt.Errorf("decoding config: %w", err)
+	}
+	return &result, nil
 }
 
 // GetMode fetches the operating mode.

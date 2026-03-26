@@ -104,7 +104,8 @@ func startSingleTenant(cfg *config.Config, mux *http.ServeMux) {
 
 	type statsResp struct {
 		portfolio.Stats
-		Configured bool `json:"configured"`
+		WalletBalanceSOL float64 `json:"wallet_balance_sol"`
+		Configured       bool    `json:"configured"`
 	}
 
 	mux.HandleFunc("POST /trade", func(w http.ResponseWriter, r *http.Request) {
@@ -123,7 +124,16 @@ func startSingleTenant(cfg *config.Config, mux *http.ServeMux) {
 
 	mux.HandleFunc("GET /stats", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(statsResp{port.Stats(), configured})
+		json.NewEncoder(w).Encode(statsResp{port.Stats(), tr.Balance(), configured})
+	})
+
+	mux.HandleFunc("GET /config", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(struct {
+			MaxConcurrentPositions int     `json:"max_concurrent_positions"`
+			MaxDailyLossPercent    float64 `json:"max_daily_loss_percent"`
+			WalletID               string  `json:"wallet_id"`
+		}{cfg.MaxConcurrentPositions, cfg.MaxDailyLossPercent, walletID})
 	})
 
 	mux.HandleFunc("GET /positions", func(w http.ResponseWriter, r *http.Request) {
@@ -417,15 +427,16 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 		inst := mgr.Get(nexusID)
 		type statsResp struct {
 			portfolio.Stats
-			Configured bool `json:"configured"`
+			WalletBalanceSOL float64 `json:"wallet_balance_sol"`
+			Configured       bool    `json:"configured"`
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if inst == nil {
 			user, _ := database.GetUser(nexusID)
-			json.NewEncoder(w).Encode(statsResp{portfolio.Stats{}, user != nil && user.HasSignet})
+			json.NewEncoder(w).Encode(statsResp{portfolio.Stats{}, 0, user != nil && user.HasSignet})
 			return
 		}
-		json.NewEncoder(w).Encode(statsResp{inst.Port.Stats(), true})
+		json.NewEncoder(w).Encode(statsResp{inst.Port.Stats(), inst.Trader.Balance(), true})
 	})
 
 	mux.HandleFunc("GET /positions", func(w http.ResponseWriter, r *http.Request) {
@@ -465,6 +476,25 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(eventlog.All())
+	})
+
+	mux.HandleFunc("GET /config", func(w http.ResponseWriter, r *http.Request) {
+		nexusID, err := requireAuth(r)
+		if err != nil {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		inst := mgr.Get(nexusID)
+		walletID := ""
+		if inst != nil {
+			walletID = inst.WalletID
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(struct {
+			MaxConcurrentPositions int     `json:"max_concurrent_positions"`
+			MaxDailyLossPercent    float64 `json:"max_daily_loss_percent"`
+			WalletID               string  `json:"wallet_id"`
+		}{cfg.MaxConcurrentPositions, cfg.MaxDailyLossPercent, walletID})
 	})
 
 	mux.HandleFunc("POST /stop", func(w http.ResponseWriter, r *http.Request) {

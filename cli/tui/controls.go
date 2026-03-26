@@ -12,8 +12,9 @@ import (
 )
 
 type controlsMsg struct {
-	stats *client.Stats
-	err   error
+	stats  *client.Stats
+	config *client.BotConfig
+	err    error
 }
 
 type actionMsg struct {
@@ -34,6 +35,7 @@ type ControlsModel struct {
 	spinner  spinner.Model
 	client   *client.Client
 	stats    *client.Stats
+	config   *client.BotConfig
 	err      error
 	loading  bool
 	fetched  bool
@@ -58,7 +60,11 @@ func (m ControlsModel) Fetch() (ControlsModel, tea.Cmd) {
 	c := m.client
 	return m, tea.Batch(m.spinner.Tick, func() tea.Msg {
 		stats, err := c.GetStats()
-		return controlsMsg{stats: stats, err: err}
+		if err != nil {
+			return controlsMsg{err: err}
+		}
+		cfg, _ := c.GetConfig() // best-effort; nil if unsupported
+		return controlsMsg{stats: stats, config: cfg}
 	})
 }
 
@@ -132,6 +138,7 @@ func (m ControlsModel) Update(msg tea.Msg) (ControlsModel, tea.Cmd) {
 		m.loading = false
 		m.fetched = true
 		m.stats = msg.stats
+		m.config = msg.config
 		m.err = msg.err
 		return m, nil
 
@@ -181,7 +188,12 @@ func (m ControlsModel) View() string {
 
 	if m.stats != nil {
 		b.WriteString(renderStatusCard(m.stats))
-		b.WriteString("\n\n  " + StyleDivider.Render(strings.Repeat("─", 60)) + "\n\n")
+		b.WriteString("\n\n")
+		if m.config != nil {
+			b.WriteString(renderConfigCard(m.config))
+			b.WriteString("\n")
+		}
+		b.WriteString("  " + StyleDivider.Render(strings.Repeat("─", 60)) + "\n\n")
 	}
 
 	// ── Busy spinner ─────────────────────────────────────
@@ -247,6 +259,25 @@ func renderStatusCard(s *client.Stats) string {
 	}
 
 	return fmt.Sprintf("  %s  %s    %s", dot, statusText, StyleMuted.Render(openStr))
+}
+
+func renderConfigCard(cfg *client.BotConfig) string {
+	w := 28
+	walletShort := cfg.WalletID
+	if len(walletShort) > 12 {
+		walletShort = walletShort[:8] + "..."
+	}
+	labels := fmt.Sprintf("  %s%s%s",
+		StyleMuted.Width(w).Render("MAX POSITIONS"),
+		StyleMuted.Width(w).Render("DAILY LOSS LIMIT"),
+		StyleMuted.Width(w).Render("WALLET"),
+	)
+	values := fmt.Sprintf("  %s%s%s",
+		StyleValue.Width(w).Bold(true).Render(fmt.Sprintf("%d", cfg.MaxConcurrentPositions)),
+		StyleValue.Width(w).Bold(true).Render(fmt.Sprintf("%.0f%%", cfg.MaxDailyLossPercent*100)),
+		StyleValue.Width(w).Render(walletShort),
+	)
+	return labels + "\n" + values
 }
 
 func renderControls(running, paused bool) string {

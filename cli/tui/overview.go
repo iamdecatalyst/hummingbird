@@ -111,7 +111,10 @@ func renderOverview(s *client.Stats) string {
 		dot = StyleGreen.Render("●")
 		statusText = StyleGreen.Bold(true).Render("LIVE")
 	}
-	b.WriteString(fmt.Sprintf("  %s  %s\n\n", dot, statusText))
+	balanceStr := fmt.Sprintf("%.4f SOL", s.WalletBalanceSOL)
+	b.WriteString(fmt.Sprintf("  %s  %s    %s\n\n", dot, statusText,
+		StyleMuted.Render("wallet  ")+StyleValue.Bold(true).Render(balanceStr),
+	))
 
 	// ── Metrics grid ────────────────────────────────────
 	w := 22
