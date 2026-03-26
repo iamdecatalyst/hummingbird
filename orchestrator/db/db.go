@@ -51,7 +51,7 @@ func New(databaseURL, encryptionKeyHex string) (*DB, error) {
 }
 
 func (d *DB) migrate() error {
-	_, err := d.sql.Exec(`
+	if _, err := d.sql.Exec(`
 		CREATE TABLE IF NOT EXISTS hb_users (
 			nexus_user_id TEXT PRIMARY KEY,
 			username      TEXT NOT NULL DEFAULT '',
@@ -63,9 +63,11 @@ func (d *DB) migrate() error {
 			signet_secret BYTEA,
 			wallet_id     TEXT NOT NULL DEFAULT '',
 			created_at    TIMESTAMPTZ DEFAULT NOW()
-		);
-		ALTER TABLE hb_users ADD COLUMN IF NOT EXISTS username TEXT NOT NULL DEFAULT '';
-	`)
+		)
+	`); err != nil {
+		return err
+	}
+	_, err := d.sql.Exec(`ALTER TABLE hb_users ADD COLUMN IF NOT EXISTS username TEXT NOT NULL DEFAULT ''`)
 	return err
 }
 
