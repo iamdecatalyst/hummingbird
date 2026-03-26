@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -6,11 +6,13 @@ import {
   XAxis, YAxis, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import {
-  ChartBar, MapPin, ClockCounterClockwise, Gear, Play, Stop,
+  ChartBar, ArrowsLeftRight, Terminal, Gear, Play, Stop,
   Pulse, SignOut, Copy, Check, Wallet, Key,
+  ArrowUp, ArrowDown, Lightning, Warning, Info,
 } from '@phosphor-icons/react'
 import { useOrchestrator } from '../hooks/useOrchestrator'
-import type { ClosedPosition, Position } from '../lib/api'
+import { api } from '../lib/api'
+import type { ClosedPosition, Position, LogEntry } from '../lib/api'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -103,10 +105,10 @@ function PositionCard({ pos }: { pos: Position }) {
 // ── Top nav ───────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'overview',  label: 'Overview',  icon: <ChartBar size={14} weight="duotone" /> },
-  { id: 'positions', label: 'Positions', icon: <MapPin size={14} weight="duotone" /> },
-  { id: 'history',   label: 'History',   icon: <ClockCounterClockwise size={14} weight="duotone" /> },
-  { id: 'config',    label: 'Config',    icon: <Gear size={14} weight="duotone" /> },
+  { id: 'overview', label: 'Overview', icon: <ChartBar size={14} weight="duotone" /> },
+  { id: 'trades',   label: 'Trades',   icon: <ArrowsLeftRight size={14} weight="duotone" /> },
+  { id: 'logs',     label: 'Logs',     icon: <Terminal size={14} weight="duotone" /> },
+  { id: 'config',   label: 'Config',   icon: <Gear size={14} weight="duotone" /> },
 ]
 
 function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, walletId, userName, userAvatar }: {
@@ -483,72 +485,151 @@ function TabOverview({ stats, positions, closed, online, error }: {
   )
 }
 
-function TabPositions({ positions }: { positions: Position[] }) {
+function TabTrades({ positions, closed }: { positions: Position[]; closed: ClosedPosition[] }) {
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="font-mono font-bold text-xl text-white">Positions</h1>
-        <p className="font-mono text-xs text-[#555] mt-0.5">{positions.length} open</p>
+    <div className="p-6 space-y-6">
+      {/* Open positions */}
+      <div>
+        <div className="flex items-center gap-3 mb-4">
+          <h2 className="font-mono font-bold text-lg text-white">Open Positions</h2>
+          <span className="font-mono text-xs px-2.5 py-1 rounded-full bg-[#00A8FF]/10 text-[#00A8FF]">{positions.length}</span>
+        </div>
+        {positions.length === 0 ? (
+          <div className="neu-tile p-8 text-center">
+            <p className="font-mono text-[#444] text-sm">No open positions — bot is scanning.</p>
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {positions.map(pos => <PositionCard key={pos.id} pos={pos} />)}
+          </div>
+        )}
       </div>
-      {positions.length === 0 ? (
-        <div className="neu-tile p-16 text-center">
-          <p className="font-mono text-[#444] text-sm">No open positions.</p>
-          <p className="font-mono text-[#333] text-xs mt-1">The bot is scanning for entries.</p>
+
+      {/* Closed trades */}
+      <div>
+        <div className="flex items-center gap-3 mb-4">
+          <h2 className="font-mono font-bold text-lg text-white">Trade History</h2>
+          <span className="font-mono text-xs px-2.5 py-1 rounded-full bg-white/5 text-[#555]">{closed.length}</span>
         </div>
-      ) : (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {positions.map(pos => <PositionCard key={pos.id} pos={pos} />)}
+        <div className="neu-tile p-5">
+          {closed.length === 0 ? (
+            <p className="font-mono text-xs text-[#444] text-center py-10">No closed trades yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-left border-b border-white/5">
+                    {['Token', 'Mode', 'Entry SOL', 'Exit SOL', 'P&L', '%', 'Reason', 'Time'].map(h => (
+                      <th key={h} className="font-mono text-[10px] text-[#333] uppercase tracking-wider pb-3 pr-5">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {closed.map((t, i) => (
+                    <tr key={i} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
+                      <td className="font-mono text-xs text-white py-2.5 pr-5">{shortMint(t.mint)}</td>
+                      <td className="font-mono text-xs text-[#00A8FF] py-2.5 pr-5">{t.score >= 75 ? 'SNIPER' : 'SCALPER'}</td>
+                      <td className="font-mono text-xs text-[#666] py-2.5 pr-5">{t.entry_amount_sol.toFixed(3)}</td>
+                      <td className="font-mono text-xs text-[#666] py-2.5 pr-5">{t.exit_amount_sol.toFixed(3)}</td>
+                      <td className={`font-mono text-xs font-bold py-2.5 pr-5 ${t.pnl_sol >= 0 ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
+                        {t.pnl_sol >= 0 ? '+' : ''}{t.pnl_sol.toFixed(4)}
+                      </td>
+                      <td className={`font-mono text-xs py-2.5 pr-5 ${t.pnl_percent >= 0 ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
+                        {t.pnl_percent >= 0 ? '+' : ''}{t.pnl_percent.toFixed(1)}%
+                      </td>
+                      <td className="py-2.5 pr-5">
+                        <span className={`font-mono text-[10px] px-2 py-0.5 rounded-full ${t.reason.startsWith('take') || t.reason === 'scalp' ? 'bg-[#4ADE80]/10 text-[#4ADE80]' : 'bg-[#EF4444]/10 text-[#EF4444]'}`}>
+                          {t.reason.replace('_', ' ').toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="font-mono text-[10px] text-[#333] py-2.5">
+                        {new Date(t.closed_at).toLocaleTimeString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }
 
-function TabHistory({ closed }: { closed: ClosedPosition[] }) {
+const LOG_META: Record<string, { color: string; bg: string; icon: React.ReactNode }> = {
+  ENTER: { color: '#4ADE80', bg: 'bg-[#4ADE80]/10', icon: <ArrowUp size={12} weight="bold" /> },
+  EXIT:  { color: '#00A8FF', bg: 'bg-[#00A8FF]/10', icon: <ArrowDown size={12} weight="bold" /> },
+  START: { color: '#4ADE80', bg: 'bg-[#4ADE80]/10', icon: <Lightning size={12} weight="fill" /> },
+  STOP:  { color: '#F59E0B', bg: 'bg-[#F59E0B]/10', icon: <Stop size={12} weight="fill" /> },
+  ALERT: { color: '#EF4444', bg: 'bg-[#EF4444]/10', icon: <Warning size={12} weight="fill" /> },
+  INFO:  { color: '#555',    bg: 'bg-white/5',       icon: <Info size={12} weight="fill" /> },
+}
+
+function TabLogs() {
+  const [logs, setLogs] = useState<LogEntry[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetch = () => api.logs().then(setLogs).catch(() => {}).finally(() => setLoading(false))
+    fetch()
+    const id = setInterval(fetch, 3000)
+    return () => clearInterval(id)
+  }, [])
+
   return (
     <div className="p-6">
-      <div className="mb-6">
-        <h1 className="font-mono font-bold text-xl text-white">History</h1>
-        <p className="font-mono text-xs text-[#555] mt-0.5">{closed.length} trades total</p>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="font-mono font-bold text-xl text-white">Logs</h1>
+          <p className="font-mono text-xs text-[#555] mt-0.5">Live bot activity — last 200 events</p>
+        </div>
+        <span className="flex items-center gap-1.5 font-mono text-xs text-[#4ADE80]">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#4ADE80] animate-pulse" />
+          live
+        </span>
       </div>
-      <div className="neu-tile p-5">
-        {closed.length === 0 ? (
-          <p className="font-mono text-xs text-[#444] text-center py-12">No closed trades yet.</p>
+
+      <div className="neu-tile overflow-hidden">
+        {loading ? (
+          <p className="font-mono text-xs text-[#333] text-center py-12">Loading...</p>
+        ) : logs.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-16">
+            <Terminal size={24} className="text-[#222]" />
+            <p className="font-mono text-xs text-[#333]">No activity yet. Start the bot to see events here.</p>
+          </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="text-left border-b border-white/5">
-                  {['Token', 'Mode', 'Entry SOL', 'Exit SOL', 'P&L', '%', 'Reason', 'Closed'].map(h => (
-                    <th key={h} className="font-mono text-xs text-[#444] uppercase tracking-wider pb-3 pr-5">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {closed.map((t, i) => (
-                  <tr key={i} className="border-b border-white/[0.03] hover:bg-white/[0.015] transition-colors">
-                    <td className="font-mono text-xs text-white py-3 pr-5">{shortMint(t.mint)}</td>
-                    <td className="font-mono text-xs text-[#00A8FF] py-3 pr-5">{t.score >= 75 ? 'SNIPER' : 'SCALPER'}</td>
-                    <td className="font-mono text-xs text-[#a0a0a0] py-3 pr-5">{t.entry_amount_sol.toFixed(3)}</td>
-                    <td className="font-mono text-xs text-[#a0a0a0] py-3 pr-5">{t.exit_amount_sol.toFixed(3)}</td>
-                    <td className={`font-mono text-xs font-bold py-3 pr-5 ${t.pnl_sol >= 0 ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
-                      {t.pnl_sol >= 0 ? '+' : ''}{t.pnl_sol.toFixed(3)}
-                    </td>
-                    <td className={`font-mono text-xs py-3 pr-5 ${t.pnl_percent >= 0 ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
-                      {t.pnl_percent >= 0 ? '+' : ''}{t.pnl_percent.toFixed(1)}%
-                    </td>
-                    <td className="py-3 pr-5">
-                      <span className={`font-mono text-xs px-2 py-0.5 rounded-full ${t.reason.startsWith('take') || t.reason === 'scalp' ? 'bg-[#4ADE80]/10 text-[#4ADE80]' : 'bg-[#EF4444]/10 text-[#EF4444]'}`}>
-                        {t.reason.replace('_', ' ').toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="font-mono text-[10px] text-[#444] py-3">
-                      {new Date(t.closed_at).toLocaleTimeString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="divide-y divide-white/[0.03]">
+            {logs.map((log, i) => {
+              const meta = LOG_META[log.type] ?? LOG_META.INFO
+              return (
+                <div key={i} className="flex items-start gap-4 px-5 py-3 hover:bg-white/[0.015] transition-colors">
+                  {/* Type badge */}
+                  <span className={`shrink-0 mt-0.5 flex items-center gap-1 font-mono text-[10px] px-2 py-0.5 rounded-full ${meta.bg}`} style={{ color: meta.color }}>
+                    {meta.icon}
+                    {log.type}
+                  </span>
+
+                  {/* Message */}
+                  <span className="font-mono text-xs text-[#a0a0a0] flex-1 leading-relaxed">{log.message}</span>
+
+                  {/* P&L inline badge for EXIT events */}
+                  {log.type === 'EXIT' && log.pnl_sol !== undefined && (
+                    <span className={`shrink-0 font-mono text-xs font-bold ${log.pnl_sol >= 0 ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
+                      {log.pnl_sol >= 0 ? '+' : ''}{log.pnl_sol.toFixed(4)} SOL
+                      {log.pnl_pct !== undefined && (
+                        <span className="ml-1 opacity-60 font-normal text-[10px]">({log.pnl_pct >= 0 ? '+' : ''}{log.pnl_pct.toFixed(1)}%)</span>
+                      )}
+                    </span>
+                  )}
+
+                  {/* Timestamp */}
+                  <span className="shrink-0 font-mono text-[10px] text-[#333]">
+                    {new Date(log.time).toLocaleTimeString()}
+                  </span>
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
@@ -674,10 +755,10 @@ export default function Dashboard({ onLogout, walletId, userName, userAvatar }: 
         userAvatar={userAvatar}
       />
 
-      {tab === 'overview'  && <TabOverview stats={stats} positions={positions} closed={closed} online={online} error={error} />}
-      {tab === 'positions' && <TabPositions positions={positions} />}
-      {tab === 'history'   && <TabHistory closed={closed} />}
-      {tab === 'config'    && <TabConfig walletId={walletId} userName={userName} userAvatar={userAvatar} botActive={stats?.configured} />}
+      {tab === 'overview' && <TabOverview stats={stats} positions={positions} closed={closed} online={online} error={error} />}
+      {tab === 'trades'   && <TabTrades positions={positions} closed={closed} />}
+      {tab === 'logs'     && <TabLogs />}
+      {tab === 'config'   && <TabConfig walletId={walletId} userName={userName} userAvatar={userAvatar} botActive={stats?.configured} />}
     </div>
   )
 }

@@ -10,6 +10,7 @@ import (
 	signet "github.com/VYLTH/signet-sdk-go/signet"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/alerts"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/config"
+	"github.com/iamdecatalyst/hummingbird/orchestrator/eventlog"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/models"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/portfolio"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/trader"
@@ -63,6 +64,10 @@ func (m *Manager) Start(userID, apiKey, apiSecret string) error {
 	m.mu.Unlock()
 
 	log.Printf("[userbot] started instance for user %s | wallet %s", userID[:8], walletID)
+	eventlog.Emit(eventlog.Event{
+		Type:    "START",
+		Message: fmt.Sprintf("Bot started — wallet %s", walletID),
+	})
 	return nil
 }
 
@@ -84,6 +89,7 @@ func (m *Manager) Stop(userID string) {
 	if ok {
 		inst.Trader.ExitAll(models.ExitManual)
 		log.Printf("[userbot] stopped instance for user %s", userID[:8])
+		eventlog.Emit(eventlog.Event{Type: "STOP", Message: "Bot stopped manually"})
 	}
 }
 
@@ -92,10 +98,25 @@ type noopNotifier struct{ userID string }
 
 func (n noopNotifier) Entered(p *models.Position) {
 	log.Printf("[user:%s] entered %s | %.3f SOL", n.userID[:8], p.Mint[:8], p.EntryAmountSOL)
+	eventlog.Emit(eventlog.Event{
+		Type:    "ENTER",
+		Token:   p.Mint,
+		AmtSOL:  p.EntryAmountSOL,
+		Message: fmt.Sprintf("Entered %s…  %.3f SOL", p.Mint[:8], p.EntryAmountSOL),
+	})
 }
 func (n noopNotifier) Exited(c *models.ClosedPosition) {
 	log.Printf("[user:%s] exited %s | P&L %+.4f SOL", n.userID[:8], c.Mint[:8], c.PnLSOL)
+	eventlog.Emit(eventlog.Event{
+		Type:    "EXIT",
+		Token:   c.Mint,
+		PnLSOL:  c.PnLSOL,
+		PnLPct:  c.PnLPercent,
+		Reason:  c.Reason,
+		Message: fmt.Sprintf("Exited %s…  %+.4f SOL (%+.1f%%)", c.Mint[:8], c.PnLSOL, c.PnLPercent),
+	})
 }
 func (n noopNotifier) Alert(text string) {
 	log.Printf("[user:%s] %s", n.userID[:8], text)
+	eventlog.Emit(eventlog.Event{Type: "ALERT", Message: text})
 }

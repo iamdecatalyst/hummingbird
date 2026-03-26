@@ -79,6 +79,17 @@ async function post<T = void>(path: string, body?: unknown): Promise<T> {
   return res.json() as Promise<T>
 }
 
+export interface LogEntry {
+  time:        string
+  type:        string   // ENTER EXIT START STOP ALERT INFO
+  token?:      string
+  amount_sol?: number
+  pnl_sol?:    number
+  pnl_pct?:    number
+  reason?:     string
+  message:     string
+}
+
 export const api = {
   // Mode detection
   mode(): Promise<{ multi_tenant: boolean }> { return get('/mode') },
@@ -87,6 +98,7 @@ export const api = {
   stats():     Promise<Stats>                { return get('/stats') },
   positions(): Promise<Position[]>           { return get('/positions') },
   closed():    Promise<ClosedPosition[]>      { return get('/closed') },
+  logs():      Promise<LogEntry[]>            { return get('/logs') },
   stop():      Promise<void>                 { return post('/stop') },
   resume():    Promise<void>                 { return post('/resume') },
   startBot():  Promise<void>                 { return post('/start') },

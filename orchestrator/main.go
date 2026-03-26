@@ -16,6 +16,7 @@ import (
 	"github.com/iamdecatalyst/hummingbird/orchestrator/bot"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/config"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/db"
+	"github.com/iamdecatalyst/hummingbird/orchestrator/eventlog"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/models"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/portfolio"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/trader"
@@ -133,6 +134,11 @@ func startSingleTenant(cfg *config.Config, mux *http.ServeMux) {
 	mux.HandleFunc("GET /closed", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(port.RecentClosed(50))
+	})
+
+	mux.HandleFunc("GET /logs", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(eventlog.All())
 	})
 
 	mux.HandleFunc("POST /stop", func(w http.ResponseWriter, r *http.Request) {
@@ -387,6 +393,15 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 			return
 		}
 		json.NewEncoder(w).Encode(inst.Port.RecentClosed(50))
+	})
+
+	mux.HandleFunc("GET /logs", func(w http.ResponseWriter, r *http.Request) {
+		if _, err := requireAuth(r); err != nil {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(eventlog.All())
 	})
 
 	mux.HandleFunc("POST /stop", func(w http.ResponseWriter, r *http.Request) {
