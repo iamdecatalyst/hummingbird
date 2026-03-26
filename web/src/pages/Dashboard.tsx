@@ -242,7 +242,7 @@ function TabOverview({ stats, positions, closed, online, error }: {
   const chartData = buildChart(closed)
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-mono font-bold text-xl text-white">Overview</h1>
@@ -335,7 +335,7 @@ function TabOverview({ stats, positions, closed, online, error }: {
 
 function TabPositions({ positions }: { positions: Position[] }) {
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6">
       <div className="mb-6">
         <h1 className="font-mono font-bold text-xl text-white">Positions</h1>
         <p className="font-mono text-xs text-[#555] mt-0.5">{positions.length} open</p>
@@ -356,7 +356,7 @@ function TabPositions({ positions }: { positions: Position[] }) {
 
 function TabHistory({ closed }: { closed: ClosedPosition[] }) {
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6">
       <div className="mb-6">
         <h1 className="font-mono font-bold text-xl text-white">History</h1>
         <p className="font-mono text-xs text-[#555] mt-0.5">{closed.length} trades total</p>
@@ -410,7 +410,7 @@ function TabConfig({ walletId, userName, userAvatar, botActive }: {
   walletId?: string; userName?: string; userAvatar?: string; botActive?: boolean
 }) {
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div className="p-6">
       <div className="mb-6">
         <h1 className="font-mono font-bold text-xl text-white">Config</h1>
         <p className="font-mono text-xs text-[#555] mt-0.5">Account & bot configuration</p>
