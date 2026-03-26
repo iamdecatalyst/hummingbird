@@ -1,6 +1,6 @@
 {
   "name": "@decatalyst/hummingbird",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "Autonomous pump.fun trading agent — CLI",
   "keywords": ["solana", "trading", "pump.fun", "cli", "defi"],
   "homepage": "https://github.com/iamdecatalyst/hummingbird",

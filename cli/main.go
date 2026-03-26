@@ -149,57 +149,77 @@ func readLineRaw() string {
 	return strings.TrimSpace(scanner.Text())
 }
 
+// ANSI color helpers for the login prompt
+const (
+	cReset  = "\033[0m"
+	cBold   = "\033[1m"
+	cBlue   = "\033[38;2;0;168;255m"   // electric blue #00A8FF
+	cNavy   = "\033[38;2;0;80;180m"    // navy blue
+	cGreen  = "\033[38;2;74;222;128m"  // green #4ADE80
+	cMuted  = "\033[38;2;85;85;85m"    // muted #555
+	cDim    = "\033[38;2;42;42;42m"    // dim #2a2a2a
+	cYellow = "\033[38;2;245;158;11m"  // yellow
+	cRed    = "\033[38;2;239;68;68m"   // red
+)
+
+func cp(color, s string) string { return color + s + cReset }
+
 func handleLogin() {
 	savedURL, savedToken := client.LoadCredentials()
 
 	fmt.Println()
-	fmt.Println("  ◈ Hummingbird Login")
+	fmt.Println(cp(cBlue, cBold+"  ◈ "+cReset+cBlue+cBold+"HUMMINGBIRD"+cReset+cp(cMuted, "  ·  cli login")))
+	fmt.Println(cp(cDim, "  ────────────────────────────────────────"))
 	fmt.Println()
 
 	defaultURL := "https://hummingbird.vylth.com"
 	if savedURL != "" {
 		defaultURL = savedURL
 	}
-	fmt.Printf("  API URL [%s]: ", defaultURL)
+	fmt.Printf("  %s %s[%s]%s ", cp(cMuted, "api url"), cNavy, defaultURL, cReset)
 	apiURL := readLineRaw()
 	if apiURL == "" {
 		apiURL = defaultURL
 	}
 	apiURL = strings.TrimRight(apiURL, "/")
 
-	// Open browser to /cli/auth on the dashboard
 	authURL := apiURL + "/cli/auth"
 	fmt.Println()
-	fmt.Println("  Opening browser — log in with Nexus and copy your token.")
-	fmt.Printf("  %s\n", authURL)
+	fmt.Println("  " + cp(cGreen, "→") + cp(cMuted, "  opening browser"))
+	fmt.Println("  " + cp(cBlue, authURL))
+	fmt.Println()
+	fmt.Println(cp(cMuted, "  log in with Nexus, copy your token, paste it below"))
 	fmt.Println()
 	openBrowser(authURL)
 
 	if savedToken != "" {
-		fmt.Print("  Paste token (Enter to keep existing): ")
+		fmt.Print("  " + cp(cMuted, "token") + cp(cDim, " (enter to keep existing)") + "  ")
 	} else {
-		fmt.Print("  Paste token: ")
+		fmt.Print("  " + cp(cMuted, "token") + "  " + cp(cBlue, "▸ "))
 	}
 	tokenInput := readHidden()
 
 	if strings.TrimSpace(tokenInput) == "" {
 		if savedToken != "" {
 			tokenInput = savedToken
-			fmt.Println("  Keeping existing token.")
+			fmt.Println(cp(cMuted, "  keeping existing token"))
 		} else {
-			fmt.Fprintln(os.Stderr, "\n  ✗ No token entered. Aborted.")
+			fmt.Fprintln(os.Stderr, "\n  "+cp(cRed, "✗  no token entered — aborted"))
 			os.Exit(1)
 		}
 	}
 
 	if err := client.SaveCredentials(apiURL, strings.TrimSpace(tokenInput)); err != nil {
-		fmt.Fprintf(os.Stderr, "  ✗ Failed to save: %v\n", err)
+		fmt.Fprintln(os.Stderr, "  "+cp(cRed, "✗  failed to save: ")+err.Error())
 		os.Exit(1)
 	}
 
 	fmt.Println()
-	fmt.Printf("  ✓ Saved to %s\n", client.CredentialsPath())
-	fmt.Println("  → Run 'hummingbird' to launch the TUI.")
+	fmt.Println("  " + cp(cGreen, "✓") + cp(cBold, "  authenticated"))
+	fmt.Println(cp(cMuted, "  saved to "+client.CredentialsPath()))
+	fmt.Println()
+	fmt.Println("  " + cp(cBlue, "→") + "  run " + cp(cBlue, cBold+"hummingbird"+cReset) + " to launch the TUI")
+	fmt.Println()
 }
 
 func openBrowser(url string) {
@@ -210,9 +230,14 @@ func openBrowser(url string) {
 	case "darwin":
 		cmd = exec.Command("open", url)
 	default:
-		// WSL: use explorer.exe to open in the Windows browser
 		if isWSL() {
-			cmd = exec.Command("explorer.exe", url)
+			// wslview (from wslu) respects the Windows default browser.
+			// Fall back to explorer.exe if wslview isn't installed.
+			if _, err := exec.LookPath("wslview"); err == nil {
+				cmd = exec.Command("wslview", url)
+			} else {
+				cmd = exec.Command("explorer.exe", url)
+			}
 		} else {
 			cmd = exec.Command("xdg-open", url)
 		}
