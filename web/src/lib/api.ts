@@ -138,6 +138,10 @@ export const api = {
     return post('/auth/telegram/token')
   },
 
+  cliToken(): Promise<{ token: string }> {
+    return post('/auth/cli-token')
+  },
+
   deleteSignet(): Promise<void> {
     const token = getToken()
     return fetch(`${BASE}/auth/signet`, {

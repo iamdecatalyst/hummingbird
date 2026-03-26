@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -145,63 +146,108 @@ func readHidden() string {
 	return input
 }
 
-func readLine(prompt string) string {
-	fmt.Print(prompt)
+func readLineRaw() string {
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Scan()
 	return strings.TrimSpace(scanner.Text())
 }
 
 func handleLogin() {
-	fmt.Println("Hummingbird Login · by Vylth")
-	fmt.Println()
-
 	savedURL, savedToken := client.LoadCredentials()
 
+	fmt.Println()
+	fmt.Println("  ◈ Hummingbird Login")
+	fmt.Println()
+
 	// API URL
-	var urlInput string
+	var apiURL string
 	if savedURL != "" {
-		fmt.Printf("Current API URL: %s\n", savedURL)
-		urlInput = readLine("Enter API URL (or press Enter to keep): ")
+		fmt.Printf("  API URL [%s]: ", savedURL)
+		apiURL = readLineRaw()
+		if apiURL == "" {
+			apiURL = savedURL
+		}
 	} else {
-		urlInput = readLine("Enter API URL [https://hummingbird-api.vylth.com]: ")
-	}
-	if urlInput == "" {
-		if savedURL != "" {
-			urlInput = savedURL
-		} else {
-			urlInput = "https://hummingbird-api.vylth.com"
+		fmt.Print("  API URL [http://localhost:8002]: ")
+		apiURL = readLineRaw()
+		if apiURL == "" {
+			apiURL = "http://localhost:8002"
 		}
 	}
+	apiURL = strings.TrimRight(apiURL, "/")
 
-	// Token
+	// Check if multi-tenant (requires login) or single-tenant (no auth)
+	c := client.New(apiURL, "")
+	mode, err := c.GetMode()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "\n  ✗ Could not reach %s: %v\n", apiURL, err)
+		os.Exit(1)
+	}
+
+	if !mode.MultiTenant {
+		// Single-tenant: no auth needed
+		if err := client.SaveCredentials(apiURL, ""); err != nil {
+			fmt.Fprintf(os.Stderr, "  ✗ Failed to save: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println()
+		fmt.Println("  ✓ Single-tenant mode — no authentication required.")
+		fmt.Printf("  ✓ Saved to %s\n", client.CredentialsPath())
+		fmt.Println("  → Run 'hummingbird' to launch the TUI.")
+		return
+	}
+
+	// Multi-tenant: open browser to /cli/auth page
+	authURL := apiURL + "/cli/auth"
+	// Try to derive web dashboard URL from API URL
+	// e.g. http://localhost:8002 → show the web URL separately if known
+	fmt.Println()
+	fmt.Println("  Opening your browser to get a CLI token…")
+	fmt.Printf("  %s\n", authURL)
+	fmt.Println()
+
+	openBrowser(authURL)
+
+	// Prompt for paste
 	if savedToken != "" {
-		shown := savedToken[:min(8, len(savedToken))] + "..." + savedToken[max(0, len(savedToken)-4):]
-		fmt.Printf("Current token: %s\n", shown)
-		fmt.Print("Enter new token (or press Enter to keep): ")
+		fmt.Print("  Paste token (Enter to keep existing): ")
 	} else {
-		fmt.Print("Enter your JWT token: ")
+		fmt.Print("  Paste token: ")
 	}
 
 	tokenInput := readHidden()
 
-	if tokenInput == "" {
+	if strings.TrimSpace(tokenInput) == "" {
 		if savedToken != "" {
 			tokenInput = savedToken
-			fmt.Println("Keeping existing token.")
+			fmt.Println("  Keeping existing token.")
 		} else {
-			fmt.Fprintln(os.Stderr, "No token entered. Aborted.")
+			fmt.Fprintln(os.Stderr, "\n  ✗ No token entered. Aborted.")
 			os.Exit(1)
 		}
 	}
 
-	if err := client.SaveCredentials(urlInput, tokenInput); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to save credentials: %v\n", err)
+	if err := client.SaveCredentials(apiURL, strings.TrimSpace(tokenInput)); err != nil {
+		fmt.Fprintf(os.Stderr, "  ✗ Failed to save: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("✓ Saved to %s\n", client.CredentialsPath())
-	fmt.Println("  Run 'hummingbird' to launch the TUI.")
+	fmt.Println()
+	fmt.Printf("  ✓ Saved to %s\n", client.CredentialsPath())
+	fmt.Println("  → Run 'hummingbird' to launch the TUI.")
+}
+
+func openBrowser(url string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	case "darwin":
+		cmd = exec.Command("open", url)
+	default:
+		cmd = exec.Command("xdg-open", url)
+	}
+	_ = cmd.Start()
 }
 
 func handleLogout() {

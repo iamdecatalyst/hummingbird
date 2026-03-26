@@ -5,6 +5,7 @@ import Landing from './pages/Landing'
 import Dashboard from './pages/Dashboard'
 import Login from './pages/Login'
 import SignetSetup from './pages/SignetSetup'
+import CLIAuth from './pages/CLIAuth'
 import { useAuth } from './hooks/useAuth'
 import { api } from './lib/api'
 
@@ -117,6 +118,7 @@ export default function App() {
       <Route path="/auth/callback"   element={<AuthCallback />} />
       <Route path="/dashboard"       element={<DashboardRoute />} />
       <Route path="/dashboard/setup" element={<DashboardRoute />} />
+      <Route path="/cli/auth"         element={<CLIAuth />} />
     </Routes>
   )
 }

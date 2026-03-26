@@ -534,6 +534,22 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 		})
 	})
 
+	// POST /auth/cli-token — mint a 7-day token for CLI use
+	mux.HandleFunc("POST /auth/cli-token", func(w http.ResponseWriter, r *http.Request) {
+		nexusID, err := requireAuth(r)
+		if err != nil {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		tok, err := auth.IssueCLIToken(nexusID, cfg.JWTSecret)
+		if err != nil {
+			http.Error(w, `{"error":"could not issue token"}`, http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"token": tok})
+	})
+
 	// POST /wallets/:id/set-main — mark a wallet as the trading wallet
 	mux.HandleFunc("POST /wallets/{id}/set-main", func(w http.ResponseWriter, r *http.Request) {
 		nexusID, err := requireAuth(r)

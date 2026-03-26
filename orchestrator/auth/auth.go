@@ -7,11 +7,24 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-const tokenTTL = 30 * 24 * time.Hour
+const tokenTTL    = 30 * 24 * time.Hour
+const cliTokenTTL =  7 * 24 * time.Hour
 
 type Claims struct {
 	NexusUserID string `json:"nid"`
 	jwt.RegisteredClaims
+}
+
+// IssueCLIToken mints a 7-day token for CLI use.
+func IssueCLIToken(nexusUserID, secret string) (string, error) {
+	claims := Claims{
+		NexusUserID: nexusUserID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(cliTokenTTL)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
 }
 
 func IssueToken(nexusUserID, secret string) (string, error) {
