@@ -114,7 +114,7 @@ const TABS = [
   { id: 'logs',     label: 'Logs',     icon: <Terminal size={14} weight="duotone" /> },
 ]
 
-function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpenCredentials, onOpenWallets, userName, userUsername, userAvatar }: {
+function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpenCredentials, onOpenWallets, onOpenTelegram, telegramConnected, userName, userUsername, userAvatar }: {
   tab: string
   setTab: (t: string) => void
   paused: boolean
@@ -124,6 +124,8 @@ function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpe
   onLogout?: () => void
   onOpenCredentials?: () => void
   onOpenWallets?: () => void
+  onOpenTelegram?: () => void
+  telegramConnected?: boolean
   userName?: string
   userUsername?: string
   userAvatar?: string
@@ -179,23 +181,24 @@ function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpe
             </button>
         }
 
-        {/* Icon buttons — Wallets + Credentials */}
+        {/* Icon buttons — Wallets + Credentials + Telegram */}
         {onOpenWallets && (
-          <button
-            onClick={onOpenWallets}
-            title="Wallets"
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#555] hover:text-white hover:bg-white/5 transition-colors"
-          >
+          <button onClick={onOpenWallets} title="Wallets"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#555] hover:text-white hover:bg-white/5 transition-colors">
             <Wallet size={15} />
           </button>
         )}
         {onOpenCredentials && (
-          <button
-            onClick={onOpenCredentials}
-            title="API Credentials"
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#555] hover:text-white hover:bg-white/5 transition-colors"
-          >
+          <button onClick={onOpenCredentials} title="API Credentials"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#555] hover:text-white hover:bg-white/5 transition-colors">
             <Key size={15} />
+          </button>
+        )}
+        {onOpenTelegram && (
+          <button onClick={onOpenTelegram} title={telegramConnected ? 'Telegram connected' : 'Connect Telegram'}
+            className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white/5"
+            style={{ color: telegramConnected ? '#24A1DE' : '#555' }}>
+            <TelegramLogo size={15} weight={telegramConnected ? 'fill' : 'regular'} />
           </button>
         )}
 
@@ -1542,6 +1545,8 @@ export default function Dashboard({ onLogout, walletId, userName, userUsername, 
         onLogout={onLogout}
         onOpenCredentials={() => setShowCredentials(true)}
         onOpenWallets={() => setShowWallets(true)}
+        onOpenTelegram={() => setShowCredentials(true)}
+        telegramConnected={!!telegramChatId}
         userName={userName}
         userUsername={userUsername}
         userAvatar={userAvatar}
