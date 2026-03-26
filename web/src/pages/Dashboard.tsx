@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import {
+  AreaChart, Area, BarChart, Bar, Cell,
+  XAxis, YAxis, Tooltip, ResponsiveContainer,
+} from 'recharts'
 import {
   ChartBar, MapPin, ClockCounterClockwise, Gear, Play, Stop,
   Pulse, SignOut, Copy, Check, Wallet, Key,
@@ -209,8 +212,7 @@ function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, walle
 
 // ── Tab views ─────────────────────────────────────────────────────────────────
 
-function buildChart(closed: ClosedPosition[]) {
-  if (closed.length === 0) return []
+function buildPnlChart(closed: ClosedPosition[]) {
   const today = new Date().toDateString()
   const todayTrades = closed.filter(c => new Date(c.closed_at).toDateString() === today)
   const byHour: Record<number, number> = {}
@@ -219,10 +221,40 @@ function buildChart(closed: ClosedPosition[]) {
     byHour[h] = (byHour[h] ?? 0) + t.pnl_sol
   }
   let cum = 0
-  return Array.from({ length: 24 }, (_, h) => {
+  return Array.from({ length: new Date().getHours() + 1 }, (_, h) => {
     cum += byHour[h] ?? 0
     return { t: `${String(h).padStart(2, '0')}:00`, pnl: parseFloat(cum.toFixed(4)) }
-  }).filter((_, h) => h <= new Date().getHours())
+  })
+}
+
+function buildBarChart(closed: ClosedPosition[]) {
+  // Last 7 days wins/losses by day
+  const days: Record<string, { label: string; wins: number; losses: number }> = {}
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    const key = d.toDateString()
+    const label = d.toLocaleDateString('en', { weekday: 'short' })
+    days[key] = { label, wins: 0, losses: 0 }
+  }
+  for (const t of closed) {
+    const key = new Date(t.closed_at).toDateString()
+    if (days[key]) {
+      if (t.pnl_sol >= 0) days[key].wins++
+      else days[key].losses++
+    }
+  }
+  return Object.values(days)
+}
+
+const tooltipStyle = {
+  background: '#111',
+  border: '1px solid rgba(255,255,255,0.06)',
+  borderRadius: 12,
+  fontFamily: 'JetBrains Mono',
+  fontSize: 11,
+  color: '#fff',
+  boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
 }
 
 function TabOverview({ stats, positions, closed, online, error }: {
@@ -239,11 +271,14 @@ function TabOverview({ stats, positions, closed, online, error }: {
   }, [])
 
   const s = stats ?? { open_positions: 0, total_trades: 0, wins: 0, losses: 0, win_rate: 0, today_pnl: 0, total_pnl: 0, paused: false, pause_reason: '', configured: true }
-  const chartData = buildChart(closed)
+  const pnlData = buildPnlChart(closed)
+  const barData = buildBarChart(closed)
+  const pnlPositive = s.today_pnl >= 0
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-6 space-y-5">
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="font-mono font-bold text-xl text-white">Overview</h1>
           <p className="font-mono text-xs text-[#555] mt-0.5">{time.toISOString().replace('T', ' ').slice(0, 19)} UTC</p>
@@ -255,80 +290,195 @@ function TabOverview({ stats, positions, closed, online, error }: {
         )}
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard label="Today P&L" value={`${s.today_pnl >= 0 ? '+' : ''}${s.today_pnl.toFixed(3)} SOL`} sub="from midnight" positive={s.today_pnl >= 0} />
-        <StatCard label="Total P&L"  value={`${s.total_pnl >= 0 ? '+' : ''}${s.total_pnl.toFixed(3)} SOL`} sub={`${s.total_trades} trades`} positive={s.total_pnl >= 0} />
-        <StatCard label="Win Rate"   value={`${s.win_rate.toFixed(0)}%`} sub={`W:${s.wins}  L:${s.losses}`} accent />
-        <StatCard label="Open"       value={`${s.open_positions}`} sub="positions" />
+      {/* Stat cards row */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          {
+            label: 'Today P&L',
+            value: `${s.today_pnl >= 0 ? '+' : ''}${s.today_pnl.toFixed(3)}`,
+            unit: 'SOL',
+            sub: 'from midnight',
+            color: s.today_pnl >= 0 ? '#4ADE80' : '#EF4444',
+          },
+          {
+            label: 'Total P&L',
+            value: `${s.total_pnl >= 0 ? '+' : ''}${s.total_pnl.toFixed(3)}`,
+            unit: 'SOL',
+            sub: `${s.total_trades} trades`,
+            color: s.total_pnl >= 0 ? '#4ADE80' : '#EF4444',
+          },
+          {
+            label: 'Win Rate',
+            value: `${s.win_rate.toFixed(0)}`,
+            unit: '%',
+            sub: `${s.wins}W · ${s.losses}L`,
+            color: '#00A8FF',
+          },
+          {
+            label: 'Open Positions',
+            value: `${s.open_positions}`,
+            unit: '',
+            sub: 'active now',
+            color: '#fff',
+          },
+        ].map((card, i) => (
+          <motion.div
+            key={card.label}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}
+            className="neu-tile p-5 relative overflow-hidden"
+          >
+            {/* Subtle glow blob */}
+            <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full opacity-10 blur-2xl"
+              style={{ background: card.color }} />
+            <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-3">{card.label}</p>
+            <p className="font-mono font-bold leading-none" style={{ fontSize: 28, color: card.color }}>
+              {card.value}
+              <span className="text-base ml-1 opacity-60">{card.unit}</span>
+            </p>
+            <p className="font-mono text-xs text-[#444] mt-2">{card.sub}</p>
+          </motion.div>
+        ))}
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6 mb-6">
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="lg:col-span-2 neu-tile p-5">
-          <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-4">Today P&L — SOL</p>
-          {chartData.length > 1 ? (
-            <ResponsiveContainer width="100%" height={180}>
-              <LineChart data={chartData}>
-                <XAxis dataKey="t" tick={{ fontFamily: 'JetBrains Mono', fontSize: 10, fill: '#444' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontFamily: 'JetBrains Mono', fontSize: 10, fill: '#444' }} axisLine={false} tickLine={false} tickFormatter={v => v.toFixed(3)} />
-                <Tooltip contentStyle={{ background: '#141414', border: '1px solid rgba(0,168,255,0.15)', borderRadius: 12, fontFamily: 'JetBrains Mono', fontSize: 12, color: '#fff' }} formatter={(v: number) => [`${v.toFixed(3)} SOL`, 'P&L']} />
-                <Line type="monotone" dataKey="pnl" stroke="#00A8FF" strokeWidth={2} dot={false} />
-              </LineChart>
+      {/* Charts row */}
+      <div className="grid lg:grid-cols-5 gap-5">
+
+        {/* P&L area chart — spans 3 cols */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+          className="lg:col-span-3 neu-tile p-5"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <p className="font-mono text-xs text-[#555] uppercase tracking-widest">P&L Today — SOL</p>
+            <span className={`font-mono text-xs px-2.5 py-1 rounded-full ${pnlPositive ? 'bg-[#4ADE80]/10 text-[#4ADE80]' : 'bg-[#EF4444]/10 text-[#EF4444]'}`}>
+              {s.today_pnl >= 0 ? '+' : ''}{s.today_pnl.toFixed(4)} SOL
+            </span>
+          </div>
+          {pnlData.length > 1 ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={pnlData}>
+                <defs>
+                  <linearGradient id="pnlGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={pnlPositive ? '#4ADE80' : '#EF4444'} stopOpacity={0.25} />
+                    <stop offset="100%" stopColor={pnlPositive ? '#4ADE80' : '#EF4444'} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="t" tick={{ fontFamily: 'JetBrains Mono', fontSize: 10, fill: '#333' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+                <YAxis tick={{ fontFamily: 'JetBrains Mono', fontSize: 10, fill: '#333' }} axisLine={false} tickLine={false} tickFormatter={v => v.toFixed(2)} width={48} />
+                <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`${v.toFixed(4)} SOL`, 'P&L']} />
+                <Area
+                  type="monotone" dataKey="pnl"
+                  stroke={pnlPositive ? '#4ADE80' : '#EF4444'} strokeWidth={2.5}
+                  fill="url(#pnlGrad)" dot={false}
+                />
+              </AreaChart>
             </ResponsiveContainer>
           ) : (
-            <div className="h-[180px] flex items-center justify-center">
-              <p className="font-mono text-xs text-[#444]">No trades today yet.</p>
+            <div className="h-[200px] flex items-center justify-center">
+              <p className="font-mono text-xs text-[#333]">No trades today yet.</p>
             </div>
           )}
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="neu-tile p-5">
-          <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-4">Open ({positions.length})</p>
-          <div className="space-y-3 max-h-[220px] overflow-y-auto">
-            {positions.map(pos => <PositionCard key={pos.id} pos={pos} />)}
-            {positions.length === 0 && (
-              <p className="font-mono text-xs text-[#444] text-center py-8">Scanning for entries...</p>
-            )}
-          </div>
+        {/* Win/Loss bar chart — spans 2 cols */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+          className="lg:col-span-2 neu-tile p-5"
+        >
+          <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-4">7-Day Trades</p>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={barData} barGap={3} barCategoryGap="30%">
+              <defs>
+                <linearGradient id="winGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#4ADE80" stopOpacity={0.9} />
+                  <stop offset="100%" stopColor="#4ADE80" stopOpacity={0.3} />
+                </linearGradient>
+                <linearGradient id="lossGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#EF4444" stopOpacity={0.9} />
+                  <stop offset="100%" stopColor="#EF4444" stopOpacity={0.3} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="label" tick={{ fontFamily: 'JetBrains Mono', fontSize: 10, fill: '#333' }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontFamily: 'JetBrains Mono', fontSize: 10, fill: '#333' }} axisLine={false} tickLine={false} allowDecimals={false} width={24} />
+              <Tooltip contentStyle={tooltipStyle} />
+              <Bar dataKey="wins"   name="Wins"   fill="url(#winGrad)"  radius={[4, 4, 0, 0]} />
+              <Bar dataKey="losses" name="Losses" fill="url(#lossGrad)" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
         </motion.div>
       </div>
 
-      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="neu-tile p-5">
-        <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-4">Recent Trades</p>
-        {closed.length === 0 ? (
-          <p className="font-mono text-xs text-[#444] text-center py-8">No trades yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="text-left border-b border-white/5">
-                  {['Token', 'Mode', 'Entry', 'Exit', 'P&L', 'Reason'].map(h => (
-                    <th key={h} className="font-mono text-xs text-[#444] uppercase tracking-wider pb-3 pr-6">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {closed.slice(0, 10).map((t, i) => (
-                  <tr key={i} className="border-b border-white/[0.03] hover:bg-white/[0.015] transition-colors">
-                    <td className="font-mono text-xs text-white py-3 pr-6">{shortMint(t.mint)}</td>
-                    <td className="font-mono text-xs text-[#00A8FF] py-3 pr-6">{t.score >= 75 ? 'SNIPER' : 'SCALPER'}</td>
-                    <td className="font-mono text-xs text-[#a0a0a0] py-3 pr-6">{t.entry_amount_sol.toFixed(3)}</td>
-                    <td className="font-mono text-xs text-[#a0a0a0] py-3 pr-6">{t.exit_amount_sol.toFixed(3)}</td>
-                    <td className={`font-mono text-xs font-bold py-3 pr-6 ${t.pnl_sol >= 0 ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
-                      {t.pnl_sol >= 0 ? '+' : ''}{t.pnl_sol.toFixed(3)} SOL
-                      <span className="ml-2 font-normal text-[10px] opacity-70">({t.pnl_percent >= 0 ? '+' : ''}{t.pnl_percent.toFixed(0)}%)</span>
-                    </td>
-                    <td className="py-3">
-                      <span className={`font-mono text-xs px-2 py-0.5 rounded-full ${t.reason.startsWith('take') || t.reason === 'scalp' ? 'bg-[#4ADE80]/10 text-[#4ADE80]' : 'bg-[#EF4444]/10 text-[#EF4444]'}`}>
-                        {t.reason.replace('_', ' ').toUpperCase()}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* Bottom row: open positions + recent trades */}
+      <div className="grid lg:grid-cols-5 gap-5">
+
+        {/* Open positions */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
+          className="lg:col-span-2 neu-tile p-5"
+        >
+          <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-4">
+            Open Positions <span className="text-white ml-1">{positions.length}</span>
+          </p>
+          <div className="space-y-3 max-h-[280px] overflow-y-auto pr-1">
+            {positions.map(pos => <PositionCard key={pos.id} pos={pos} />)}
+            {positions.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-10 gap-2">
+                <div className="w-8 h-8 rounded-full bg-white/4 flex items-center justify-center">
+                  <span className="text-[#333] text-xs">—</span>
+                </div>
+                <p className="font-mono text-xs text-[#333]">Scanning for entries...</p>
+              </div>
+            )}
           </div>
-        )}
-      </motion.div>
+        </motion.div>
+
+        {/* Recent trades */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+          className="lg:col-span-3 neu-tile p-5"
+        >
+          <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-4">Recent Trades</p>
+          {closed.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 gap-2">
+              <p className="font-mono text-xs text-[#333]">No trades yet.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-left border-b border-white/5">
+                    {['Token', 'Mode', 'Entry', 'Exit', 'P&L', 'Reason'].map(h => (
+                      <th key={h} className="font-mono text-[10px] text-[#333] uppercase tracking-wider pb-3 pr-5">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {closed.slice(0, 8).map((t, i) => (
+                    <tr key={i} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
+                      <td className="font-mono text-xs text-white py-2.5 pr-5">{shortMint(t.mint)}</td>
+                      <td className="font-mono text-xs text-[#00A8FF] py-2.5 pr-5">{t.score >= 75 ? 'SNIPER' : 'SCALPER'}</td>
+                      <td className="font-mono text-xs text-[#666] py-2.5 pr-5">{t.entry_amount_sol.toFixed(3)}</td>
+                      <td className="font-mono text-xs text-[#666] py-2.5 pr-5">{t.exit_amount_sol.toFixed(3)}</td>
+                      <td className={`font-mono text-xs font-bold py-2.5 pr-5 ${t.pnl_sol >= 0 ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
+                        {t.pnl_sol >= 0 ? '+' : ''}{t.pnl_sol.toFixed(3)}
+                        <span className="ml-1 font-normal text-[10px] opacity-60">({t.pnl_percent >= 0 ? '+' : ''}{t.pnl_percent.toFixed(0)}%)</span>
+                      </td>
+                      <td className="py-2.5">
+                        <span className={`font-mono text-[10px] px-2 py-0.5 rounded-full ${t.reason.startsWith('take') || t.reason === 'scalp' ? 'bg-[#4ADE80]/10 text-[#4ADE80]' : 'bg-[#EF4444]/10 text-[#EF4444]'}`}>
+                          {t.reason.replace('_', ' ').toUpperCase()}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </motion.div>
+
+      </div>
     </div>
   )
 }
