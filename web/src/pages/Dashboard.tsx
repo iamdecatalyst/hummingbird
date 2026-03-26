@@ -303,8 +303,9 @@ function ModalHeader({ icon, title, sub, onClose }: {
 
 // ── Credentials modal ─────────────────────────────────────────────────────────
 
-function CredentialsModal({ signetKeyPrefix, onClose, onSaved }: {
+function CredentialsModal({ signetKeyPrefix, hasSignet, onClose, onSaved }: {
   signetKeyPrefix?: string
+  hasSignet?: boolean
   onClose: () => void
   onSaved?: () => void
 }) {
@@ -345,7 +346,7 @@ function CredentialsModal({ signetKeyPrefix, onClose, onSaved }: {
       />
       <div className="p-5 space-y-4">
         {/* Saved key card */}
-        {signetKeyPrefix && (
+        {(hasSignet || signetKeyPrefix) && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 12,
             padding: '14px 16px', borderRadius: 14,
@@ -358,7 +359,7 @@ function CredentialsModal({ signetKeyPrefix, onClose, onSaved }: {
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-0.5">Active Key</p>
-              <p className="font-mono text-xs text-[#a0a0a0]">{signetKeyPrefix}</p>
+              <p className="font-mono text-xs text-[#a0a0a0]">{signetKeyPrefix || 'Key saved'}</p>
             </div>
             <button
               onClick={handleDelete}
@@ -373,7 +374,7 @@ function CredentialsModal({ signetKeyPrefix, onClose, onSaved }: {
         )}
 
         <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest">
-          {signetKeyPrefix ? 'Replace with new credentials' : 'Enter Signet credentials'}
+          {(hasSignet || signetKeyPrefix) ? 'Replace with new credentials' : 'Enter Signet credentials'}
         </p>
 
         {/* API Key */}
@@ -428,7 +429,7 @@ function CredentialsModal({ signetKeyPrefix, onClose, onSaved }: {
             opacity: saving ? 0.6 : 1,
           }}
         >
-          {saved ? '✓ Saved' : saving ? 'Verifying…' : signetKeyPrefix ? 'Update Credentials' : 'Save Credentials'}
+          {saved ? '✓ Saved' : saving ? 'Verifying…' : (hasSignet || signetKeyPrefix) ? 'Update Credentials' : 'Save Credentials'}
         </button>
 
         <p className="font-mono text-[10px] text-[#333] text-center">
@@ -516,9 +517,17 @@ function WalletsModal({ onClose, mainWalletId, onMainWalletSet }: {
                     <SolanaIcon size={13} />
                   </div>
                   <div className="flex-1 text-left min-w-0">
-                    <p className="font-mono text-xs text-white font-bold truncate">
-                      {wallets.find(w => w.id === activeWallet)?.label || 'Wallet'}
-                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-mono text-xs text-white font-bold truncate">
+                        {wallets.find(w => w.id === activeWallet)?.label || 'Wallet'}
+                      </p>
+                      {mainWalletId && mainWalletId === activeWallet && (
+                        <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full shrink-0"
+                          style={{ background: 'rgba(74,222,128,0.12)', color: '#4ADE80' }}>
+                          main
+                        </span>
+                      )}
+                    </div>
                     <p className="font-mono text-[10px] text-[#555]">
                       {wallets.find(w => w.id === activeWallet)?.balance_sol.toFixed(4)} SOL
                     </p>
@@ -543,7 +552,15 @@ function WalletsModal({ onClose, mainWalletId, onMainWalletSet }: {
                             <SolanaIcon size={11} />
                           </div>
                           <div className="flex-1 text-left min-w-0">
-                            <p className="font-mono text-xs text-white truncate">{w.label || 'Wallet'}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-mono text-xs text-white truncate">{w.label || 'Wallet'}</p>
+                              {mainWalletId === w.id && (
+                                <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full shrink-0"
+                                  style={{ background: 'rgba(74,222,128,0.12)', color: '#4ADE80' }}>
+                                  main
+                                </span>
+                              )}
+                            </div>
                             <p className="font-mono text-[10px] text-[#555]">{w.balance_sol.toFixed(4)} SOL</p>
                           </div>
                           {activeWallet === w.id && <Check size={13} className="text-[#00A8FF] shrink-0" />}
@@ -1428,11 +1445,12 @@ interface DashboardProps {
   userUsername?:     string
   userAvatar?:       string
   signetKeyPrefix?:  string
+  hasSignet?:        boolean
   mainWalletId?:     string
   onCredentialsSaved?: () => void
 }
 
-export default function Dashboard({ onLogout, walletId, userName, userUsername, userAvatar, signetKeyPrefix, mainWalletId, onCredentialsSaved }: DashboardProps) {
+export default function Dashboard({ onLogout, walletId, userName, userUsername, userAvatar, signetKeyPrefix, hasSignet, mainWalletId, onCredentialsSaved }: DashboardProps) {
   const { stats, positions, closed, online, loading, error, stop, resume } = useOrchestrator()
   const [tab, setTab] = useState('overview')
   const [showCredentials, setShowCredentials] = useState(false)
@@ -1492,6 +1510,7 @@ export default function Dashboard({ onLogout, walletId, userName, userUsername, 
       {showCredentials && (
         <CredentialsModal
           signetKeyPrefix={signetKeyPrefix}
+          hasSignet={hasSignet}
           onClose={() => setShowCredentials(false)}
           onSaved={onCredentialsSaved}
         />
