@@ -1,14 +1,16 @@
 use serde::{Deserialize, Serialize};
 
-/// A new token detected on pump.fun — forwarded to the Python scorer
+/// A new token detected on any supported launchpad — forwarded to the Python scorer
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenDetected {
-    pub mint: String,
-    pub signature: String,
-    pub dev_wallet: String,
-    pub bonding_curve: String,
+    pub mint: String,           // token mint / contract address
+    pub signature: String,      // tx signature / hash
+    pub dev_wallet: String,     // creator wallet
+    pub bonding_curve: String,  // bonding curve account (empty string for EVM)
     pub timestamp_ms: u64,
-    pub slot: u64,
+    pub slot: u64,              // Solana slot (0 for EVM)
+    pub platform: String,       // "pump_fun" | "moonshot" | "four_meme" | "virtuals" etc.
+    pub chain: String,          // "solana" | "base" | "bnb"
 }
 
 // --- Solana WebSocket notification types ---

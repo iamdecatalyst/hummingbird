@@ -20,10 +20,18 @@ async fn main() -> Result<()> {
     let config = config::Config::from_env()?;
 
     info!("🐦 Hummingbird Listener");
-    info!("   RPC WebSocket : {}", config.rpc_ws);
-    info!("   RPC HTTP      : {}", config.rpc_http);
-    info!("   Scorer        : {}", config.scorer_url);
-    info!("   Program       : {}", config.pump_fun_program);
+    info!("   Solana RPC : {}", config.solana_ws);
+    info!("   Scorer     : {}", config.scorer_url);
+    info!(
+        "   Platforms  : {}",
+        config
+            .solana_programs
+            .iter()
+            .map(|p| p.platform.as_str())
+            .chain(config.evm_chains.iter().map(|c| c.platform.as_str()))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
 
     listener::run(config).await
 }

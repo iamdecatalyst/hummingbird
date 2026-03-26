@@ -10,6 +10,10 @@ pub struct Forwarder {
 }
 
 impl Forwarder {
+    pub fn scorer_url(&self) -> String {
+        self.scorer_url.clone()
+    }
+
     pub fn new(scorer_url: String) -> Self {
         Self {
             scorer_url,
