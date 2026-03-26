@@ -141,7 +141,7 @@ export default function Dashboard() {
 
   const chartData = buildChart(closed)
 
-  // Offline / loading states
+  // Loading spinner
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center">
@@ -158,10 +158,49 @@ export default function Dashboard() {
     )
   }
 
+  // Unconfigured — show setup instructions
+  if (stats && stats.configured === false) {
+    return (
+      <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center px-6">
+        <div className="max-w-lg w-full text-center">
+          <img
+            src="/logo.png"
+            alt="Hummingbird"
+            className="w-20 h-20 object-contain mx-auto mb-6"
+            style={{ filter: 'drop-shadow(0 0 20px rgba(0,168,255,0.4))' }}
+          />
+          <h1 className="font-mono font-bold text-white text-2xl mb-2">Not configured</h1>
+          <p className="text-[#666] text-sm mb-8">
+            The orchestrator is running but Signet credentials are missing.
+            Set them in your <code className="text-[#00A8FF] bg-white/5 px-1.5 py-0.5 rounded">.env</code> and restart.
+          </p>
+          <div className="neu-tile p-5 text-left font-mono text-xs leading-relaxed mb-6">
+            <div className="text-[#555] mb-2"># /opt/hummingbird/.env</div>
+            <div><span className="text-[#00A8FF]">SIGNET_API_KEY</span>=<span className="text-[#4ADE80]">your_api_key</span></div>
+            <div><span className="text-[#00A8FF]">SIGNET_API_SECRET</span>=<span className="text-[#4ADE80]">your_api_secret</span></div>
+          </div>
+          <div className="flex gap-3 justify-center">
+            <a
+              href="https://signet.vylth.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hb-btn text-sm"
+            >
+              Get Signet API key →
+            </a>
+            <a href="https://github.com/iamdecatalyst/hummingbird" target="_blank" rel="noopener noreferrer" className="neu-btn-ghost text-sm">
+              View docs
+            </a>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // Show offline banner but still render with zeros
   const s = stats ?? {
     open_positions: 0, total_trades: 0, wins: 0, losses: 0,
-    win_rate: 0, today_pnl: 0, total_pnl: 0, paused: false, pause_reason: '',
+    win_rate: 0, today_pnl: 0, total_pnl: 0, paused: false, pause_reason: '', configured: false,
   }
 
   return (

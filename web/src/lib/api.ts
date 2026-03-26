@@ -13,6 +13,7 @@ export interface Stats {
   total_pnl:      number
   paused:         boolean
   pause_reason:   string
+  configured:     boolean
 }
 
 export interface Position {
