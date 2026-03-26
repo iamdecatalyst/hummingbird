@@ -17,7 +17,8 @@ type Client struct {
 }
 
 // New creates a new Hummingbird API client.
-func New(baseURL, token string) *Client {
+// Returns (client, notLoggedIn) — notLoggedIn is true if no credentials are saved.
+func New(baseURL, token string) (*Client, bool) {
 	savedURL, savedToken := LoadCredentials()
 
 	if baseURL == "" {
@@ -25,9 +26,6 @@ func New(baseURL, token string) *Client {
 	}
 	if baseURL == "" {
 		baseURL = savedURL
-	}
-	if baseURL == "" {
-		baseURL = "https://hummingbird-api.vylth.com"
 	}
 
 	if token == "" {
@@ -37,13 +35,15 @@ func New(baseURL, token string) *Client {
 		token = savedToken
 	}
 
+	notLoggedIn := baseURL == "" || token == ""
+
 	return &Client{
 		BaseURL: baseURL,
 		Token:   token,
 		httpClient: &http.Client{
 			Timeout: 15 * time.Second,
 		},
-	}
+	}, notLoggedIn
 }
 
 // Stats holds the response from GET /stats.

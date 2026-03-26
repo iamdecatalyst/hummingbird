@@ -19,24 +19,19 @@ const usageText = `Hummingbird — Pump.fun trading agent CLI
 by VYLTH Strategies · @iamdecatalyst
 
 USAGE:
-  hummingbird [flags] <command>
-  hummingbird                    Launch interactive TUI (multi-tenant)
-  hummingbird -url <url>         Launch TUI against a self-hosted instance
+  hummingbird              Launch interactive TUI
+  hummingbird <command>    Run a one-shot command
 
 COMMANDS:
-  login                   Authenticate via Nexus — opens browser, saves token
-  logout                  Remove saved credentials
-  status                  One-shot: print trading stats
-  positions               One-shot: print open and recent closed positions
-  logs                    One-shot: print recent log events
+  login       Authenticate — opens browser, saves token
+  logout      Remove saved credentials
+  status      One-shot: print trading stats
+  positions   One-shot: print open and recent closed positions
+  logs        One-shot: print recent log events
 
-FLAGS:
-  -url string    API base URL override (or set HUMMINGBIRD_API_URL env var)
-  -token string  JWT token override (or set HUMMINGBIRD_TOKEN env var)
-  -h, --help     Show this help message
-
-SELF-HOSTED (single-tenant):
-  hummingbird -url http://localhost:8002     no login needed
+Get started:
+  hummingbird login        → authenticate with Nexus
+  hummingbird              → launch TUI
 
 For full documentation visit: https://github.com/iamdecatalyst/hummingbird
 `
@@ -76,7 +71,14 @@ func main() {
 		}
 	}
 
-	c := client.New(apiURL, token)
+	c, notLoggedIn := client.New(apiURL, token)
+
+	if notLoggedIn {
+		fmt.Fprintln(os.Stderr, "\n  "+cp(cRed, "✗  not logged in"))
+		fmt.Fprintln(os.Stderr, "  "+cp(cMuted, "run ")+cp(cBlue, cBold+"hummingbird login"+cReset)+cp(cMuted, " to authenticate"))
+		fmt.Fprintln(os.Stderr)
+		os.Exit(1)
+	}
 
 	if len(args) == 0 {
 		// Set terminal window title
@@ -164,33 +166,24 @@ const (
 
 func cp(color, s string) string { return color + s + cReset }
 
+const (
+	hostedAPIURL  = "https://hummingbird-api.vylth.com"
+	hostedAuthURL = "https://hummingbird.vylth.com/cli/auth"
+)
+
 func handleLogin() {
-	savedURL, savedToken := client.LoadCredentials()
+	_, savedToken := client.LoadCredentials()
 
 	fmt.Println()
 	fmt.Println(cp(cBlue, cBold+"  ◈ "+cReset+cBlue+cBold+"HUMMINGBIRD"+cReset+cp(cMuted, "  ·  cli login")))
 	fmt.Println(cp(cDim, "  ────────────────────────────────────────"))
 	fmt.Println()
-
-	defaultURL := "https://hummingbird.vylth.com"
-	if savedURL != "" {
-		defaultURL = savedURL
-	}
-	fmt.Printf("  %s %s[%s]%s ", cp(cMuted, "api url"), cNavy, defaultURL, cReset)
-	apiURL := readLineRaw()
-	if apiURL == "" {
-		apiURL = defaultURL
-	}
-	apiURL = strings.TrimRight(apiURL, "/")
-
-	authURL := apiURL + "/cli/auth"
-	fmt.Println()
 	fmt.Println("  " + cp(cGreen, "→") + cp(cMuted, "  opening browser"))
-	fmt.Println("  " + cp(cBlue, authURL))
+	fmt.Println("  " + cp(cBlue, hostedAuthURL))
 	fmt.Println()
 	fmt.Println(cp(cMuted, "  log in with Nexus, copy your token, paste it below"))
 	fmt.Println()
-	openBrowser(authURL)
+	openBrowser(hostedAuthURL)
 
 	if savedToken != "" {
 		fmt.Print("  " + cp(cMuted, "token") + cp(cDim, " (enter to keep existing)") + "  ")
@@ -215,7 +208,7 @@ func handleLogin() {
 		fmt.Println("  " + cp(cGreen, "✓") + "  " + cp(cDim, dots) + cp(cMuted, fmt.Sprintf("  %d chars", len(strings.TrimSpace(tokenInput)))))
 	}
 
-	if err := client.SaveCredentials(apiURL, strings.TrimSpace(tokenInput)); err != nil {
+	if err := client.SaveCredentials(hostedAPIURL, strings.TrimSpace(tokenInput)); err != nil {
 		fmt.Fprintln(os.Stderr, "  "+cp(cRed, "✗  failed to save: ")+err.Error())
 		os.Exit(1)
 	}
