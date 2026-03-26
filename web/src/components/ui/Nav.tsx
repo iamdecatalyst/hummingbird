@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { GithubLogo, List, X, ArrowRight } from '@phosphor-icons/react'
 
 export default function Nav() {
   const [scrolled, setScrolled] = useState(false)
@@ -26,9 +27,15 @@ export default function Nav() {
     >
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
         {/* Logo */}
-        <Link to="/" className="flex items-center gap-2 group">
-          <span className="text-lg font-mono font-bold tracking-widest text-white group-hover:text-hb-blue transition-colors duration-200">
-            🐦 HUMMINGBIRD
+        <Link to="/" className="flex items-center gap-3 group">
+          <img
+            src="/logo.png"
+            alt="Hummingbird"
+            className="w-8 h-8 object-contain transition-transform duration-300 group-hover:scale-110"
+            style={{ filter: 'drop-shadow(0 0 8px rgba(0,168,255,0.4))' }}
+          />
+          <span className="font-mono font-bold tracking-widest text-white group-hover:text-[#00A8FF] transition-colors duration-200">
+            HUMMINGBIRD
           </span>
         </Link>
 
@@ -37,7 +44,7 @@ export default function Nav() {
           <NavLink href="/#how-it-works">How It Works</NavLink>
           <NavLink href="/#features">Features</NavLink>
           <NavLink href="https://github.com/iamdecatalyst/hummingbird" external>
-            GitHub
+            <GithubLogo size={15} className="inline -mt-0.5 mr-1" />GitHub
           </NavLink>
           {pathname !== '/dashboard' && (
             <Link
@@ -55,7 +62,7 @@ export default function Nav() {
           onClick={() => setOpen(o => !o)}
           aria-label="Toggle menu"
         >
-          <span className="font-mono text-sm">{open ? '✕' : '☰'}</span>
+          {open ? <X size={18} /> : <List size={18} />}
         </button>
       </div>
 

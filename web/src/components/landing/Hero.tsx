@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
+import { GithubLogo, Star, ArrowRight } from '@phosphor-icons/react'
 
 // Mock trade feed entries — look real, display fast
 const FEED_ENTRIES = [
@@ -111,17 +112,25 @@ export default function Hero() {
 
           {/* Left — copy */}
           <div>
-            {/* Status pill */}
+            {/* Logo + status */}
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              className="inline-flex items-center gap-2 mb-8 px-4 py-2 rounded-full neu-card-inset"
+              className="flex items-center gap-4 mb-8"
             >
-              <span className="status-dot-live" />
-              <span className="font-mono text-xs text-[#a0a0a0] tracking-widest uppercase">
-                Live on Solana mainnet
-              </span>
+              <img
+                src="/logo.png"
+                alt="Hummingbird"
+                className="w-14 h-14 object-contain animate-float"
+                style={{ filter: 'drop-shadow(0 0 16px rgba(0,168,255,0.5))' }}
+              />
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full neu-card-inset">
+                <span className="status-dot-live" />
+                <span className="font-mono text-xs text-[#a0a0a0] tracking-widest uppercase">
+                  Live on Solana mainnet
+                </span>
+              </div>
             </motion.div>
 
             {/* Headline */}
@@ -173,7 +182,7 @@ export default function Hero() {
               className="flex flex-wrap gap-3"
             >
               <Link to="/dashboard" className="hb-btn">
-                Launch Dashboard →
+                Launch Dashboard <ArrowRight size={16} weight="bold" />
               </Link>
               <a
                 href="https://github.com/iamdecatalyst/hummingbird"
@@ -181,7 +190,7 @@ export default function Hero() {
                 rel="noopener noreferrer"
                 className="neu-btn-ghost"
               >
-                ★ Star on GitHub
+                <Star size={15} weight="fill" className="text-[#00A8FF]" /> Star on GitHub
               </a>
             </motion.div>
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { ChartBar, MapPin, ClockCounterClockwise, Gear, Play, Stop, ArrowLeft, Pulse } from '@phosphor-icons/react'
 import { useOrchestrator } from '../hooks/useOrchestrator'
 import type { ClosedPosition, Position } from '../lib/api'
 
@@ -65,16 +66,20 @@ function Sidebar({
   active, paused, onStop, onResume,
 }: { active: string; paused: boolean; onStop: () => void; onResume: () => void }) {
   const navItems = [
-    { id: 'overview',  label: 'Overview',  icon: '📊' },
-    { id: 'positions', label: 'Positions', icon: '📍' },
-    { id: 'history',   label: 'History',   icon: '🗂' },
-    { id: 'config',    label: 'Config',    icon: '⚙️' },
+    { id: 'overview',  label: 'Overview',  icon: <ChartBar size={16} weight="duotone" /> },
+    { id: 'positions', label: 'Positions', icon: <MapPin size={16} weight="duotone" /> },
+    { id: 'history',   label: 'History',   icon: <ClockCounterClockwise size={16} weight="duotone" /> },
+    { id: 'config',    label: 'Config',    icon: <Gear size={16} weight="duotone" /> },
   ]
   return (
     <aside className="w-56 shrink-0 flex flex-col gap-1 pt-4 border-r border-white/5">
       <div className="px-4 mb-6">
-        <Link to="/" className="font-mono text-sm font-bold text-white hover:text-[#00A8FF] transition-colors">
-          🐦 HUMMINGBIRD
+        <Link to="/" className="flex items-center gap-2 group">
+          <img src="/logo.png" alt="" className="w-6 h-6 object-contain"
+            style={{ filter: 'drop-shadow(0 0 6px rgba(0,168,255,0.4))' }} />
+          <span className="font-mono text-sm font-bold text-white group-hover:text-[#00A8FF] transition-colors">
+            HUMMINGBIRD
+          </span>
         </Link>
         <div className="flex items-center gap-2 mt-2">
           {paused
@@ -98,8 +103,8 @@ function Sidebar({
 
       <div className="mt-auto px-4 pb-4 pt-8 flex flex-col gap-2">
         {paused
-          ? <button onClick={onResume} className="hb-btn text-xs py-2 justify-center">▶ Resume</button>
-          : <button onClick={onStop}   className="neu-btn-ghost text-xs py-2 justify-center">⏹ Stop All</button>
+          ? <button onClick={onResume} className="hb-btn text-xs py-2 justify-center gap-1.5"><Play size={13} weight="fill" /> Resume</button>
+          : <button onClick={onStop}   className="neu-btn-ghost text-xs py-2 justify-center gap-1.5"><Stop size={13} weight="fill" /> Stop All</button>
         }
       </div>
     </aside>
@@ -177,7 +182,7 @@ export default function Dashboard() {
             <span className={`flex items-center gap-1.5 neu-card-inset px-3 py-1.5 rounded-xl font-mono text-xs ${
               online ? 'text-[#4ADE80]' : 'text-[#EF4444]'
             }`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${online ? 'bg-[#4ADE80]' : 'bg-[#EF4444]'}`} />
+              <Pulse size={13} weight="bold" />
               {online ? 'live' : 'offline'}
             </span>
             <span className="neu-card-inset px-3 py-1.5 rounded-xl font-mono text-xs text-[#00A8FF]">
