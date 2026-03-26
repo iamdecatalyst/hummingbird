@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Routes, Route, useNavigate } from 'react-router-dom'
+import { Routes, Route, useNavigate, Navigate } from 'react-router-dom'
 import { NexusCallback, getAccessToken } from '@vylth/nexus-react'
 import Landing from './pages/Landing'
 import Dashboard from './pages/Dashboard'
@@ -48,6 +48,7 @@ function Spinner() {
 function DashboardRoute() {
   const [multiTenant, setMultiTenant] = useState<boolean | null>(null)
   const { token, me, loading, logout, refreshMe } = useAuth()
+  const navigate = useNavigate()
 
   useEffect(() => {
     api.mode()
@@ -62,8 +63,8 @@ function DashboardRoute() {
     return <Dashboard />
   }
 
-  // Multi-tenant: not logged in → Login
-  if (!token) return <Login />
+  // Multi-tenant: not logged in → redirect to /login
+  if (!token) return <Navigate to="/login" replace />
 
   // Logged in but no Signet key yet → Setup
   if (me && !me.has_signet) {
@@ -77,7 +78,7 @@ function DashboardRoute() {
 
   return (
     <Dashboard
-      onLogout={logout}
+      onLogout={() => { logout(); navigate('/login', { replace: true }) }}
       walletId={me?.wallet_id}
       userName={me ? `${me.first_name} ${me.last_name}`.trim() : undefined}
       userAvatar={me?.avatar}
@@ -85,12 +86,30 @@ function DashboardRoute() {
   )
 }
 
+// /login — redirect to /dashboard if already logged in
+function LoginRoute() {
+  const [multiTenant, setMultiTenant] = useState<boolean | null>(null)
+  const { token, loading } = useAuth()
+
+  useEffect(() => {
+    api.mode()
+      .then(r => setMultiTenant(r.multi_tenant))
+      .catch(() => setMultiTenant(false))
+  }, [])
+
+  if (multiTenant === null || loading) return <Spinner />
+  if (!multiTenant) return <Navigate to="/dashboard" replace />
+  if (token) return <Navigate to="/dashboard" replace />
+  return <Login />
+}
+
 export default function App() {
   return (
     <Routes>
-      <Route path="/"              element={<Landing />} />
-      <Route path="/auth/callback" element={<AuthCallback />} />
-      <Route path="/dashboard"     element={<DashboardRoute />} />
+      <Route path="/"                element={<Landing />} />
+      <Route path="/login"           element={<LoginRoute />} />
+      <Route path="/auth/callback"   element={<AuthCallback />} />
+      <Route path="/dashboard"       element={<DashboardRoute />} />
       <Route path="/dashboard/setup" element={<DashboardRoute />} />
     </Routes>
   )
