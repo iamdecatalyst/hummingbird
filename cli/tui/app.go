@@ -181,7 +181,7 @@ func (m Model) View() string {
 
 	// Footer
 	b.WriteString("\n\n")
-	hint := "← → / h l / tab: switch   1-4: jump to tab   r: refresh   q: quit"
+	hint := "← →  switch tab   ↑↓ / j k  scroll   g G  top/bottom   r  refresh   q  quit"
 	b.WriteString("  " + StyleHelp.Render(hint))
 
 	return b.String()

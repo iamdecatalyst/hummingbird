@@ -93,27 +93,22 @@ func (m TradesModel) Update(msg tea.Msg) (TradesModel, tea.Cmd) {
 func (m TradesModel) View() string {
 	var b strings.Builder
 
-	b.WriteString("  " + StyleTitle.Render("◎ Trades & Positions"))
-	b.WriteString("\n\n")
-
 	if m.loading {
-		b.WriteString("  " + m.spinner.View() + StyleMuted.Render("  Fetching positions..."))
+		b.WriteString("  " + m.spinner.View() + StyleMuted.Render("  fetching positions..."))
 		return b.String()
 	}
 
 	if m.err != nil {
 		b.WriteString("  " + StyleError.Render("✗ "+m.err.Error()))
-		b.WriteString("\n\n  " + StyleMuted.Render("Press r to retry"))
 		return b.String()
 	}
 
 	if !m.fetched {
-		b.WriteString("  " + StyleMuted.Render("Loading..."))
+		b.WriteString("  " + StyleMuted.Render("loading..."))
 		return b.String()
 	}
 
 	b.WriteString(renderTrades(m.open, m.closed))
-	b.WriteString("\n\n  " + StyleHelp.Render("Press r to refresh"))
 
 	return b.String()
 }

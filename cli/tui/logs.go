@@ -95,12 +95,10 @@ func (m LogsModel) View() string {
 
 	if m.err != nil {
 		b.WriteString("  " + StyleError.Render("✗  " + m.err.Error()))
-		b.WriteString("\n\n  " + StyleHelp.Render("r  retry"))
 		return b.String()
 	}
 
 	b.WriteString(renderLogs(m.logs, m.scrollOff))
-	b.WriteString("\n\n  " + StyleHelp.Render("↑↓ / j k  scroll   g  top   G  bottom   r  refresh"))
 
 	return b.String()
 }

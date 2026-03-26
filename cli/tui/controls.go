@@ -176,7 +176,6 @@ func (m ControlsModel) View() string {
 
 	if m.err != nil {
 		b.WriteString("  " + StyleError.Render("✗  "+m.err.Error()))
-		b.WriteString("\n\n  " + StyleHelp.Render("r  retry"))
 		return b.String()
 	}
 
@@ -228,7 +227,6 @@ func (m ControlsModel) View() string {
 	running := m.stats != nil && !m.stats.Paused && m.stats.Configured
 
 	b.WriteString(renderControls(running, paused))
-	b.WriteString("\n\n  " + StyleHelp.Render("r  refresh status"))
 
 	return b.String()
 }
