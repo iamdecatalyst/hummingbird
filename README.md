@@ -1,170 +1,151 @@
-```
-  _                     _                 _     _         _
- | |__  _   _ _ __ ___ | |_ ___ __  __ (_) __| |       | |
- | '_ \| | | | '_ ` _ \| __/ __|  \/  || |/ _` |       | |
- | | | | |_| | | | | | | || (__ | |\/| || | (_| |  _   | |
- |_| |_|\__,_|_| |_| |_|\__\___|_|  |_||_|\__,_| (_)  |_|
+<div align="center">
+  <img src="https://media.vylth.com/images/Inhr2N9T.png" width="110" alt="Hummingbird" />
+  <h1>Hummingbird</h1>
+  <p><strong>Autonomous pump.fun trading agent</strong></p>
+  <p>
+    <img src="https://img.shields.io/badge/Rust-listener-orange?style=flat-square&logo=rust" />
+    <img src="https://img.shields.io/badge/Python-scorer-blue?style=flat-square&logo=python" />
+    <img src="https://img.shields.io/badge/Go-orchestrator-00ADD8?style=flat-square&logo=go" />
+    <img src="https://img.shields.io/badge/Solana-non--custodial-9945FF?style=flat-square&logo=solana" />
+  </p>
+</div>
 
-         autonomous pump.fun trading agent
-         rust · python · go · solana
-```
+---
 
-> Detects new token launches in **<100ms**, scores rug risk before entering,
-> scalps momentum on already-running tokens, and exits before the dev dumps.
-> All non-custodial — powered by [Signet](https://signet.vylth.com).
+Detects new token launches in **<100ms**, scores rug risk before entering, scalps momentum on already-running tokens, and exits before the dev dumps. All non-custodial — powered by [Signet](https://signet.vylth.com).
 
 ---
 
 ## How It Works
 
 ```
- ┌─────────────────────────────────────────────────────────────────┐
- │                        TWO MODES                                │
- │                                                                 │
- │   SNIPER                          SCALPER                       │
- │   ──────                          ───────                       │
- │   New token launches              Already-running tokens        │
- │   Enter early, ride the pump      Spot second-wave momentum     │
- │   Exit before the rug             Tight in/out, fast profits    │
- └─────────────────────────────────────────────────────────────────┘
+                    TWO MODES
+        ┌───────────────────────────────────┐
+        │  SNIPER            SCALPER        │
+        │  ──────            ───────        │
+        │  New launches      Running tokens │
+        │  Enter early       Second wave    │
+        │  Ride the pump     Tight in/out   │
+        └───────────────────────────────────┘
 
- ┌──────────────────────────────────────────────────────────────────────┐
- │                                                                      │
- │   pump.fun WebSocket  ──►  new mint detected  (Rust, <100ms)        │
- │                                    │                                 │
- │                                    ▼                                 │
- │                         score token (Python)                         │
- │                         · dev wallet age & history                   │
- │                         · dev % of supply held                       │
- │                         · contract flags (mint/freeze auth)          │
- │                         · LP status                                  │
- │                         · bonding curve fill %                       │
- │                         · social presence                            │
- │                                    │                                 │
- │              ┌─────────────────────┴──────────────────────┐         │
- │              │ score < 60 → skip    score ≥ 60 → ENTER    │         │
- │              └─────────────────────────────────────────────┘         │
- │                                    │                                 │
- │                                    ▼                                 │
- │                    execute via Signet API  (Go)                      │
- │                    non-custodial · your keys                         │
- │                                    │                                 │
- │                                    ▼                                 │
- │                      watch position  (Rust)                          │
- │                      · dev wallet selling?  → DUMP NOW              │
- │                      · LP removed?          → DUMP NOW              │
- │                      · 2x hit?              → sell 40%              │
- │                      · 5x hit?              → sell 40%              │
- │                      · -25%?                → stop loss             │
- │                                    │                                 │
- │                                    ▼                                 │
- │              🐦 Telegram: "Exited TICKER | +340% | 0.43 SOL"        │
- │                                    │                                 │
- │                                    ▼                                 │
- │                         profits recycled → next cycle               │
- │                                                                      │
- └──────────────────────────────────────────────────────────────────────┘
+  pump.fun WebSocket
+        │
+        ▼  <100ms (Rust)
+  new mint detected
+        │
+        ▼
+  score token (Python)
+  ├── dev wallet age & history   (0–20 pts)
+  ├── dev % of supply held       (0–20 pts)
+  ├── bonding curve fill %       (0–20 pts)
+  ├── contract flags             (0–15 pts)
+  ├── social presence            (0–10 pts)
+  └── LP status                  (0–15 pts)
+        │
+        ├── score < 60 → skip
+        └── score ≥ 60 → ENTER
+                │
+                ▼
+        Signet API swap (Go)
+        non-custodial · your keys
+                │
+                ▼
+        watch position
+        ├── dev selling?          → dump now
+        ├── LP removed?           → dump now
+        ├── -15% in <10s?         → dump now
+        ├── 2x hit?               → sell 40%
+        ├── 5x hit?               → sell 40%
+        ├── 10x hit?              → sell rest
+        ├── -25% from entry?      → stop loss
+        └── 8 min no movement?    → time exit
+                │
+                ▼
+        Telegram: "Exited TICKER | +340% | 0.43 SOL"
 ```
 
 ---
 
 ## Scoring
 
-```
- PRE-ENTRY SCORE  (0 – 100)
- ──────────────────────────────────────────────────────
- dev wallet age & rug history    0 – 20 pts
- dev % of supply held            0 – 20 pts   (>20% = red flag)
- contract flags                  0 – 15 pts   (mint/freeze auth)
- LP status                       0 – 20 pts
- social presence                 0 – 10 pts
- bonding curve fill              0 – 15 pts   (sweet spot: 5–25%)
- ──────────────────────────────────────────────────────
- < 60   →  skip
- 60–74  →  0.05 SOL
- 75–89  →  0.10 SOL
- 90+    →  0.20 SOL
-```
-
----
-
-## Exit Logic
+| Check | Points | Signal |
+|---|---|---|
+| Dev wallet age & rug history | 0–20 | Fresh wallet = high risk |
+| Dev % of supply held | 0–20 | >20% held = likely dump incoming |
+| Bonding curve fill | 0–20 | Sweet spot: 5–25% filled |
+| Contract flags | 0–15 | Mint/freeze authority = red flag |
+| Social presence | 0–10 | No socials = anonymous dev |
+| LP status | 0–15 | Locked LP = safer entry |
 
 ```
- EMERGENCY (no hesitation)
-   dev sells >5% of holdings      →  dump everything now
-   LP removed                     →  dump everything now
-   >15% drop in under 10 seconds  →  dump everything now
-
- TAKE PROFIT (staged)
-   2x entry price   →  sell 40%
-   5x entry price   →  sell 40%
-   10x entry price  →  sell remaining  (or trail)
-
- STOP LOSS
-   -25% from entry               →  cut and move on
-   -15% AND volume dying         →  don't wait for -25%
-
- TIME EXIT
-   no movement after 8 minutes   →  exit at market
-   bonding curve stalled <10%    →  exit after 5 min
+< 60    →  skip
+60–74   →  enter 0.05 SOL
+75–89   →  enter 0.10 SOL
+90+     →  enter 0.20 SOL
 ```
 
 ---
 
 ## Scalper Mode
 
-```
- while True:
-   scan tokens launched in last 30 minutes
-   find second-wave pattern:
-     · pumped → pulled back 20–40% from ATH
-     · volume rising again
-     · holder count still growing
-     · dev wallet untouched
-   enter tight position (0.05–0.10 SOL)
-   target 1.5–2x, stop at -15%
-   take and go, repeat
-```
+Runs continuously alongside the sniper. Targets tokens already launched in the last 30 minutes showing a second-wave momentum pattern:
+
+- Pumped → pulled back 20–40% from ATH
+- Volume rising again
+- Holder count still growing
+- Dev wallet untouched
+
+Enters tight (0.05–0.10 SOL), targets 1.5–2x, stops at -15%, repeats.
 
 ---
 
-## Modules
+## Project Structure
 
 ```
- hummingbird/
- ├── listener/        Rust  — Solana WebSocket detector + position monitor
- ├── scorer/          Python — token risk scoring engine
- ├── orchestrator/    Go    — Signet integration, portfolio manager
- └── bot/             Go    — Telegram + Discord interface
+hummingbird/
+├── listener/       Rust   — Solana WebSocket detector, <100ms detection
+├── scorer/         Python — concurrent risk scoring engine
+│   └── checks/            dev_wallet · supply · bonding · contract · social
+├── orchestrator/   Go     — Signet integration, portfolio, Telegram bot
+│   ├── trader/            execution + exit loop
+│   ├── monitor/           per-position price watcher
+│   ├── portfolio/         open/closed position state
+│   ├── userbot/           multi-tenant user management
+│   ├── bot/               Telegram bot (single + multi-tenant)
+│   └── db/                PostgreSQL persistence
+└── cli/            Go     — terminal UI for local/self-hosted installs
 ```
 
 ---
 
 ## Quick Start
 
+**Prerequisites:** Rust, Python 3.11+, Go 1.22+, PostgreSQL
+
 ```bash
 cp .env.example .env
-# Set your RPC endpoint and Signet API key
+# Fill in: RPC_HTTP, SIGNET_API_KEY, SIGNET_API_SECRET, DATABASE_URL
+```
 
-# 1. scorer
+```bash
+# 1. Scorer
 cd scorer && pip install -r requirements.txt && python main.py
 
-# 2. listener
+# 2. Listener
 cd listener && cargo run --release
 
-# 3. orchestrator + bot
+# 3. Orchestrator
 cd orchestrator && go run .
 ```
 
 You need a **Signet API key** to execute trades → [signet.vylth.com](https://signet.vylth.com)
-Free tier: 1,000 requests · 5 wallets · no credit card
+Free tier: 1,000 requests · 5 wallets · no credit card.
 
 ---
 
 ## RPC
 
-For real detection speed, use a private RPC (public mainnet rate-limits under load):
+For real detection speed, use a private RPC — public mainnet rate-limits under load:
 
 - [Helius](https://helius.xyz) — recommended
 - [QuickNode](https://quicknode.com)
@@ -172,6 +153,14 @@ For real detection speed, use a private RPC (public mainnet rate-limits under lo
 
 ---
 
+## Creator
+
+Built by **[@iamdecatalyst](https://github.com/iamdecatalyst)** — CEO & Solo Founder, [VYLTH Strategies](https://vylth.com).
+
+---
+
 ## License
 
-MIT — free to use, fork, and build on.
+[Hummingbird License v1.0](./LICENSE) — free to use, self-host, and fork.
+You may **not** rebrand it and sell it as a different product.
+Violations will be pursued legally. Questions: decatalyst@vylth.com
