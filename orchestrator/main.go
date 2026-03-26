@@ -207,17 +207,23 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 		if resp.StatusCode != http.StatusOK {
 			return "", "", "", "", "", fmt.Errorf("invalid nexus token (status %d)", resp.StatusCode)
 		}
-		var profile struct {
-			ID        string `json:"id"`
-			Email     string `json:"email"`
-			FirstName string `json:"first_name"`
-			LastName  string `json:"last_name"`
-			Avatar    string `json:"avatar_url"`
+		var envelope struct {
+			Investor struct {
+				ID        string `json:"id"`
+				Email     string `json:"email"`
+				FirstName string `json:"first_name"`
+				LastName  string `json:"last_name"`
+				Avatar    string `json:"avatar_url"`
+			} `json:"investor"`
 		}
-		if err := json.NewDecoder(resp.Body).Decode(&profile); err != nil {
+		if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
 			return "", "", "", "", "", fmt.Errorf("decode profile: %w", err)
 		}
-		return profile.ID, profile.FirstName, profile.LastName, profile.Email, profile.Avatar, nil
+		p := envelope.Investor
+		if p.ID == "" {
+			return "", "", "", "", "", fmt.Errorf("nexus profile missing id")
+		}
+		return p.ID, p.FirstName, p.LastName, p.Email, p.Avatar, nil
 	}
 
 	// POST /auth/nexus — exchange Nexus access token for a Hummingbird JWT.
@@ -240,7 +246,7 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 
 		// Upsert profile (updates name/avatar on every login)
 		if err := database.UpsertProfile(nexusID, firstName, lastName, email, avatar); err != nil {
-			log.Printf("[auth/nexus] upsert failed for %s: %v", nexusID[:8], err)
+			log.Printf("[auth/nexus] upsert failed for %s: %v", nexusID, err)
 			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 			return
 		}
@@ -306,7 +312,11 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 
 		// Verify credentials + get wallet ID
 		client := signet.NewClient(req.APIKey, req.APISecret).WithBaseURL(cfg.SignetBaseURL)
-		walletName := fmt.Sprintf("hb-%s", nexusID[:8])
+		short := nexusID
+		if len(short) > 8 {
+			short = short[:8]
+		}
+		walletName := fmt.Sprintf("hb-%s", short)
 		walletID, err := trader.EnsureWallet(client, walletName)
 		if err != nil {
 			http.Error(w, `{"error":"invalid Signet credentials"}`, http.StatusBadRequest)
