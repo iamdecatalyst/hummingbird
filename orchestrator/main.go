@@ -202,20 +202,21 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 
 	// validateNexusToken calls the Nexus profile endpoint to verify the token
 	// and returns the user's Nexus profile.
-	validateNexusToken := func(accessToken string) (id, firstName, lastName, email, avatar string, err error) {
+	validateNexusToken := func(accessToken string) (id, username, firstName, lastName, email, avatar string, err error) {
 		req, _ := http.NewRequest("GET", "https://auth.vylth.com/api/nexus/account/profile", nil)
 		req.Header.Set("Authorization", "Bearer "+accessToken)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
-			return "", "", "", "", "", fmt.Errorf("nexus unreachable: %w", err)
+			return "", "", "", "", "", "", fmt.Errorf("nexus unreachable: %w", err)
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
-			return "", "", "", "", "", fmt.Errorf("invalid nexus token (status %d)", resp.StatusCode)
+			return "", "", "", "", "", "", fmt.Errorf("invalid nexus token (status %d)", resp.StatusCode)
 		}
 		var envelope struct {
 			Investor struct {
 				ID        string `json:"id"`
+				Username  string `json:"username"`
 				Email     string `json:"email"`
 				FirstName string `json:"first_name"`
 				LastName  string `json:"last_name"`
@@ -223,13 +224,13 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 			} `json:"investor"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
-			return "", "", "", "", "", fmt.Errorf("decode profile: %w", err)
+			return "", "", "", "", "", "", fmt.Errorf("decode profile: %w", err)
 		}
 		p := envelope.Investor
 		if p.ID == "" {
-			return "", "", "", "", "", fmt.Errorf("nexus profile missing id")
+			return "", "", "", "", "", "", fmt.Errorf("nexus profile missing id")
 		}
-		return p.ID, p.FirstName, p.LastName, p.Email, p.Avatar, nil
+		return p.ID, p.Username, p.FirstName, p.LastName, p.Email, p.Avatar, nil
 	}
 
 	// POST /auth/nexus — exchange Nexus access token for a Hummingbird JWT.
@@ -243,7 +244,7 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 			return
 		}
 
-		nexusID, firstName, lastName, email, avatar, err := validateNexusToken(req.AccessToken)
+		nexusID, username, firstName, lastName, email, avatar, err := validateNexusToken(req.AccessToken)
 		if err != nil {
 			log.Printf("[auth/nexus] validation failed: %v", err)
 			http.Error(w, `{"error":"invalid Nexus token"}`, http.StatusUnauthorized)
@@ -251,7 +252,7 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 		}
 
 		// Upsert profile (updates name/avatar on every login)
-		if err := database.UpsertProfile(nexusID, firstName, lastName, email, avatar); err != nil {
+		if err := database.UpsertProfile(nexusID, username, firstName, lastName, email, avatar); err != nil {
 			log.Printf("[auth/nexus] upsert failed for %s: %v", nexusID, err)
 			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 			return
@@ -266,6 +267,7 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 			"has_signet": user != nil && user.HasSignet,
 			"user": map[string]string{
 				"id":         nexusID,
+				"username":   username,
 				"first_name": firstName,
 				"last_name":  lastName,
 				"email":      email,
@@ -290,6 +292,7 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
 			"id":         user.NexusUserID,
+			"username":   user.Username,
 			"first_name": user.FirstName,
 			"last_name":  user.LastName,
 			"email":      user.Email,
@@ -431,6 +434,104 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 		}
 		fmt.Fprint(w, `{"status":"resumed"}`)
 	})
+
+	// GET /wallets — list all Signet wallets for this user
+	mux.HandleFunc("GET /wallets", func(w http.ResponseWriter, r *http.Request) {
+		nexusID, err := requireAuth(r)
+		if err != nil {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		apiKey, apiSecret, err := database.GetSignetCredentials(nexusID)
+		if err != nil {
+			http.Error(w, `{"error":"no signet credentials"}`, http.StatusBadRequest)
+			return
+		}
+		client := signet.NewClient(apiKey, apiSecret).WithBaseURL(cfg.SignetBaseURL)
+		wallets, err := client.Wallets.List()
+		if err != nil {
+			http.Error(w, `{"error":"signet error"}`, http.StatusBadGateway)
+			return
+		}
+		// Fetch SOL balance for each wallet
+		type walletWithBalance struct {
+			ID      string  `json:"id"`
+			Address string  `json:"address"`
+			Label   string  `json:"label"`
+			Balance float64 `json:"balance_sol"`
+		}
+		result := make([]walletWithBalance, 0, len(wallets))
+		for _, wal := range wallets {
+			label := ""
+			if wal.Label != nil {
+				label = *wal.Label
+			}
+			bal := fetchSOLBalance(cfg.SignetBaseURL, apiKey, apiSecret, wal.ID)
+			result = append(result, walletWithBalance{
+				ID:      wal.ID,
+				Address: wal.Address,
+				Label:   label,
+				Balance: bal,
+			})
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(result)
+	})
+
+	// POST /wallets — create a new Solana wallet
+	mux.HandleFunc("POST /wallets", func(w http.ResponseWriter, r *http.Request) {
+		nexusID, err := requireAuth(r)
+		if err != nil {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		var req struct {
+			Label string `json:"label"`
+		}
+		json.NewDecoder(r.Body).Decode(&req)
+		apiKey, apiSecret, err := database.GetSignetCredentials(nexusID)
+		if err != nil {
+			http.Error(w, `{"error":"no signet credentials"}`, http.StatusBadRequest)
+			return
+		}
+		client := signet.NewClient(apiKey, apiSecret).WithBaseURL(cfg.SignetBaseURL)
+		label := req.Label
+		if label == "" {
+			label = "hummingbird"
+		}
+		wal, err := client.Wallets.Create(signet.CreateWalletParams{Chain: "solana", Label: label})
+		if err != nil {
+			log.Printf("[wallets] create failed: %v", err)
+			http.Error(w, `{"error":"failed to create wallet"}`, http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(wal)
+	})
+}
+
+// fetchSOLBalance calls Signet balance API directly (not in SDK yet).
+func fetchSOLBalance(baseURL, apiKey, apiSecret, walletID string) float64 {
+	if baseURL == "" {
+		baseURL = "https://api.signet.vylth.com/v1"
+	}
+	url := strings.TrimRight(baseURL, "/") + "/wallets/" + walletID + "/balance"
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return 0
+	}
+	req.Header.Set("X-API-Key", apiKey)
+	req.Header.Set("X-API-Secret", apiSecret)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return 0
+	}
+	defer resp.Body.Close()
+	var result struct {
+		SOL float64 `json:"sol"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result.SOL
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -461,10 +562,17 @@ func withCORS(h http.Handler) http.Handler {
 
 type noopNotifier struct{}
 
+func safeShort(s string) string {
+	if len(s) > 8 {
+		return s[:8]
+	}
+	return s
+}
+
 func (noopNotifier) Entered(p *models.Position) {
-	log.Printf("[notify] entered %s | %.3f SOL", p.Mint[:8], p.EntryAmountSOL)
+	log.Printf("[notify] entered %s | %.3f SOL", safeShort(p.Mint), p.EntryAmountSOL)
 }
 func (noopNotifier) Exited(c *models.ClosedPosition) {
-	log.Printf("[notify] exited %s | P&L %+.4f SOL", c.Mint[:8], c.PnLSOL)
+	log.Printf("[notify] exited %s | P&L %+.4f SOL", safeShort(c.Mint), c.PnLSOL)
 }
 func (noopNotifier) Alert(text string) { log.Printf("[notify] %s", text) }

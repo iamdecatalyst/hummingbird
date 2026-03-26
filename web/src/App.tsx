@@ -81,6 +81,7 @@ function DashboardRoute() {
       onLogout={() => { logout(); navigate('/login', { replace: true }) }}
       walletId={me?.wallet_id}
       userName={me ? `${me.first_name} ${me.last_name}`.trim() : undefined}
+      userUsername={me?.username}
       userAvatar={me?.avatar}
     />
   )

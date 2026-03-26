@@ -41,6 +41,7 @@ export interface ClosedPosition extends Position {
 
 export interface MeResponse {
   id:         string
+  username:   string
   first_name: string
   last_name:  string
   email:      string
@@ -48,6 +49,13 @@ export interface MeResponse {
   has_signet: boolean
   wallet_id:  string
   bot_active: boolean
+}
+
+export interface WalletEntry {
+  id:          string
+  address:     string
+  label:       string
+  balance_sol: number
 }
 
 function getToken(): string | null {
@@ -110,5 +118,11 @@ export const api = {
   me(): Promise<MeResponse> { return get('/auth/me') },
   setupSignet(api_key: string, api_secret: string) {
     return post<{ status: string; bot_active: boolean }>('/auth/setup-signet', { api_key, api_secret })
+  },
+
+  // Wallets
+  wallets():                           Promise<WalletEntry[]> { return get('/wallets') },
+  createWallet(label?: string):        Promise<{ id: string; address: string }> {
+    return post('/wallets', { label: label ?? 'hummingbird' })
   },
 }

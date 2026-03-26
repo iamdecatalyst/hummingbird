@@ -21,6 +21,7 @@ type DB struct {
 
 type User struct {
 	NexusUserID string
+	Username    string
 	FirstName   string
 	LastName    string
 	Email       string
@@ -53,6 +54,7 @@ func (d *DB) migrate() error {
 	_, err := d.sql.Exec(`
 		CREATE TABLE IF NOT EXISTS hb_users (
 			nexus_user_id TEXT PRIMARY KEY,
+			username      TEXT NOT NULL DEFAULT '',
 			first_name    TEXT NOT NULL DEFAULT '',
 			last_name     TEXT NOT NULL DEFAULT '',
 			email         TEXT NOT NULL DEFAULT '',
@@ -61,19 +63,20 @@ func (d *DB) migrate() error {
 			signet_secret BYTEA,
 			wallet_id     TEXT NOT NULL DEFAULT '',
 			created_at    TIMESTAMPTZ DEFAULT NOW()
-		)
+		);
+		ALTER TABLE hb_users ADD COLUMN IF NOT EXISTS username TEXT NOT NULL DEFAULT '';
 	`)
 	return err
 }
 
 // UpsertProfile creates or updates a user's Nexus profile info.
-func (d *DB) UpsertProfile(nexusUserID, firstName, lastName, email, avatar string) error {
+func (d *DB) UpsertProfile(nexusUserID, username, firstName, lastName, email, avatar string) error {
 	_, err := d.sql.Exec(`
-		INSERT INTO hb_users (nexus_user_id, first_name, last_name, email, avatar)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO hb_users (nexus_user_id, username, first_name, last_name, email, avatar)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (nexus_user_id) DO UPDATE
-			SET first_name=$2, last_name=$3, email=$4, avatar=$5
-	`, nexusUserID, firstName, lastName, email, avatar)
+			SET username=$2, first_name=$3, last_name=$4, email=$5, avatar=$6
+	`, nexusUserID, username, firstName, lastName, email, avatar)
 	return err
 }
 
@@ -81,11 +84,11 @@ func (d *DB) UpsertProfile(nexusUserID, firstName, lastName, email, avatar strin
 func (d *DB) GetUser(nexusUserID string) (*User, error) {
 	var u User
 	err := d.sql.QueryRow(`
-		SELECT nexus_user_id, first_name, last_name, email, avatar,
+		SELECT nexus_user_id, COALESCE(username,''), first_name, last_name, email, avatar,
 		       (signet_key IS NOT NULL), COALESCE(wallet_id,''), created_at
 		FROM hb_users WHERE nexus_user_id=$1
 	`, nexusUserID).Scan(
-		&u.NexusUserID, &u.FirstName, &u.LastName, &u.Email, &u.Avatar,
+		&u.NexusUserID, &u.Username, &u.FirstName, &u.LastName, &u.Email, &u.Avatar,
 		&u.HasSignet, &u.WalletID, &u.CreatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {

@@ -111,7 +111,7 @@ const TABS = [
   { id: 'config',   label: 'Config',   icon: <Gear size={14} weight="duotone" /> },
 ]
 
-function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, walletId, userName, userAvatar }: {
+function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, walletId, userName, userUsername, userAvatar }: {
   tab: string
   setTab: (t: string) => void
   paused: boolean
@@ -121,6 +121,7 @@ function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, walle
   onLogout?: () => void
   walletId?: string
   userName?: string
+  userUsername?: string
   userAvatar?: string
 }) {
   const [userMenuOpen, setUserMenuOpen] = useState(false)
@@ -188,7 +189,7 @@ function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, walle
                   </div>
               }
               <span className="font-mono text-xs text-[#666] hidden md:block max-w-[120px] truncate">
-                {userName || (walletId ? `${walletId.slice(0, 6)}…` : 'User')}
+                {userUsername ? `@${userUsername}` : (userName || 'User')}
               </span>
             </button>
 
@@ -637,9 +638,33 @@ function TabLogs() {
   )
 }
 
-function TabConfig({ walletId, userName, userAvatar, botActive }: {
-  walletId?: string; userName?: string; userAvatar?: string; botActive?: boolean
+function TabConfig({ userName, userUsername, userAvatar, botActive }: {
+  userName?: string; userUsername?: string; userAvatar?: string; botActive?: boolean
 }) {
+  const [wallets, setWallets]       = useState<import('../lib/api').WalletEntry[]>([])
+  const [walletsLoading, setWLoad]  = useState(true)
+  const [creating, setCreating]     = useState(false)
+  const [createLabel, setCreateLabel] = useState('')
+  const [showCreate, setShowCreate] = useState(false)
+
+  const loadWallets = () => {
+    setWLoad(true)
+    api.wallets().then(setWallets).catch(() => {}).finally(() => setWLoad(false))
+  }
+  useEffect(() => { loadWallets() }, [])
+
+  const handleCreate = async () => {
+    setCreating(true)
+    try {
+      await api.createWallet(createLabel || undefined)
+      setCreateLabel('')
+      setShowCreate(false)
+      loadWallets()
+    } catch { /* ignore */ } finally {
+      setCreating(false)
+    }
+  }
+
   return (
     <div className="p-6">
       <div className="mb-6">
@@ -648,6 +673,7 @@ function TabConfig({ walletId, userName, userAvatar, botActive }: {
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
+        {/* Profile card */}
         <div className="neu-tile p-6 space-y-4">
           <div className="flex items-center gap-3 pb-4 border-b border-white/5">
             {userAvatar
@@ -658,39 +684,90 @@ function TabConfig({ walletId, userName, userAvatar, botActive }: {
             }
             <div>
               <p className="font-mono text-sm text-white font-bold">{userName || 'User'}</p>
-              <p className="font-mono text-xs text-[#555]">VYLTH Nexus account</p>
+              {userUsername && <p className="font-mono text-xs text-[#555]">@{userUsername}</p>}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Wallet size={14} className="text-[#555] shrink-0" />
-            <p className="font-mono text-xs text-[#555] uppercase tracking-widest">Signet Wallet</p>
-          </div>
-          {walletId
-            ? <CopyField label="Wallet Address" value={walletId} />
-            : <p className="font-mono text-xs text-[#444]">No wallet connected.</p>
-          }
-        </div>
 
-        <div className="neu-tile p-6 space-y-4">
-          <p className="font-mono text-xs text-[#555] uppercase tracking-widest pb-4 border-b border-white/5">Bot Status</p>
-          <div className="flex items-center justify-between">
-            <span className="font-mono text-xs text-[#666]">Status</span>
-            <span className={`font-mono text-xs px-2.5 py-1 rounded-full ${botActive ? 'bg-[#4ADE80]/10 text-[#4ADE80]' : 'bg-[#EF4444]/10 text-[#EF4444]'}`}>
-              {botActive ? 'Running' : 'Stopped'}
-            </span>
+          {/* Bot status */}
+          <p className="font-mono text-xs text-[#555] uppercase tracking-widest">Bot Status</p>
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-xs text-[#666]">Status</span>
+              <span className={`font-mono text-xs px-2.5 py-1 rounded-full ${botActive ? 'bg-[#4ADE80]/10 text-[#4ADE80]' : 'bg-[#EF4444]/10 text-[#EF4444]'}`}>
+                {botActive ? 'Running' : 'Stopped'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-xs text-[#666]">Network</span>
+              <span className="font-mono text-xs text-[#a0a0a0]">Solana Mainnet</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-xs text-[#666]">DEX</span>
+              <span className="font-mono text-xs text-[#a0a0a0]">pump.fun / Raydium</span>
+            </div>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="font-mono text-xs text-[#666]">Network</span>
-            <span className="font-mono text-xs text-[#a0a0a0]">Solana Mainnet</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="font-mono text-xs text-[#666]">DEX</span>
-            <span className="font-mono text-xs text-[#a0a0a0]">pump.fun / Raydium</span>
-          </div>
-          <div className="flex items-center gap-2 pt-4 border-t border-white/5">
+          <div className="flex items-center gap-2 pt-3 border-t border-white/5">
             <Key size={14} className="text-[#555] shrink-0" />
             <p className="font-mono text-xs text-[#555]">Signet credentials encrypted at rest</p>
           </div>
+        </div>
+
+        {/* Wallets card */}
+        <div className="neu-tile p-6 space-y-4">
+          <div className="flex items-center justify-between pb-4 border-b border-white/5">
+            <div className="flex items-center gap-2">
+              <Wallet size={14} className="text-[#555] shrink-0" />
+              <p className="font-mono text-xs text-[#555] uppercase tracking-widest">Signet Wallets</p>
+            </div>
+            <button
+              onClick={() => setShowCreate(v => !v)}
+              className="font-mono text-xs px-3 py-1 rounded-lg bg-white/5 text-[#666] hover:bg-white/8 hover:text-white transition-colors"
+            >
+              + New
+            </button>
+          </div>
+
+          {showCreate && (
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Label (optional)"
+                value={createLabel}
+                onChange={e => setCreateLabel(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleCreate()}
+                className="flex-1 bg-[#141414] border border-white/8 rounded-lg px-3 py-2 font-mono text-xs text-white placeholder-[#444] outline-none focus:border-white/20"
+              />
+              <button
+                onClick={handleCreate}
+                disabled={creating}
+                className="font-mono text-xs px-3 py-2 rounded-lg bg-[#00A8FF]/10 text-[#00A8FF] hover:bg-[#00A8FF]/20 transition-colors disabled:opacity-40"
+              >
+                {creating ? '…' : 'Create'}
+              </button>
+            </div>
+          )}
+
+          {walletsLoading ? (
+            <p className="font-mono text-xs text-[#333] text-center py-6">Loading wallets...</p>
+          ) : wallets.length === 0 ? (
+            <p className="font-mono text-xs text-[#444] text-center py-6">No wallets yet.</p>
+          ) : (
+            <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
+              {wallets.map(wal => (
+                <div key={wal.id} className="neu-card-inset p-4 rounded-xl space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xs text-white font-bold truncate max-w-[140px]">
+                      {wal.label || 'Unnamed'}
+                    </span>
+                    <span className="font-mono text-sm font-bold text-[#4ADE80]">
+                      {wal.balance_sol.toFixed(3)} <span className="text-xs font-normal text-[#555]">SOL</span>
+                    </span>
+                  </div>
+                  <CopyField label="Address" value={wal.address} />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -700,13 +777,14 @@ function TabConfig({ walletId, userName, userAvatar, botActive }: {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 interface DashboardProps {
-  onLogout?:   () => void
-  walletId?:   string
-  userName?:   string
-  userAvatar?: string
+  onLogout?:    () => void
+  walletId?:    string
+  userName?:    string
+  userUsername?: string
+  userAvatar?:  string
 }
 
-export default function Dashboard({ onLogout, walletId, userName, userAvatar }: DashboardProps) {
+export default function Dashboard({ onLogout, walletId, userName, userUsername, userAvatar }: DashboardProps) {
   const { stats, positions, closed, online, loading, error, stop, resume } = useOrchestrator()
   const [tab, setTab] = useState('overview')
 
@@ -752,13 +830,14 @@ export default function Dashboard({ onLogout, walletId, userName, userAvatar }: 
         onLogout={onLogout}
         walletId={walletId}
         userName={userName}
+        userUsername={userUsername}
         userAvatar={userAvatar}
       />
 
       {tab === 'overview' && <TabOverview stats={stats} positions={positions} closed={closed} online={online} error={error} />}
       {tab === 'trades'   && <TabTrades positions={positions} closed={closed} />}
       {tab === 'logs'     && <TabLogs />}
-      {tab === 'config'   && <TabConfig walletId={walletId} userName={userName} userAvatar={userAvatar} botActive={stats?.configured} />}
+      {tab === 'config'   && <TabConfig userName={userName} userUsername={userUsername} userAvatar={userAvatar} botActive={stats?.configured} />}
     </div>
   )
 }
