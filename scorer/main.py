@@ -1,39 +1,64 @@
 """
 Hummingbird Scorer — FastAPI service.
 
-Receives TokenDetected from the Rust listener,
-scores it, and forwards the ScoreResult to the Go orchestrator.
+Two jobs:
+  1. Receive TokenDetected from Rust listener → score for sniper entry → forward to orchestrator
+  2. Run scalper background task → find second-wave patterns → forward scalp signals
 """
-import httpx
+import asyncio
+import logging
 import uvicorn
-from fastapi import FastAPI, BackgroundTasks
 from contextlib import asynccontextmanager
 
-from models import TokenDetected, ScoreResult
-from scorer import score as run_score
-from config import ORCHESTRATOR_URL, PORT
+import httpx
+from fastapi import BackgroundTasks, FastAPI
 
-import logging
+from config import ORCHESTRATOR_URL, PORT
+from models import ScoreResult, TokenDetected
+from scalper import Scalper
+from scorer import score as run_score
+from store import TokenStore
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [scorer] %(message)s")
 log = logging.getLogger(__name__)
+
+# Shared state
+store = TokenStore(max_age_minutes=45)
+scalper = Scalper(store=store, orchestrator_url=ORCHESTRATOR_URL)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    log.info(f"🐍 Hummingbird Scorer ready on port {PORT}")
-    log.info(f"   Forwarding to orchestrator: {ORCHESTRATOR_URL}")
+    log.info("🐍 Hummingbird Scorer ready on port %d", PORT)
+    log.info("   Orchestrator: %s", ORCHESTRATOR_URL)
+    # Start scalper background loop
+    task = asyncio.create_task(scalper.run())
     yield
+    task.cancel()
 
 
 app = FastAPI(title="Hummingbird Scorer", lifespan=lifespan)
 
 
+# ── Sniper endpoint ───────────────────────────────────────────────────────────
+
 @app.post("/score")
 async def score_token(token: TokenDetected, background_tasks: BackgroundTasks):
     """
-    Receives a token from the Rust listener.
-    Scores it in the background so the listener isn't blocked waiting.
+    Receives a new token from the Rust listener.
+    1. Adds it to the store (scalper will evaluate it in ~30s)
+    2. Scores it immediately for sniper entry
+    Both happen in the background so the listener isn't blocked.
     """
+    # Always store — even if we skip sniper entry, scalper may catch a second wave
+    store.add(
+        mint=token.mint,
+        platform=token.platform,
+        chain=token.chain,
+        dev_wallet=token.dev_wallet,
+        bonding_curve=token.bonding_curve,
+        timestamp_ms=token.timestamp_ms,
+    )
     background_tasks.add_task(_score_and_forward, token)
     return {"status": "queued", "mint": token.mint}
 
@@ -41,12 +66,15 @@ async def score_token(token: TokenDetected, background_tasks: BackgroundTasks):
 async def _score_and_forward(token: TokenDetected):
     result = await run_score(token)
 
+    mode = "sniper"
     log.info(
-        f"{'✅' if result.decision != 'skip' else '⏭ '} "
-        f"{token.mint[:8]}... "
-        f"score={result.total}/100 "
-        f"decision={result.decision} "
-        f"position={result.position_sol} SOL"
+        "%s [%s] %s...  score=%d/100  decision=%s  position=%.2f SOL",
+        "✅" if result.decision != "skip" else "⏭ ",
+        mode,
+        token.mint[:8],
+        result.total,
+        result.decision,
+        result.position_sol,
     )
     _log_breakdown(result)
 
@@ -56,9 +84,25 @@ async def _score_and_forward(token: TokenDetected):
     await _forward(result)
 
 
+# ── Scalper callback ──────────────────────────────────────────────────────────
+
+@app.post("/scalper/closed")
+async def scalper_position_closed(body: dict):
+    """
+    Called by the orchestrator when a scalp position closes.
+    Frees the slot so the same token can be scalped again if the pattern repeats.
+    """
+    mint = body.get("mint", "")
+    if mint:
+        scalper.on_position_closed(mint)
+    return {"status": "ok"}
+
+
+# ── Shared helpers ────────────────────────────────────────────────────────────
+
 def _log_breakdown(result: ScoreResult):
     for name, check in result.checks.items():
-        log.info(f"   {name:12s} {check.score:2d}/{check.max_score}  {check.reason}")
+        log.info("   %-14s %2d/%d  %s", name, check.score, check.max_score, check.reason)
 
 
 async def _forward(result: ScoreResult):
@@ -67,16 +111,28 @@ async def _forward(result: ScoreResult):
         async with httpx.AsyncClient(timeout=3.0) as client:
             resp = await client.post(url, json=result.model_dump())
             if resp.status_code == 200:
-                log.info(f"   → forwarded to orchestrator")
+                log.info("   → forwarded to orchestrator")
             else:
-                log.error(f"   → orchestrator returned {resp.status_code}")
+                log.error("   → orchestrator returned %d", resp.status_code)
     except Exception as e:
-        log.error(f"   → failed to reach orchestrator: {e}")
+        log.error("   → failed to reach orchestrator: %s", e)
 
+
+# ── Status endpoints ──────────────────────────────────────────────────────────
 
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/store/stats")
+async def store_stats():
+    eligible = store.get_eligible()
+    return {
+        "total_tokens": store.size(),
+        "eligible_for_scalp": len(eligible),
+        "active_scalps": len(scalper._active),
+    }
 
 
 if __name__ == "__main__":

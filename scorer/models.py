@@ -9,18 +9,20 @@ class TokenDetected(BaseModel):
     bonding_curve: str
     timestamp_ms: int
     slot: int
+    platform: str = "pump_fun"   # "pump_fun" | "moonshot" | "four_meme" | "virtuals" etc.
+    chain: str = "solana"        # "solana" | "base" | "bnb"
 
 
 class CheckResult(BaseModel):
-    score: int      # points awarded for this check
-    max_score: int  # max possible from this check
-    reason: str     # human-readable explanation
+    score: int
+    max_score: int
+    reason: str
 
 
 class ScoreResult(BaseModel):
     mint: str
-    total: int      # 0–100 final score
-    decision: str   # "skip" | "small" | "medium" | "full"
+    total: int
+    decision: str        # "skip" | "small" | "medium" | "full" | "scalp"
     position_sol: float
     checks: dict[str, CheckResult]
     scored_at_ms: int

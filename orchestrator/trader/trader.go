@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,8 +25,9 @@ type Trader struct {
 	portfolio *portfolio.Portfolio
 	telegram  *alerts.Telegram
 	solanaRPC string
+	scorerURL string // for scalp-closed callbacks
 
-	exitCh   chan monitor.ExitSignal
+	exitCh    chan monitor.ExitSignal
 	cancelFns sync.Map // mint → context.CancelFunc
 }
 
@@ -34,6 +37,7 @@ func New(
 	port *portfolio.Portfolio,
 	tg *alerts.Telegram,
 	solanaRPC string,
+	scorerURL string,
 ) *Trader {
 	t := &Trader{
 		signet:    signetClient,
@@ -41,6 +45,7 @@ func New(
 		portfolio: port,
 		telegram:  tg,
 		solanaRPC: solanaRPC,
+		scorerURL: scorerURL,
 		exitCh:    make(chan monitor.ExitSignal, 32),
 	}
 	go t.processExits()
@@ -48,6 +53,7 @@ func New(
 }
 
 // Execute is called when the Python scorer decides to enter a trade.
+// Handles both sniper ("small"/"medium"/"full") and scalper ("scalp") decisions.
 func (t *Trader) Execute(result *models.ScoreResult) {
 	if result.Decision == "skip" || result.PositionSOL <= 0 {
 		return
@@ -165,6 +171,25 @@ func (t *Trader) handleExit(sig monitor.ExitSignal) {
 
 		t.portfolio.Close(closed)
 		t.telegram.Exited(closed)
+
+		// Notify scorer if this was a scalp — frees the slot for re-entry
+		if closed.Reason != models.ExitManual {
+			go t.notifyScorerClosed(closed.Mint)
+		}
+	}
+}
+
+func (t *Trader) notifyScorerClosed(mint string) {
+	if t.scorerURL == "" {
+		return
+	}
+	url := t.scorerURL + "/scalper/closed"
+	body := fmt.Sprintf(`{"mint":"%s"}`, mint)
+	req, _ := http.NewRequest("POST", url, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err == nil {
+		resp.Body.Close()
 	}
 }
 

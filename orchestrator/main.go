@@ -32,7 +32,8 @@ func main() {
 	// Init components
 	tg := alerts.NewTelegram(cfg.TelegramToken, cfg.TelegramChatID)
 	port := portfolio.New(1.0, cfg.MaxConcurrentPositions, cfg.MaxDailyLossPercent)
-	tr := trader.New(signetClient, walletID, port, tg, cfg.SolanaRPC)
+	scorerURL := "http://localhost:8001" // Python scorer
+	tr := trader.New(signetClient, walletID, port, tg, cfg.SolanaRPC, scorerURL)
 
 	// Daily stats ticker
 	go dailyStats(tg, port)
