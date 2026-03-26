@@ -185,13 +185,13 @@ func (p *Portfolio) refreshToday() {
 }
 
 type Stats struct {
-	OpenPositions int
-	TotalTrades   int
-	Wins          int
-	Losses        int
-	WinRate       float64
-	TodayPnL      float64
-	TotalPnL      float64
-	Paused        bool
-	PauseReason   string
+	OpenPositions int     `json:"open_positions"`
+	TotalTrades   int     `json:"total_trades"`
+	Wins          int     `json:"wins"`
+	Losses        int     `json:"losses"`
+	WinRate       float64 `json:"win_rate"`
+	TodayPnL      float64 `json:"today_pnl"`
+	TotalPnL      float64 `json:"total_pnl"`
+	Paused        bool    `json:"paused"`
+	PauseReason   string  `json:"pause_reason"`
 }

@@ -113,6 +113,13 @@ func main() {
 		fmt.Fprint(w, `{"status":"ok"}`)
 	})
 
+	// GET /closed — recent closed positions (for dashboard)
+	mux.HandleFunc("GET /closed", func(w http.ResponseWriter, r *http.Request) {
+		closed := port.RecentClosed(50)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(closed)
+	})
+
 	addr := ":" + cfg.Port
 	log.Printf("🐦 Hummingbird Orchestrator running on %s", addr)
 	log.Printf("   Wallet: %s", walletID)
@@ -121,7 +128,7 @@ func main() {
 
 	notifier.Alert("🐦 Hummingbird is online and watching pump.fun")
 
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := http.ListenAndServe(addr, withCORS(mux)); err != nil {
 		log.Fatalf("[main] server error: %v", err)
 	}
 }
@@ -136,6 +143,20 @@ func dailyStats(tgBot *bot.Bot, port *portfolio.Portfolio) {
 			tgBot.DailyStats(port.Stats())
 		}
 	}
+}
+
+// withCORS wraps a handler to allow cross-origin requests from the dashboard.
+func withCORS(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
 }
 
 // noopNotifier is used when Telegram is not configured.

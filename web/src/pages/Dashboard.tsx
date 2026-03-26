@@ -1,119 +1,168 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer
-} from 'recharts'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { useOrchestrator } from '../hooks/useOrchestrator'
+import type { ClosedPosition, Position } from '../lib/api'
 
-// ── Mock data (replaced by real API when orchestrator is running) ──────────
-const MOCK_STATS = {
-  todayPnL: 0.847,
-  totalPnL: 4.231,
-  openPositions: 2,
-  winRate: 68,
-  totalTrades: 44,
-  wins: 30,
-  losses: 14,
-  paused: false,
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function held(openedAt: string): string {
+  const ms = Date.now() - new Date(openedAt).getTime()
+  const s  = Math.floor(ms / 1000)
+  const m  = Math.floor(s / 60)
+  const h  = Math.floor(m / 60)
+  if (h > 0) return `${h}h ${m % 60}m`
+  if (m > 0) return `${m}m ${s % 60}s`
+  return `${s}s`
 }
 
-const MOCK_POSITIONS = [
-  { mint: 'PUMP3R8A9x', mode: 'SNIPER', entry: 0.200, score: 87, held: '3m 12s', pnlPct: +42 },
-  { mint: '7xKp2mNqW1', mode: 'SCALPER', entry: 0.050, score: 71, held: '1m 08s', pnlPct: +8 },
-]
+function shortMint(mint: string) { return mint.slice(0, 8) }
 
-const MOCK_CLOSED = [
-  { mint: 'MNSHTf9xVK', mode: 'SNIPER',  entry: 0.200, exit: 1.022, pnl: +0.822, pct: +411, reason: 'TP3' },
-  { mint: 'VRTL9mzPQR', mode: 'SCALPER', entry: 0.050, exit: 0.422, pnl: +0.372, pct: +744, reason: 'TP3' },
-  { mint: 'Boop7r3KLM', mode: 'SNIPER',  entry: 0.100, exit: 0.194, pnl: +0.094, pct: +94,  reason: 'TP1' },
-  { mint: 'RAYLch2KNP', mode: 'SNIPER',  entry: 0.100, exit: 0.078, pnl: -0.022, pct: -22,  reason: 'SL'  },
-  { mint: '9mZXq7KpR2', mode: 'SCALPER', entry: 0.050, exit: 0.040, pnl: -0.010, pct: -20,  reason: 'SL'  },
-]
+// ── Sub-components ────────────────────────────────────────────────────────────
 
-const MOCK_CHART = [
-  { t: '00:00', pnl: 0 },
-  { t: '03:00', pnl: 0.12 },
-  { t: '06:00', pnl: 0.08 },
-  { t: '09:00', pnl: 0.34 },
-  { t: '12:00', pnl: 0.29 },
-  { t: '15:00', pnl: 0.61 },
-  { t: '18:00', pnl: 0.55 },
-  { t: '21:00', pnl: 0.847 },
-]
-
-// ── Sub-components ──────────────────────────────────────────────────────────
-function StatCard({ label, value, sub, accent }: { label: string; value: string; sub?: string; accent?: boolean }) {
+function StatCard({
+  label, value, sub, positive, accent,
+}: { label: string; value: string; sub?: string; positive?: boolean; accent?: boolean }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="neu-tile p-5"
-    >
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="neu-tile p-5">
       <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-2">{label}</p>
-      <p className={`font-mono text-2xl font-bold ${accent ? 'text-[#00A8FF]' : 'text-white'}`}>{value}</p>
+      <p className={`font-mono text-2xl font-bold ${
+        accent    ? 'text-[#00A8FF]' :
+        positive === true  ? 'text-[#4ADE80]' :
+        positive === false ? 'text-[#EF4444]' :
+        'text-white'
+      }`}>
+        {value}
+      </p>
       {sub && <p className="font-mono text-xs text-[#555] mt-1">{sub}</p>}
     </motion.div>
   )
 }
 
-function Sidebar({ active }: { active: string }) {
+function PositionCard({ pos }: { pos: Position }) {
+  const heldStr = held(pos.opened_at)
+  return (
+    <div className="neu-card-inset p-3 rounded-xl">
+      <div className="flex items-start justify-between mb-1">
+        <span className="font-mono text-xs text-white font-bold">{shortMint(pos.mint)}</span>
+        <span className="font-mono text-xs text-[#00A8FF]">score: {pos.score}</span>
+      </div>
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-xs text-[#00A8FF]">
+          {pos.score >= 75 ? 'SNIPER' : 'SCALPER'}
+        </span>
+        <span className="font-mono text-xs text-[#555]">{heldStr}</span>
+      </div>
+      <div className="font-mono text-xs text-[#555] mt-1">
+        entry: {pos.entry_amount_sol.toFixed(3)} SOL
+      </div>
+    </div>
+  )
+}
+
+function Sidebar({
+  active, paused, onStop, onResume,
+}: { active: string; paused: boolean; onStop: () => void; onResume: () => void }) {
   const navItems = [
-    { id: 'overview',  label: 'Overview',   icon: '📊' },
-    { id: 'positions', label: 'Positions',  icon: '📍' },
-    { id: 'history',   label: 'History',    icon: '🗂' },
-    { id: 'config',    label: 'Config',     icon: '⚙️' },
+    { id: 'overview',  label: 'Overview',  icon: '📊' },
+    { id: 'positions', label: 'Positions', icon: '📍' },
+    { id: 'history',   label: 'History',   icon: '🗂' },
+    { id: 'config',    label: 'Config',    icon: '⚙️' },
   ]
   return (
-    <aside className="w-56 shrink-0 flex flex-col gap-1 pt-4">
+    <aside className="w-56 shrink-0 flex flex-col gap-1 pt-4 border-r border-white/5">
       <div className="px-4 mb-6">
         <Link to="/" className="font-mono text-sm font-bold text-white hover:text-[#00A8FF] transition-colors">
           🐦 HUMMINGBIRD
         </Link>
         <div className="flex items-center gap-2 mt-2">
-          <span className="status-dot-live" />
-          <span className="font-mono text-xs text-[#00A8FF]">LIVE</span>
+          {paused
+            ? <><span className="w-2 h-2 rounded-full bg-[#F59E0B]" /><span className="font-mono text-xs text-[#F59E0B]">PAUSED</span></>
+            : <><span className="status-dot-live" /><span className="font-mono text-xs text-[#00A8FF]">LIVE</span></>
+          }
         </div>
       </div>
+
       {navItems.map(item => (
-        <button
-          key={item.id}
+        <button key={item.id}
           className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-left font-mono text-sm transition-all duration-200 ${
             active === item.id
               ? 'bg-[#141414] text-white shadow-[3px_3px_8px_rgba(0,0,0,0.7),-3px_-3px_8px_rgba(40,40,40,0.12)]'
               : 'text-[#666] hover:text-[#a0a0a0] hover:bg-[#111]'
           }`}
         >
-          <span>{item.icon}</span>
-          <span>{item.label}</span>
+          <span>{item.icon}</span><span>{item.label}</span>
         </button>
       ))}
-      <div className="mt-auto px-4 pb-4 pt-8">
-        <div className="neu-card-inset p-3 rounded-xl">
-          <p className="font-mono text-xs text-[#555] mb-1">Today P&L</p>
-          <p className="font-mono text-lg font-bold text-[#4ADE80]">
-            +{MOCK_STATS.todayPnL.toFixed(3)} SOL
-          </p>
-        </div>
+
+      <div className="mt-auto px-4 pb-4 pt-8 flex flex-col gap-2">
+        {paused
+          ? <button onClick={onResume} className="hb-btn text-xs py-2 justify-center">▶ Resume</button>
+          : <button onClick={onStop}   className="neu-btn-ghost text-xs py-2 justify-center">⏹ Stop All</button>
+        }
       </div>
     </aside>
   )
 }
 
-// ── Main Dashboard ──────────────────────────────────────────────────────────
+// Build chart from closed positions (cumulative P&L by hour)
+function buildChart(closed: ClosedPosition[]) {
+  if (closed.length === 0) return []
+  const today = new Date().toDateString()
+  const todayTrades = closed.filter(c => new Date(c.closed_at).toDateString() === today)
+  const byHour: Record<number, number> = {}
+  for (const t of todayTrades) {
+    const h = new Date(t.closed_at).getHours()
+    byHour[h] = (byHour[h] ?? 0) + t.pnl_sol
+  }
+  let cum = 0
+  return Array.from({ length: 24 }, (_, h) => {
+    cum += byHour[h] ?? 0
+    return { t: `${String(h).padStart(2, '0')}:00`, pnl: parseFloat(cum.toFixed(4)) }
+  }).filter((_, h) => h <= new Date().getHours())
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+
 export default function Dashboard() {
+  const { stats, positions, closed, online, loading, error, stop, resume } = useOrchestrator()
   const [time, setTime] = useState(new Date())
+
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000)
     return () => clearInterval(t)
   }, [])
 
-  const stats = MOCK_STATS
+  const chartData = buildChart(closed)
+
+  // Offline / loading states
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center">
+        <div className="text-center">
+          <div className="font-mono text-4xl mb-4">🐦</div>
+          <p className="font-mono text-[#555] text-sm animate-pulse">Connecting to orchestrator...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show offline banner but still render with zeros
+  const s = stats ?? {
+    open_positions: 0, total_trades: 0, wins: 0, losses: 0,
+    win_rate: 0, today_pnl: 0, total_pnl: 0, paused: false, pause_reason: '',
+  }
 
   return (
     <div className="min-h-screen bg-[#0d0d0d] flex">
-      <Sidebar active="overview" />
+      <Sidebar
+        active="overview"
+        paused={s.paused}
+        onStop={stop}
+        onResume={resume}
+      />
 
-      {/* Main content */}
       <main className="flex-1 overflow-y-auto p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -124,36 +173,52 @@ export default function Dashboard() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <span className="neu-card-inset px-3 py-1.5 rounded-xl font-mono text-xs text-[#00A8FF]">
-              {stats.openPositions} open
+            {/* Connection status */}
+            <span className={`flex items-center gap-1.5 neu-card-inset px-3 py-1.5 rounded-xl font-mono text-xs ${
+              online ? 'text-[#4ADE80]' : 'text-[#EF4444]'
+            }`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${online ? 'bg-[#4ADE80]' : 'bg-[#EF4444]'}`} />
+              {online ? 'live' : 'offline'}
             </span>
-            <button className="hb-btn text-xs py-2 px-4">
-              ⏹ Stop All
-            </button>
+            <span className="neu-card-inset px-3 py-1.5 rounded-xl font-mono text-xs text-[#00A8FF]">
+              {s.open_positions} open
+            </span>
           </div>
         </div>
+
+        {/* Offline error banner */}
+        {error && (
+          <div className="mb-6 neu-card-inset px-4 py-3 rounded-xl flex items-center gap-3">
+            <span className="font-mono text-xs text-[#EF4444]">⚠</span>
+            <span className="font-mono text-xs text-[#EF4444]">
+              Orchestrator offline — {error}. Showing last known data.
+            </span>
+          </div>
+        )}
 
         {/* Stat cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <StatCard
             label="Today P&L"
-            value={`+${stats.todayPnL.toFixed(3)} SOL`}
+            value={`${s.today_pnl >= 0 ? '+' : ''}${s.today_pnl.toFixed(3)} SOL`}
             sub="↑ from midnight"
-            accent
+            positive={s.today_pnl >= 0 ? true : false}
           />
           <StatCard
             label="Total P&L"
-            value={`+${stats.totalPnL.toFixed(3)} SOL`}
-            sub={`${stats.totalTrades} trades`}
+            value={`${s.total_pnl >= 0 ? '+' : ''}${s.total_pnl.toFixed(3)} SOL`}
+            sub={`${s.total_trades} trades`}
+            positive={s.total_pnl >= 0 ? true : false}
           />
           <StatCard
             label="Win Rate"
-            value={`${stats.winRate}%`}
-            sub={`W:${stats.wins}  L:${stats.losses}`}
+            value={`${s.win_rate.toFixed(0)}%`}
+            sub={`W:${s.wins}  L:${s.losses}`}
+            accent
           />
           <StatCard
             label="Open Positions"
-            value={`${stats.openPositions}`}
+            value={`${s.open_positions}`}
             sub="max 5 concurrent"
           />
         </div>
@@ -161,82 +226,45 @@ export default function Dashboard() {
         <div className="grid lg:grid-cols-3 gap-6">
           {/* P&L chart */}
           <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
             className="lg:col-span-2 neu-tile p-5"
           >
             <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-4">
               Today P&L — SOL
             </p>
-            <ResponsiveContainer width="100%" height={180}>
-              <LineChart data={MOCK_CHART}>
-                <XAxis
-                  dataKey="t"
-                  tick={{ fontFamily: 'JetBrains Mono', fontSize: 10, fill: '#444' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontFamily: 'JetBrains Mono', fontSize: 10, fill: '#444' }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={v => `${v.toFixed(2)}`}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: '#141414',
-                    border: '1px solid rgba(0,168,255,0.15)',
-                    borderRadius: 12,
-                    fontFamily: 'JetBrains Mono',
-                    fontSize: 12,
-                    color: '#fff',
-                  }}
-                  formatter={(v: number) => [`${v.toFixed(3)} SOL`, 'P&L']}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="pnl"
-                  stroke="#00A8FF"
-                  strokeWidth={2}
-                  dot={false}
-                  strokeDasharray="0"
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            {chartData.length > 1 ? (
+              <ResponsiveContainer width="100%" height={180}>
+                <LineChart data={chartData}>
+                  <XAxis dataKey="t" tick={{ fontFamily: 'JetBrains Mono', fontSize: 10, fill: '#444' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontFamily: 'JetBrains Mono', fontSize: 10, fill: '#444' }} axisLine={false} tickLine={false} tickFormatter={v => v.toFixed(3)} />
+                  <Tooltip
+                    contentStyle={{ background: '#141414', border: '1px solid rgba(0,168,255,0.15)', borderRadius: 12, fontFamily: 'JetBrains Mono', fontSize: 12, color: '#fff' }}
+                    formatter={(v: number) => [`${v.toFixed(3)} SOL`, 'P&L']}
+                  />
+                  <Line type="monotone" dataKey="pnl" stroke="#00A8FF" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[180px] flex items-center justify-center">
+                <p className="font-mono text-xs text-[#444]">No trades today yet.</p>
+              </div>
+            )}
           </motion.div>
 
           {/* Open positions */}
           <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
             className="neu-tile p-5"
           >
             <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-4">
-              Open Positions ({MOCK_POSITIONS.length})
+              Open Positions ({positions.length})
             </p>
             <div className="space-y-3">
-              {MOCK_POSITIONS.map(pos => (
-                <div key={pos.mint} className="neu-card-inset p-3 rounded-xl">
-                  <div className="flex items-start justify-between mb-1">
-                    <span className="font-mono text-xs text-white font-bold">{pos.mint.slice(0, 8)}</span>
-                    <span className={`font-mono text-xs font-bold ${pos.pnlPct >= 0 ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
-                      {pos.pnlPct >= 0 ? '+' : ''}{pos.pnlPct}%
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs text-[#00A8FF]">{pos.mode}</span>
-                    <span className="font-mono text-xs text-[#555]">{pos.held}</span>
-                  </div>
-                  <div className="flex items-center justify-between mt-1">
-                    <span className="font-mono text-xs text-[#555]">entry: {pos.entry} SOL</span>
-                    <span className="font-mono text-xs text-[#555]">score: {pos.score}</span>
-                  </div>
-                </div>
-              ))}
-              {MOCK_POSITIONS.length === 0 && (
-                <p className="font-mono text-xs text-[#444] text-center py-4">
+              {positions.map(pos => <PositionCard key={pos.id} pos={pos} />)}
+              {positions.length === 0 && (
+                <p className="font-mono text-xs text-[#444] text-center py-6">
                   Scanning for entries...
                 </p>
               )}
@@ -246,61 +274,60 @@ export default function Dashboard() {
 
         {/* Recent trades table */}
         <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
           className="neu-tile p-5 mt-6"
         >
           <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-4">
             Recent Trades
           </p>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="text-left border-b border-white/5">
-                  {['Token', 'Mode', 'Entry', 'Exit', 'P&L', 'Reason'].map(h => (
-                    <th key={h} className="font-mono text-xs text-[#444] uppercase tracking-wider pb-3 pr-6">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {MOCK_CLOSED.map((t, i) => (
-                  <tr key={i} className="border-b border-white/3 hover:bg-white/[0.015] transition-colors">
-                    <td className="font-mono text-xs text-white py-3 pr-6">{t.mint.slice(0, 8)}</td>
-                    <td className="font-mono text-xs text-[#00A8FF] py-3 pr-6">{t.mode}</td>
-                    <td className="font-mono text-xs text-[#a0a0a0] py-3 pr-6">{t.entry.toFixed(3)}</td>
-                    <td className="font-mono text-xs text-[#a0a0a0] py-3 pr-6">{t.exit.toFixed(3)}</td>
-                    <td className={`font-mono text-xs font-bold py-3 pr-6 ${t.pnl >= 0 ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
-                      {t.pnl >= 0 ? '+' : ''}{t.pnl.toFixed(3)} SOL
-                      <span className="ml-2 font-normal text-[10px] opacity-70">
-                        ({t.pct >= 0 ? '+' : ''}{t.pct}%)
-                      </span>
-                    </td>
-                    <td className="py-3">
-                      <span className={`font-mono text-xs px-2 py-0.5 rounded-full ${
-                        t.reason.startsWith('TP')
-                          ? 'bg-[#4ADE80]/10 text-[#4ADE80]'
-                          : 'bg-[#EF4444]/10 text-[#EF4444]'
-                      }`}>
-                        {t.reason}
-                      </span>
-                    </td>
+          {closed.length === 0 ? (
+            <p className="font-mono text-xs text-[#444] text-center py-6">No trades yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-left border-b border-white/5">
+                    {['Token', 'Mode', 'Entry', 'Exit', 'P&L', 'Reason'].map(h => (
+                      <th key={h} className="font-mono text-xs text-[#444] uppercase tracking-wider pb-3 pr-6">{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {closed.slice(0, 20).map((t, i) => (
+                    <tr key={i} className="border-b border-white/[0.03] hover:bg-white/[0.015] transition-colors">
+                      <td className="font-mono text-xs text-white py-3 pr-6">{shortMint(t.mint)}</td>
+                      <td className="font-mono text-xs text-[#00A8FF] py-3 pr-6">
+                        {t.score >= 75 ? 'SNIPER' : 'SCALPER'}
+                      </td>
+                      <td className="font-mono text-xs text-[#a0a0a0] py-3 pr-6">{t.entry_amount_sol.toFixed(3)}</td>
+                      <td className="font-mono text-xs text-[#a0a0a0] py-3 pr-6">{t.exit_amount_sol.toFixed(3)}</td>
+                      <td className={`font-mono text-xs font-bold py-3 pr-6 ${t.pnl_sol >= 0 ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
+                        {t.pnl_sol >= 0 ? '+' : ''}{t.pnl_sol.toFixed(3)} SOL
+                        <span className="ml-2 font-normal text-[10px] opacity-70">
+                          ({t.pnl_percent >= 0 ? '+' : ''}{t.pnl_percent.toFixed(0)}%)
+                        </span>
+                      </td>
+                      <td className="py-3">
+                        <span className={`font-mono text-xs px-2 py-0.5 rounded-full ${
+                          t.reason.startsWith('take') || t.reason === 'scalp'
+                            ? 'bg-[#4ADE80]/10 text-[#4ADE80]'
+                            : 'bg-[#EF4444]/10 text-[#EF4444]'
+                        }`}>
+                          {t.reason.replace('_', ' ').toUpperCase()}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </motion.div>
 
-        {/* API notice */}
-        <div className="mt-6 neu-card-inset px-4 py-3 rounded-xl flex items-center gap-3">
-          <span className="font-mono text-xs text-[#00A8FF]">ℹ</span>
-          <span className="font-mono text-xs text-[#555]">
-            Dashboard showing mock data. Connect to orchestrator at{' '}
-            <code className="text-[#a0a0a0]">localhost:8002</code> for live stats.
-          </span>
+        {/* Footer note */}
+        <div className="mt-4 font-mono text-xs text-[#333] text-center">
+          Polling every 3s · orchestrator at {import.meta.env.VITE_API_URL ?? 'localhost:8002'}
         </div>
       </main>
     </div>

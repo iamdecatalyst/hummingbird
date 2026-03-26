@@ -20,18 +20,18 @@ type CheckResult struct {
 
 // Position tracks an open trade.
 type Position struct {
-	ID             string
-	Mint           string
-	WalletID       string
-	EntryPriceSOL  float64 // price in SOL at entry
-	EntryAmountSOL float64 // SOL spent to enter
-	TokenBalance   float64 // token units held
-	Score          int
-	OpenedAt       time.Time
+	ID             string    `json:"id"`
+	Mint           string    `json:"mint"`
+	WalletID       string    `json:"wallet_id"`
+	EntryPriceSOL  float64   `json:"entry_price_sol"`
+	EntryAmountSOL float64   `json:"entry_amount_sol"`
+	TokenBalance   float64   `json:"token_balance"`
+	Score          int       `json:"score"`
+	OpenedAt       time.Time `json:"opened_at"`
 
 	// Exit tracking
-	PeakPriceSOL    float64
-	TakeProfitLevel int // 0 = none hit, 1 = first hit (2x), 2 = second (5x)
+	PeakPriceSOL    float64 `json:"peak_price_sol"`
+	TakeProfitLevel int     `json:"take_profit_level"`
 }
 
 // ExitReason describes why a position was closed.
@@ -48,11 +48,11 @@ const (
 // ClosedPosition is a completed trade with final P&L.
 type ClosedPosition struct {
 	Position
-	ExitPriceSOL   float64
-	ExitAmountSOL  float64
-	PnLSOL         float64
-	PnLPercent     float64
-	Reason         ExitReason
-	ClosedAt       time.Time
-	TxHash         string
+	ExitPriceSOL  float64    `json:"exit_price_sol"`
+	ExitAmountSOL float64    `json:"exit_amount_sol"`
+	PnLSOL        float64    `json:"pnl_sol"`
+	PnLPercent    float64    `json:"pnl_percent"`
+	Reason        ExitReason `json:"reason"`
+	ClosedAt      time.Time  `json:"closed_at"`
+	TxHash        string     `json:"tx_hash"`
 }
