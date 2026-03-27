@@ -16,15 +16,19 @@ type MantisScanResponse struct {
 	Success bool `json:"success"`
 	Data    struct {
 		Scan struct {
-			TokenAddress           string  `json:"token_address"`
-			MintAuthorityRevoked   bool    `json:"mint_authority_revoked"`
-			FreezeAuthorityRevoked bool    `json:"freeze_authority_revoked"`
-			LPLocked               bool    `json:"lp_locked"`
-			LPLockDurationDays     *int    `json:"lp_lock_duration_days"`
-			Top10HolderPct         float64 `json:"top_10_holder_pct"`
-			DeployerWalletAgeDays  int     `json:"deployer_wallet_age_days"`
-			MetadataMutable        bool    `json:"metadata_mutable"`
-			Flags                  []Flag  `json:"flags"`
+			TokenAddress            string   `json:"token_address"`
+			MintAuthorityRevoked    bool     `json:"mint_authority_revoked"`
+			FreezeAuthorityRevoked  bool     `json:"freeze_authority_revoked"`
+			LPLocked                bool     `json:"lp_locked"`
+			LPLockDurationDays      *int     `json:"lp_lock_duration_days"`
+			Top10HolderPct          float64  `json:"top_10_holder_pct"`
+			DeployerWalletAgeDays   int      `json:"deployer_wallet_age_days"`
+			MetadataMutable         bool     `json:"metadata_mutable"`
+			Flags                   []Flag   `json:"flags"`
+			BondingCurveFillPct     *float64 `json:"bonding_curve_fill_pct"`
+			BondingCurveComplete    *bool    `json:"bonding_curve_complete"`
+			DevSupplyPct            *float64 `json:"dev_supply_pct"`
+			DeployerPriorLaunches   *int     `json:"deployer_prior_launches"`
 		} `json:"scan"`
 		RiskScore RiskScore `json:"risk_score"`
 	} `json:"data"`

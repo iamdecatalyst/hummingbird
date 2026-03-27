@@ -33,9 +33,23 @@ func New(baseURL, apiKey string) *Client {
 
 // MantisScan returns a full risk scan for a token address.
 // Checks mint/freeze authority, holder concentration, deployer age, and more.
-// Maps to GET /api/cricket/mantis/scan/{token}
-func (c *Client) MantisScan(ctx context.Context, tokenAddress string) (*MantisScanResponse, error) {
+// devWallet and bondingCurve are optional — pass empty string to omit.
+// Maps to GET /api/cricket/mantis/scan/{token}?dev_wallet=&bonding_curve=
+func (c *Client) MantisScan(ctx context.Context, tokenAddress, devWallet, bondingCurve string) (*MantisScanResponse, error) {
 	url := fmt.Sprintf("%s/api/cricket/mantis/scan/%s", c.baseURL, tokenAddress)
+	if devWallet != "" || bondingCurve != "" {
+		params := "?"
+		if devWallet != "" {
+			params += "dev_wallet=" + devWallet
+		}
+		if bondingCurve != "" {
+			if devWallet != "" {
+				params += "&"
+			}
+			params += "bonding_curve=" + bondingCurve
+		}
+		url += params
+	}
 	return doGet[MantisScanResponse](ctx, c, url)
 }
 

@@ -967,7 +967,7 @@ func scoreAndTrade(cc *cricket.Client, dispatch func(*models.ScoreResult), token
 	walletCh := make(chan walletRes, 1)
 
 	go func() {
-		d, err := cc.MantisScan(ctx, token.Mint)
+		d, err := cc.MantisScan(ctx, token.Mint, token.DevWallet, token.BondingCurve)
 		scanCh <- scanRes{d, err}
 	}()
 	go func() {
@@ -1031,6 +1031,17 @@ func scoreFromCricket(scan *cricket.MantisScanResponse, devWallet *cricket.Firef
 		score = 90
 	default:
 		return 0, "skip", 0 // unknown rating — skip to be safe
+	}
+
+	// Bonding curve: if already graduated, token is on Raydium — different dynamics
+	s := scan.Data.Scan
+	if s.BondingCurveComplete != nil && *s.BondingCurveComplete {
+		score -= 10 // graduated tokens have less pump.fun edge
+	}
+	// Dev supply concentration already factored into Cricket's rating,
+	// but >50% is an extra hard signal we penalise additionally here
+	if s.DevSupplyPct != nil && *s.DevSupplyPct > 50 {
+		score -= 20
 	}
 
 	if devWallet != nil && devWallet.Success {
