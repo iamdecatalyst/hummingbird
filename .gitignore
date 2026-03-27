@@ -1,6 +1,7 @@
 target/
 .env
 BLUEPRINT.md
+CLAUDE.md
 *.pem
 *.key
 web/node_modules/
