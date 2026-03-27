@@ -182,7 +182,7 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 	}
 	log.Printf("[main] Postgres connected, multi-tenant mode active (Nexus SSO)")
 
-	mgr := userbot.NewManager(cfg)
+	mgr := userbot.NewManager(cfg, database)
 
 	// Telegram bot (multi-tenant mode)
 	var tgBot *bot.Bot
@@ -520,12 +520,38 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 	})
 
 	mux.HandleFunc("GET /logs", func(w http.ResponseWriter, r *http.Request) {
-		if _, err := requireAuth(r); err != nil {
+		nexusID, err := requireAuth(r)
+		if err != nil {
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(eventlog.All())
+		inst := mgr.Get(nexusID)
+		if inst == nil {
+			json.NewEncoder(w).Encode([]eventlog.Event{})
+			return
+		}
+		json.NewEncoder(w).Encode(inst.Log.All())
+	})
+
+	mux.HandleFunc("GET /logs/export", func(w http.ResponseWriter, r *http.Request) {
+		nexusID, err := requireAuth(r)
+		if err != nil {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		inst := mgr.Get(nexusID)
+		var events []eventlog.Event
+		if inst != nil {
+			events = inst.Log.All()
+		}
+		w.Header().Set("Content-Type", "text/csv")
+		w.Header().Set("Content-Disposition", `attachment; filename="hummingbird-logs.csv"`)
+		fmt.Fprintln(w, "time,type,token,amount_sol,pnl_sol,pnl_pct,reason,message")
+		for _, e := range events {
+			fmt.Fprintf(w, "%s,%s,%s,%.6f,%.6f,%.2f,%s,%q\n",
+				e.Time.Format(time.RFC3339), e.Type, e.Token, e.AmtSOL, e.PnLSOL, e.PnLPct, e.Reason, e.Message)
+		}
 	})
 
 	mux.HandleFunc("GET /config", func(w http.ResponseWriter, r *http.Request) {

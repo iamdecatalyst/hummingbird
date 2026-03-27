@@ -13,6 +13,8 @@ import (
 	"time"
 
 	_ "github.com/lib/pq"
+
+	"github.com/iamdecatalyst/hummingbird/orchestrator/eventlog"
 )
 
 // UserConfig holds per-user trading settings.
@@ -116,13 +118,67 @@ func (d *DB) migrate() error {
 		return err
 	}
 	// Per-user trading config (JSON blob — easy to extend without further migrations)
-	_, err := d.sql.Exec(`
+	if _, err := d.sql.Exec(`
 		CREATE TABLE IF NOT EXISTS hb_user_configs (
 			nexus_user_id TEXT PRIMARY KEY,
 			config_json   JSONB NOT NULL DEFAULT '{}'
 		)
-	`)
+	`); err != nil {
+		return err
+	}
+	// Per-user event log (persisted across restarts)
+	if _, err := d.sql.Exec(`
+		CREATE TABLE IF NOT EXISTS hb_events (
+			id            BIGSERIAL PRIMARY KEY,
+			nexus_user_id TEXT NOT NULL,
+			time          TIMESTAMPTZ NOT NULL,
+			type          TEXT NOT NULL DEFAULT '',
+			token         TEXT NOT NULL DEFAULT '',
+			amount_sol    DOUBLE PRECISION NOT NULL DEFAULT 0,
+			pnl_sol       DOUBLE PRECISION NOT NULL DEFAULT 0,
+			pnl_pct       DOUBLE PRECISION NOT NULL DEFAULT 0,
+			reason        TEXT NOT NULL DEFAULT '',
+			message       TEXT NOT NULL DEFAULT ''
+		)
+	`); err != nil {
+		return err
+	}
+	_, err := d.sql.Exec(`CREATE INDEX IF NOT EXISTS hb_events_user_time ON hb_events (nexus_user_id, time DESC)`)
 	return err
+}
+
+// InsertEvent persists a single event for a user. Fire-and-forget safe.
+func (d *DB) InsertEvent(nexusUserID string, e eventlog.Event) {
+	d.sql.Exec(`
+		INSERT INTO hb_events (nexus_user_id, time, type, token, amount_sol, pnl_sol, pnl_pct, reason, message)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	`, nexusUserID, e.Time, e.Type, e.Token, e.AmtSOL, e.PnLSOL, e.PnLPct, e.Reason, e.Message)
+}
+
+// RecentEvents loads the most recent events for a user, returned oldest-first
+// so they can be passed directly to Log.Load.
+func (d *DB) RecentEvents(nexusUserID string, limit int) ([]eventlog.Event, error) {
+	rows, err := d.sql.Query(`
+		SELECT time, type, token, amount_sol, pnl_sol, pnl_pct, reason, message
+		FROM hb_events WHERE nexus_user_id=$1
+		ORDER BY time DESC LIMIT $2
+	`, nexusUserID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var events []eventlog.Event
+	for rows.Next() {
+		var e eventlog.Event
+		if err := rows.Scan(&e.Time, &e.Type, &e.Token, &e.AmtSOL, &e.PnLSOL, &e.PnLPct, &e.Reason, &e.Message); err == nil {
+			events = append(events, e)
+		}
+	}
+	// reverse to oldest-first for Log.Load
+	for i, j := 0, len(events)-1; i < j; i, j = i+1, j-1 {
+		events[i], events[j] = events[j], events[i]
+	}
+	return events, rows.Err()
 }
 
 // GetUserConfig loads per-user config, falling back to defaults if not set.

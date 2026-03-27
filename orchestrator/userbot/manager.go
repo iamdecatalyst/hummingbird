@@ -24,6 +24,7 @@ type Instance struct {
 	WalletID string
 	Port     *portfolio.Portfolio
 	Trader   *trader.Trader
+	Log      *eventlog.Log
 }
 
 // Manager owns all active instances, keyed by user ID.
@@ -32,13 +33,15 @@ type Manager struct {
 	instances   map[string]*Instance
 	chatToUser  map[string]string // telegram chat_id → nexus user ID
 	cfg         *config.Config
+	db          *db.DB
 }
 
-func NewManager(cfg *config.Config) *Manager {
+func NewManager(cfg *config.Config, database *db.DB) *Manager {
 	return &Manager{
 		instances:  make(map[string]*Instance),
 		chatToUser: make(map[string]string),
 		cfg:        cfg,
+		db:         database,
 	}
 }
 
@@ -82,11 +85,23 @@ func (m *Manager) startInstance(userID, apiKey, apiSecret, walletID, telegramCha
 	}
 	port := portfolio.New(1.0, maxPos, dailyLoss)
 
+	// Per-user event log — persisted to Postgres asynchronously.
+	userLog := eventlog.New(func(e eventlog.Event) {
+		if m.db != nil {
+			go m.db.InsertEvent(userID, e)
+		}
+	})
+	if m.db != nil {
+		if recent, err := m.db.RecentEvents(userID, 500); err == nil {
+			userLog.Load(recent)
+		}
+	}
+
 	var n alerts.Notifier
 	if telegramChatID != "" && m.cfg.TelegramToken != "" {
-		n = alerts.NewTelegram(m.cfg.TelegramToken, telegramChatID)
+		n = alerts.NewTelegram(m.cfg.TelegramToken, telegramChatID).WithLog(userLog)
 	} else {
-		n = noopNotifier{userID}
+		n = noopNotifier{userID, userLog}
 	}
 
 	monCfg := monitor.MonitorConfig{
@@ -104,6 +119,7 @@ func (m *Manager) startInstance(userID, apiKey, apiSecret, walletID, telegramCha
 		WalletID: walletID,
 		Port:     port,
 		Trader:   tr,
+		Log:      userLog,
 	}
 
 	m.mu.Lock()
@@ -115,7 +131,7 @@ func (m *Manager) startInstance(userID, apiKey, apiSecret, walletID, telegramCha
 
 	log.Printf("[userbot] started instance for user %s | wallet %s | tg=%v",
 		short(userID), walletID, telegramChatID != "")
-	eventlog.Emit(eventlog.Event{
+	userLog.Emit(eventlog.Event{
 		Type:    "START",
 		Message: fmt.Sprintf("Bot started — wallet %s", walletID),
 	})
@@ -169,16 +185,19 @@ func (m *Manager) Stop(userID string) {
 	if ok {
 		inst.Trader.ExitAll(models.ExitManual)
 		log.Printf("[userbot] stopped instance for user %s", short(userID))
-		eventlog.Emit(eventlog.Event{Type: "STOP", Message: "Bot stopped manually"})
+		inst.Log.Emit(eventlog.Event{Type: "STOP", Message: "Bot stopped manually"})
 	}
 }
 
-// noopNotifier logs trades to stdout tagged with the user ID.
-type noopNotifier struct{ userID string }
+// noopNotifier logs trades to stdout and emits to the per-user event log.
+type noopNotifier struct {
+	userID string
+	log    *eventlog.Log
+}
 
 func (n noopNotifier) Entered(p *models.Position) {
 	log.Printf("[user:%s] entered %s | %.3f SOL", short(n.userID), short(p.Mint), p.EntryAmountSOL)
-	eventlog.Emit(eventlog.Event{
+	n.log.Emit(eventlog.Event{
 		Type:    "ENTER",
 		Token:   p.Mint,
 		AmtSOL:  p.EntryAmountSOL,
@@ -187,7 +206,7 @@ func (n noopNotifier) Entered(p *models.Position) {
 }
 func (n noopNotifier) Exited(c *models.ClosedPosition) {
 	log.Printf("[user:%s] exited %s | P&L %+.4f SOL", short(n.userID), short(c.Mint), c.PnLSOL)
-	eventlog.Emit(eventlog.Event{
+	n.log.Emit(eventlog.Event{
 		Type:    "EXIT",
 		Token:   c.Mint,
 		PnLSOL:  c.PnLSOL,
@@ -198,5 +217,5 @@ func (n noopNotifier) Exited(c *models.ClosedPosition) {
 }
 func (n noopNotifier) Alert(text string) {
 	log.Printf("[user:%s] %s", short(n.userID), text)
-	eventlog.Emit(eventlog.Event{Type: "ALERT", Message: text})
+	n.log.Emit(eventlog.Event{Type: "ALERT", Message: text})
 }

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/iamdecatalyst/hummingbird/orchestrator/eventlog"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/models"
 )
 
@@ -22,6 +23,7 @@ type Telegram struct {
 	token  string
 	chatID string
 	client *http.Client
+	log    *eventlog.Log
 }
 
 func NewTelegram(token, chatID string) *Telegram {
@@ -32,6 +34,12 @@ func NewTelegram(token, chatID string) *Telegram {
 	}
 }
 
+// WithLog attaches a per-user event log so trade events appear on the dashboard.
+func (t *Telegram) WithLog(l *eventlog.Log) *Telegram {
+	t.log = l
+	return t
+}
+
 func (t *Telegram) Entered(p *models.Position) {
 	msg := fmt.Sprintf(
 		"🐦 *ENTERED*\n`%s`\nScore: %d/100 | Position: %.3f SOL\nTime: %s",
@@ -39,6 +47,18 @@ func (t *Telegram) Entered(p *models.Position) {
 		p.OpenedAt.Format("15:04:05"),
 	)
 	t.send(msg)
+	if t.log != nil {
+		short := p.Mint
+		if len(short) > 8 {
+			short = short[:8]
+		}
+		t.log.Emit(eventlog.Event{
+			Type:   "ENTER",
+			Token:  p.Mint,
+			AmtSOL: p.EntryAmountSOL,
+			Message: fmt.Sprintf("Entered %s…  %.3f SOL", short, p.EntryAmountSOL),
+		})
+	}
 }
 
 func (t *Telegram) Exited(c *models.ClosedPosition) {
@@ -57,6 +77,20 @@ func (t *Telegram) Exited(c *models.ClosedPosition) {
 		time.Since(c.OpenedAt).Round(time.Second),
 	)
 	t.send(msg)
+	if t.log != nil {
+		short := c.Mint
+		if len(short) > 8 {
+			short = short[:8]
+		}
+		t.log.Emit(eventlog.Event{
+			Type:    "EXIT",
+			Token:   c.Mint,
+			PnLSOL:  c.PnLSOL,
+			PnLPct:  c.PnLPercent,
+			Reason:  string(c.Reason),
+			Message: fmt.Sprintf("Exited %s…  %+.4f SOL (%+.1f%%)", short, c.PnLSOL, c.PnLPercent),
+		})
+	}
 }
 
 func (t *Telegram) DailyStats(wins, losses int, pnl float64, winRate float64) {
@@ -73,6 +107,9 @@ func (t *Telegram) DailyStats(wins, losses int, pnl float64, winRate float64) {
 
 func (t *Telegram) Alert(text string) {
 	t.send("⚠️ " + text)
+	if t.log != nil {
+		t.log.Emit(eventlog.Event{Type: "ALERT", Message: text})
+	}
 }
 
 func (t *Telegram) send(text string) {

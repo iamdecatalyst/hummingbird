@@ -1,4 +1,4 @@
-// Package eventlog provides a global in-memory ring buffer of bot events.
+// Package eventlog provides a per-user event log with an optional persist callback.
 package eventlog
 
 import (
@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-const maxEvents = 200
+const maxEvents = 500
 
 type Event struct {
 	Time    time.Time `json:"time"`
@@ -19,30 +19,58 @@ type Event struct {
 	Message string    `json:"message"`
 }
 
-var (
-	mu     sync.RWMutex
-	events []Event
-)
+// Log is a per-user event log. persist is called on every new event (may be nil).
+type Log struct {
+	mu      sync.RWMutex
+	events  []Event
+	persist func(Event)
+}
 
-func Emit(e Event) {
+func New(persist func(Event)) *Log {
+	return &Log{persist: persist}
+}
+
+func (l *Log) Emit(e Event) {
 	if e.Time.IsZero() {
 		e.Time = time.Now()
 	}
-	mu.Lock()
-	defer mu.Unlock()
-	events = append(events, e)
-	if len(events) > maxEvents {
-		events = events[len(events)-maxEvents:]
+	l.mu.Lock()
+	l.events = append(l.events, e)
+	if len(l.events) > maxEvents {
+		l.events = l.events[len(l.events)-maxEvents:]
+	}
+	l.mu.Unlock()
+	if l.persist != nil {
+		l.persist(e)
+	}
+}
+
+// Load pre-populates the log from stored events without calling persist.
+func (l *Log) Load(events []Event) {
+	if len(events) == 0 {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.events = append(events, l.events...)
+	if len(l.events) > maxEvents {
+		l.events = l.events[len(l.events)-maxEvents:]
 	}
 }
 
 // All returns events newest-first.
-func All() []Event {
-	mu.RLock()
-	defer mu.RUnlock()
-	out := make([]Event, len(events))
-	for i, e := range events {
-		out[len(events)-1-i] = e
+func (l *Log) All() []Event {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	out := make([]Event, len(l.events))
+	for i, e := range l.events {
+		out[len(l.events)-1-i] = e
 	}
 	return out
 }
+
+// global is used only in single-tenant mode.
+var global = New(nil)
+
+func Emit(e Event) { global.Emit(e) }
+func All() []Event { return global.All() }
