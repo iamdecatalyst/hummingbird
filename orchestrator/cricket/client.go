@@ -1,0 +1,88 @@
+// Package cricket provides a client for the Cricket Protocol API.
+// Cricket powers all token risk analysis and smart-money signal detection
+// in Hummingbird — users need a Cricket account to run the bot.
+// Sign up at https://cricket.vylth.com
+package cricket
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"time"
+)
+
+// Client is an HTTP client for the Cricket Protocol API.
+type Client struct {
+	baseURL string
+	apiKey  string
+	http    *http.Client
+}
+
+// New creates a Cricket API client.
+// baseURL is the Cricket API root (e.g. https://api-cricket.vylth.com).
+// apiKey is the Cricket API key from your dashboard.
+func New(baseURL, apiKey string) *Client {
+	return &Client{
+		baseURL: baseURL,
+		apiKey:  apiKey,
+		http:    &http.Client{Timeout: 8 * time.Second},
+	}
+}
+
+// MantisScan returns a full risk scan for a token address.
+// Checks mint/freeze authority, holder concentration, deployer age, and more.
+// Maps to GET /api/cricket/mantis/scan/{token}
+func (c *Client) MantisScan(ctx context.Context, tokenAddress string) (*MantisScanResponse, error) {
+	url := fmt.Sprintf("%s/api/cricket/mantis/scan/%s", c.baseURL, tokenAddress)
+	return doGet[MantisScanResponse](ctx, c, url)
+}
+
+// FireflyWallet returns a wallet profile and smart-money score.
+// Used to evaluate the dev wallet before entering a position.
+// Maps to GET /api/cricket/firefly/wallet/{address}
+func (c *Client) FireflyWallet(ctx context.Context, address string) (*FireflyWalletResponse, error) {
+	url := fmt.Sprintf("%s/api/cricket/firefly/wallet/%s", c.baseURL, address)
+	return doGet[FireflyWalletResponse](ctx, c, url)
+}
+
+// FireflySignals returns current accumulation/exodus signals detected by Cricket.
+// Used by the scalper to find second-wave entries and rug warnings in open positions.
+// Maps to GET /api/cricket/firefly/signals
+func (c *Client) FireflySignals(ctx context.Context) (*FireflySignalsResponse, error) {
+	url := fmt.Sprintf("%s/api/cricket/firefly/signals", c.baseURL)
+	return doGet[FireflySignalsResponse](ctx, c, url)
+}
+
+func doGet[T any](ctx context.Context, c *Client, url string) (*T, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	}
+	req.Header.Set("User-Agent", "hummingbird/1.0")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("cricket API %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result T
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("decode: %w (body: %.200s)", err, string(body))
+	}
+	return &result, nil
+}

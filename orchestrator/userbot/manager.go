@@ -10,6 +10,7 @@ import (
 	signet "github.com/VYLTH/signet-sdk-go/signet"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/alerts"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/config"
+	"github.com/iamdecatalyst/hummingbird/orchestrator/cricket"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/db"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/eventlog"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/models"
@@ -34,14 +35,18 @@ type Manager struct {
 	chatToUser  map[string]string // telegram chat_id → nexus user ID
 	cfg         *config.Config
 	db          *db.DB
+	cricket     *cricket.Client
+	scalper     trader.ScalperCloser
 }
 
-func NewManager(cfg *config.Config, database *db.DB) *Manager {
+func NewManager(cfg *config.Config, database *db.DB, cc *cricket.Client, sc trader.ScalperCloser) *Manager {
 	return &Manager{
 		instances:  make(map[string]*Instance),
 		chatToUser: make(map[string]string),
 		cfg:        cfg,
 		db:         database,
+		cricket:    cc,
+		scalper:    sc,
 	}
 }
 
@@ -112,7 +117,7 @@ func (m *Manager) startInstance(userID, apiKey, apiSecret, walletID, telegramCha
 		TimeoutMinutes:  userCfg.TimeoutMinutes,
 	}
 
-	tr := trader.New(client, walletID, port, n, m.cfg.SolanaRPC, "http://localhost:8001", monCfg)
+	tr := trader.New(client, walletID, port, n, m.cricket, m.scalper, monCfg)
 
 	inst := &Instance{
 		UserID:   userID,

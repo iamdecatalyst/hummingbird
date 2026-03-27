@@ -2,11 +2,12 @@ package models
 
 import "time"
 
-// ScoreResult is received from the Python scorer.
+// ScoreResult is produced by the Cricket scorer and passed to traders.
 type ScoreResult struct {
 	Mint        string                 `json:"mint"`
+	DevWallet   string                 `json:"dev_wallet"`
 	Total       int                    `json:"total"`
-	Decision    string                 `json:"decision"` // skip | small | medium | full
+	Decision    string                 `json:"decision"` // skip | small | medium | full | scalp
 	PositionSOL float64                `json:"position_sol"`
 	Checks      map[string]CheckResult `json:"checks"`
 	ScoredAtMs  int64                  `json:"scored_at_ms"`
@@ -22,6 +23,7 @@ type CheckResult struct {
 type Position struct {
 	ID             string    `json:"id"`
 	Mint           string    `json:"mint"`
+	DevWallet      string    `json:"dev_wallet"`
 	WalletID       string    `json:"wallet_id"`
 	EntryPriceSOL  float64   `json:"entry_price_sol"`
 	EntryAmountSOL float64   `json:"entry_amount_sol"`

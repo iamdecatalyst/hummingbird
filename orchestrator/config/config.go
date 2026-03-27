@@ -9,6 +9,11 @@ type Config struct {
 	// Mode
 	MultiTenant bool
 
+	// Cricket Protocol — required for all scoring and signal detection
+	// Sign up at https://cricket.vylth.com
+	CricketURL string // e.g. https://api-cricket.vylth.com
+	CricketKey string // CRICKET_API_KEY from your Cricket dashboard
+
 	// Signet (single-tenant only — optional in multi-tenant)
 	SignetAPIKey    string
 	SignetAPISecret string
@@ -37,6 +42,9 @@ type Config struct {
 func Load() *Config {
 	return &Config{
 		MultiTenant: getBool("MULTI_TENANT", false),
+
+		CricketURL: getEnv("CRICKET_API_URL", "https://api-cricket.vylth.com"),
+		CricketKey: getEnv("CRICKET_API_KEY", ""),
 
 		SignetAPIKey:    getEnv("SIGNET_API_KEY", ""),
 		SignetAPISecret: getEnv("SIGNET_API_SECRET", ""),

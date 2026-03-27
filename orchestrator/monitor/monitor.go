@@ -1,7 +1,6 @@
 package monitor
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/iamdecatalyst/hummingbird/orchestrator/cricket"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/models"
 )
 
@@ -49,16 +49,16 @@ type ExitSignal struct {
 // Monitor watches a single open position and sends exit signals.
 type Monitor struct {
 	pos        *models.Position
-	solanaRPC  string
+	cricket    *cricket.Client // for Firefly exodus signal detection
 	exitCh     chan<- ExitSignal
 	httpClient *http.Client
 	cfg        MonitorConfig
 }
 
-func New(pos *models.Position, solanaRPC string, exitCh chan<- ExitSignal, cfg MonitorConfig) *Monitor {
+func New(pos *models.Position, cc *cricket.Client, exitCh chan<- ExitSignal, cfg MonitorConfig) *Monitor {
 	return &Monitor{
 		pos:        pos,
-		solanaRPC:  solanaRPC,
+		cricket:    cc,
 		exitCh:     exitCh,
 		httpClient: &http.Client{Timeout: 3 * time.Second},
 		cfg:        cfg,
@@ -182,49 +182,30 @@ func (m *Monitor) fetchPrice(mint string) (float64, error) {
 	return 0, fmt.Errorf("mint %s not found in Jupiter response", mint[:8])
 }
 
-// isDevSelling checks recent transactions on the dev wallet for large token transfers.
+// isDevSelling checks Cricket Firefly for an exodus signal on our token.
+// An exodus signal means smart-money wallets are exiting — strong rug warning.
 func (m *Monitor) isDevSelling() bool {
-	body, _ := json.Marshal(map[string]any{
-		"jsonrpc": "2.0",
-		"id":      1,
-		"method":  "getSignaturesForAddress",
-		"params":  []any{m.pos.Mint, map[string]any{"limit": 5}},
-	})
+	if m.cricket == nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 
-	req, _ := http.NewRequest("POST", m.solanaRPC, nil)
-	req.Header.Set("Content-Type", "application/json")
-
-	req.Body = io.NopCloser(bytes.NewReader(body))
-
-	resp, err := m.httpClient.Do(req)
+	resp, err := m.cricket.FireflySignals(ctx)
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
 
-	// If there are fresh transactions on the mint account itself,
-	// that's a signal — full analysis would require parsing tx details.
-	// For now: if we see >2 new txs since we entered, flag for review.
-	var result struct {
-		Result []struct {
-			BlockTime int64 `json:"blockTime"`
-		} `json:"result"`
-	}
-	respBody, _ := io.ReadAll(resp.Body)
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return false
-	}
-
-	entryTime := m.pos.OpenedAt.Unix()
-	postEntryTxs := 0
-	for _, sig := range result.Result {
-		if sig.BlockTime > entryTime {
-			postEntryTxs++
+	for _, sig := range resp.Data {
+		if sig.TokenAddress != m.pos.Mint {
+			continue
+		}
+		if sig.SignalType == "exodus" && sig.Strength != "weak" {
+			log.Printf("[monitor] 🚨 Cricket exodus signal on %s (strength=%s)", m.pos.Mint[:8], sig.Strength)
+			return true
 		}
 	}
-
-	// >3 new transactions on the mint after we entered = investigate
-	return postEntryTxs > 3
+	return false
 }
 
 func (m *Monitor) exit(reason models.ExitReason, partial float64) {

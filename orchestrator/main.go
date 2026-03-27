@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -15,11 +16,13 @@ import (
 	"github.com/iamdecatalyst/hummingbird/orchestrator/auth"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/bot"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/config"
+	"github.com/iamdecatalyst/hummingbird/orchestrator/cricket"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/db"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/eventlog"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/models"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/monitor"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/portfolio"
+	"github.com/iamdecatalyst/hummingbird/orchestrator/scalper"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/trader"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/userbot"
 )
@@ -27,6 +30,15 @@ import (
 func main() {
 	cfg := config.Load()
 	mux := http.NewServeMux()
+
+	// Cricket client — powers all scoring, signal detection, and rug monitoring.
+	// Users need a Cricket account: https://cricket.vylth.com
+	cc := cricket.New(cfg.CricketURL, cfg.CricketKey)
+	if cfg.CricketKey == "" {
+		log.Printf("[main] WARNING: CRICKET_API_KEY not set — scoring will fail. Get your key at https://cricket.vylth.com")
+	} else {
+		log.Printf("[main] Cricket Protocol connected (%s)", cfg.CricketURL)
+	}
 
 	// Always public — lets the frontend know which mode to render
 	mux.HandleFunc("GET /mode", func(w http.ResponseWriter, r *http.Request) {
@@ -39,9 +51,9 @@ func main() {
 	})
 
 	if cfg.MultiTenant {
-		startMultiTenant(cfg, mux)
+		startMultiTenant(cfg, cc, mux)
 	} else {
-		startSingleTenant(cfg, mux)
+		startSingleTenant(cfg, cc, mux)
 	}
 
 	addr := ":" + cfg.Port
@@ -53,7 +65,7 @@ func main() {
 
 // ── Single-tenant mode ────────────────────────────────────────────────────────
 
-func startSingleTenant(cfg *config.Config, mux *http.ServeMux) {
+func startSingleTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux) {
 	configured := false
 	var walletID string
 	var err error
@@ -87,7 +99,17 @@ func startSingleTenant(cfg *config.Config, mux *http.ServeMux) {
 		}
 	}
 
-	tr := trader.New(signetClient, walletID, port, notifier, cfg.SolanaRPC, "http://localhost:8001", monitor.DefaultMonitorConfig())
+	// Scalper: finds second-wave entries via Cricket Firefly signals.
+	// Uses a shared var to break the trader↔scalper init cycle.
+	var tr *trader.Trader
+	sc := scalper.New(cc, func(r *models.ScoreResult) {
+		if tr != nil {
+			tr.Execute(r)
+		}
+	})
+	tr = trader.New(signetClient, walletID, port, notifier, cc, sc, monitor.DefaultMonitorConfig())
+
+	go sc.Run(context.Background())
 
 	if tgBot != nil {
 		tgBot.SetExecutor(tr)
@@ -109,6 +131,24 @@ func startSingleTenant(cfg *config.Config, mux *http.ServeMux) {
 		Configured       bool    `json:"configured"`
 	}
 
+	// POST /score — receives TokenDetected from the Rust listener.
+	// Scores the token via Cricket and enters a position if it passes.
+	// Replaces the Python scorer service entirely.
+	mux.HandleFunc("POST /score", func(w http.ResponseWriter, r *http.Request) {
+		if !configured {
+			http.Error(w, `{"error":"not configured"}`, http.StatusServiceUnavailable)
+			return
+		}
+		var token cricket.TokenDetected
+		if err := json.NewDecoder(r.Body).Decode(&token); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		go scoreAndTrade(cc, tr.Execute, token)
+		fmt.Fprintf(w, `{"status":"queued","mint":"%s"}`, token.Mint)
+	})
+
+	// POST /trade — legacy internal endpoint kept for compatibility.
 	mux.HandleFunc("POST /trade", func(w http.ResponseWriter, r *http.Request) {
 		if !configured {
 			http.Error(w, `{"error":"not configured"}`, http.StatusServiceUnavailable)
@@ -175,14 +215,26 @@ func startSingleTenant(cfg *config.Config, mux *http.ServeMux) {
 // First login: prompt for Signet API key once → encrypted in DB → bot starts.
 // Subsequent logins: Nexus → JWT → bot resumes from stored credentials.
 
-func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
+func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux) {
 	database, err := db.New(cfg.DatabaseURL, cfg.EncryptionKey)
 	if err != nil {
 		log.Fatalf("[main] db init failed: %v", err)
 	}
 	log.Printf("[main] Postgres connected, multi-tenant mode active (Nexus SSO)")
 
-	mgr := userbot.NewManager(cfg, database)
+	// Shared scalper — dispatch is wired after mgr is created to break the init cycle.
+	var mgr *userbot.Manager
+	sc := scalper.New(cc, func(r *models.ScoreResult) {
+		if mgr != nil {
+			for _, inst := range mgr.All() {
+				inst.Trader.Execute(r)
+			}
+		}
+	})
+
+	mgr = userbot.NewManager(cfg, database, cc, sc)
+
+	go sc.Run(context.Background())
 
 	// Telegram bot (multi-tenant mode)
 	var tgBot *bot.Bot
@@ -451,8 +503,24 @@ func startMultiTenant(cfg *config.Config, mux *http.ServeMux) {
 		fmt.Fprint(w, `{"status":"ok","bot_active":true}`)
 	})
 
-	// Internal scorer endpoint — routes signals to all active user instances.
-	// Called from localhost by the Python scorer; no user auth required.
+	// POST /score — receives TokenDetected from the Rust listener.
+	// Scores via Cricket and fans out to all active user traders.
+	// This replaces the Python scorer service entirely.
+	mux.HandleFunc("POST /score", func(w http.ResponseWriter, r *http.Request) {
+		var token cricket.TokenDetected
+		if err := json.NewDecoder(r.Body).Decode(&token); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		go scoreAndTrade(cc, func(result *models.ScoreResult) {
+			for _, inst := range mgr.All() {
+				inst.Trader.Execute(result)
+			}
+		}, token)
+		fmt.Fprintf(w, `{"status":"queued","mint":"%s"}`, token.Mint)
+	})
+
+	// POST /trade — legacy internal endpoint kept for compatibility.
 	mux.HandleFunc("POST /trade", func(w http.ResponseWriter, r *http.Request) {
 		var result models.ScoreResult
 		if err := json.NewDecoder(r.Body).Decode(&result); err != nil {
@@ -874,6 +942,117 @@ func fetchSOLBalance(baseURL, apiKey, apiSecret, walletID string) float64 {
 	}
 	json.NewDecoder(resp.Body).Decode(&result)
 	return result.SOL
+}
+
+// ── Cricket scoring ───────────────────────────────────────────────────────────
+
+// scoreAndTrade runs a Cricket risk analysis on a freshly-detected token and,
+// if the score passes, calls dispatch to send it to the active trader(s).
+// Runs in a goroutine — the listener is never blocked.
+func scoreAndTrade(cc *cricket.Client, dispatch func(*models.ScoreResult), token cricket.TokenDetected) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Run mantis scan + firefly wallet check concurrently
+	type scanRes struct {
+		data *cricket.MantisScanResponse
+		err  error
+	}
+	type walletRes struct {
+		data *cricket.FireflyWalletResponse
+		err  error
+	}
+
+	scanCh := make(chan scanRes, 1)
+	walletCh := make(chan walletRes, 1)
+
+	go func() {
+		d, err := cc.MantisScan(ctx, token.Mint)
+		scanCh <- scanRes{d, err}
+	}()
+	go func() {
+		d, err := cc.FireflyWallet(ctx, token.DevWallet)
+		walletCh <- walletRes{d, err}
+	}()
+
+	sr := <-scanCh
+	wr := <-walletCh
+
+	if sr.err != nil {
+		log.Printf("[scorer] mantis scan failed for %s: %v — need Cricket API key? https://cricket.vylth.com", safeShort(token.Mint), sr.err)
+		return
+	}
+
+	score, decision, posSOL := scoreFromCricket(sr.data, wr.data)
+
+	entered := decision != "skip"
+	sym := map[bool]string{true: "✅", false: "⏭ "}[entered]
+	log.Printf("[scorer] %s %s…  score=%d  decision=%s  pos=%.2f SOL  (rating=%s)",
+		sym, safeShort(token.Mint), score, decision, posSOL, sr.data.Data.RiskScore.Rating)
+
+	if !entered {
+		return
+	}
+
+	dispatch(&models.ScoreResult{
+		Mint:        token.Mint,
+		DevWallet:   token.DevWallet,
+		Total:       score,
+		Decision:    decision,
+		PositionSOL: posSOL,
+		Checks: map[string]models.CheckResult{
+			"mantis": {
+				Score:    sr.data.Data.RiskScore.Score,
+				MaxScore: 100,
+				Reason:   sr.data.Data.RiskScore.Rating,
+			},
+		},
+		ScoredAtMs: time.Now().UnixMilli(),
+	})
+}
+
+// scoreFromCricket maps Cricket's risk data to a Hummingbird score and position size.
+//
+// Cricket mantis rating → rug risk (high = bad). We invert for Hummingbird (high = good).
+//   critical / high → skip entirely
+//   moderate        → small position (0.05 SOL)
+//   low             → larger position, adjusted by dev wallet profile
+//
+// Dev wallet adjustments (Firefly):
+//   smart_contract_deployer with >75% win rate → seasoned rugger, reduce score
+//   very low firefly score (<20)               → bad actor, reduce score
+func scoreFromCricket(scan *cricket.MantisScanResponse, devWallet *cricket.FireflyWalletResponse) (score int, decision string, posSOL float64) {
+	switch scan.Data.RiskScore.Rating {
+	case "critical", "high":
+		return 0, "skip", 0
+	case "moderate":
+		score = 70
+	case "low":
+		score = 90
+	default:
+		return 0, "skip", 0 // unknown rating — skip to be safe
+	}
+
+	if devWallet != nil && devWallet.Success {
+		dw := devWallet.Data
+		if dw.Style == "smart_contract_deployer" && dw.WinRate > 75 {
+			score -= 25 // experienced deployer with high win rate = likely professional rugger
+		}
+		if dw.Score < 20 {
+			score -= 15 // very low smart-money score = flagged bad actor
+		}
+	}
+
+	switch {
+	case score < 60:
+		return score, "skip", 0
+	case score < 75:
+		return score, "small", 0.05
+	case score < 90:
+		return score, "medium", 0.10
+	default:
+		return score, "full", 0.20
+	}
 }
 
 // ── Config conversion helpers ─────────────────────────────────────────────────

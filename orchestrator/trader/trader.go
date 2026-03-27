@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -14,6 +13,7 @@ import (
 	signet "github.com/VYLTH/signet-sdk-go/signet"
 
 	"github.com/iamdecatalyst/hummingbird/orchestrator/alerts"
+	"github.com/iamdecatalyst/hummingbird/orchestrator/cricket"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/models"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/monitor"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/portfolio"
@@ -22,14 +22,19 @@ import (
 // compile-time check that alerts.Telegram still satisfies Notifier
 var _ alerts.Notifier = (*alerts.Telegram)(nil)
 
+// ScalperCloser is notified when a position closes so the scalper can free the slot.
+type ScalperCloser interface {
+	OnPositionClosed(mint string)
+}
+
 // Trader executes trades via Signet and manages position lifecycle.
 type Trader struct {
 	signet     *signet.Client
 	walletID   string
 	portfolio  *portfolio.Portfolio
 	telegram   alerts.Notifier
-	solanaRPC  string
-	scorerURL  string // for scalp-closed callbacks
+	cricket    *cricket.Client // passed to per-position monitors
+	scalper    ScalperCloser   // notified on close to free scalp slots
 	monitorCfg monitor.MonitorConfig
 
 	exitCh    chan monitor.ExitSignal
@@ -41,8 +46,8 @@ func New(
 	walletID string,
 	port *portfolio.Portfolio,
 	tg alerts.Notifier,
-	solanaRPC string,
-	scorerURL string,
+	cc *cricket.Client,
+	sc ScalperCloser,
 	monitorCfg monitor.MonitorConfig,
 ) *Trader {
 	t := &Trader{
@@ -50,8 +55,8 @@ func New(
 		walletID:   walletID,
 		portfolio:  port,
 		telegram:   tg,
-		solanaRPC:  solanaRPC,
-		scorerURL:  scorerURL,
+		cricket:    cc,
+		scalper:    sc,
 		monitorCfg: monitorCfg,
 		exitCh:     make(chan monitor.ExitSignal, 32),
 	}
@@ -122,6 +127,7 @@ func (t *Trader) enter(result *models.ScoreResult) {
 	pos := &models.Position{
 		ID:             tx.TxHash,
 		Mint:           result.Mint,
+		DevWallet:      result.DevWallet,
 		WalletID:       t.walletID,
 		EntryPriceSOL:  result.PositionSOL, // refined by monitor on first price tick
 		EntryAmountSOL: result.PositionSOL,
@@ -133,10 +139,10 @@ func (t *Trader) enter(result *models.ScoreResult) {
 	t.portfolio.Open(pos)
 	t.telegram.Entered(pos)
 
-	// Start post-entry monitor
+	// Start post-entry monitor — uses Cricket Firefly for exodus detection
 	ctx, cancel := context.WithCancel(context.Background())
 	t.cancelFns.Store(result.Mint, cancel)
-	m := monitor.New(pos, t.solanaRPC, t.exitCh, t.monitorCfg)
+	m := monitor.New(pos, t.cricket, t.exitCh, t.monitorCfg)
 	go m.Watch(ctx)
 }
 
@@ -210,26 +216,13 @@ func (t *Trader) handleExit(sig monitor.ExitSignal) {
 		t.portfolio.Close(closed)
 		t.telegram.Exited(closed)
 
-		// Notify scorer if this was a scalp — frees the slot for re-entry
-		if closed.Reason != models.ExitManual {
-			go t.notifyScorerClosed(closed.Mint)
+		// Notify scalper so the slot is freed for re-entry if the pattern repeats
+		if t.scalper != nil && closed.Reason != models.ExitManual {
+			go t.scalper.OnPositionClosed(closed.Mint)
 		}
 	}
 }
 
-func (t *Trader) notifyScorerClosed(mint string) {
-	if t.scorerURL == "" {
-		return
-	}
-	url := t.scorerURL + "/scalper/closed"
-	body := fmt.Sprintf(`{"mint":"%s"}`, mint)
-	req, _ := http.NewRequest("POST", url, strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err == nil {
-		resp.Body.Close()
-	}
-}
 
 // ExitAll closes all open positions immediately (e.g. on /stop command).
 func (t *Trader) ExitAll(reason models.ExitReason) {

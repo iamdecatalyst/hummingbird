@@ -41,7 +41,7 @@ impl Config {
 
             evm_chains: evm_chains_from_env(),
 
-            scorer_url: env("SCORER_URL", "http://localhost:8001"),
+            scorer_url: env("SCORER_URL", "http://localhost:8002/score"),
         })
     }
 }
