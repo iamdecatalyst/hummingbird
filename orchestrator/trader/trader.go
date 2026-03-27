@@ -2,6 +2,7 @@ package trader
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -82,13 +83,32 @@ func (t *Trader) Execute(result *models.ScoreResult) {
 func (t *Trader) enter(result *models.ScoreResult) {
 	log.Printf("[trader] entering %s | score=%d | %.3f SOL", result.Mint[:8], result.Total, result.PositionSOL)
 
-	tx, err := t.signet.Wallets.Swap(t.walletID, signet.SwapParams{
+	params := signet.SwapParams{
 		FromToken:       "SOL",
 		ToToken:         result.Mint,
 		Amount:          fmt.Sprintf("%.6f", result.PositionSOL),
 		SlippageBps:     300, // 3% — generous for new tokens
 		DeadlineSeconds: 30,
-	})
+	}
+
+	var tx *signet.TransactionResult
+	var err error
+	const maxRetries = 4
+	for attempt := range maxRetries {
+		tx, err = t.signet.Wallets.Swap(t.walletID, params)
+		if err == nil {
+			break
+		}
+		var sigErr *signet.SignetError
+		if errors.As(err, &sigErr) && sigErr.StatusCode == 502 && strings.Contains(sigErr.Message, "Unknown Solana token") {
+			if attempt < maxRetries-1 {
+				log.Printf("[trader] token %s not yet indexed by signet, retry %d/%d in 4s", result.Mint[:8], attempt+1, maxRetries)
+				time.Sleep(4 * time.Second)
+				continue
+			}
+		}
+		break
+	}
 	if err != nil {
 		log.Printf("[trader] signet swap failed for %s: %v", result.Mint[:8], err)
 		t.telegram.Alert(fmt.Sprintf("entry failed: %s\n%v", result.Mint[:8], err))
