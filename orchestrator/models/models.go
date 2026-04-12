@@ -29,6 +29,7 @@ type Position struct {
 	EntryAmountSOL float64   `json:"entry_amount_sol"`
 	TokenBalance   float64   `json:"token_balance"`
 	Score          int       `json:"score"`
+	Decision       string    `json:"decision"`
 	OpenedAt       time.Time `json:"opened_at"`
 
 	// Exit tracking

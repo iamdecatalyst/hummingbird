@@ -109,6 +109,22 @@ func (m *Manager) startInstance(userID, apiKey, apiSecret, walletID, telegramCha
 		n = noopNotifier{userID, userLog}
 	}
 
+	// Persist hooks — fire-and-forget DB writes for position lifecycle.
+	if m.db != nil {
+		port.SetPersistHooks(
+			func(pos *models.Position) {
+				if err := m.db.SavePosition(userID, pos); err != nil {
+					log.Printf("[userbot] SavePosition failed for user %s: %v", short(userID), err)
+				}
+			},
+			func(closed *models.ClosedPosition) {
+				if err := m.db.ClosePosition(userID, closed); err != nil {
+					log.Printf("[userbot] ClosePosition failed for user %s: %v", short(userID), err)
+				}
+			},
+		)
+	}
+
 	monCfg := monitor.MonitorConfig{
 		StopLossPercent: userCfg.StopLossPercent,
 		TakeProfit1x:    userCfg.TakeProfit1x,
@@ -118,6 +134,16 @@ func (m *Manager) startInstance(userID, apiKey, apiSecret, walletID, telegramCha
 	}
 
 	tr := trader.New(client, walletID, port, n, m.cricket, m.scalper, monCfg)
+
+	// Restore open positions from DB so monitors resume after a restart.
+	if m.db != nil {
+		if openPositions, err := m.db.OpenPositionsByUser(userID); err == nil && len(openPositions) > 0 {
+			for _, pos := range openPositions {
+				tr.Restore(pos)
+			}
+			log.Printf("[userbot] restored %d open position(s) for user %s", len(openPositions), short(userID))
+		}
+	}
 
 	inst := &Instance{
 		UserID:   userID,

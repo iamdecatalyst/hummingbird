@@ -132,6 +132,7 @@ func (t *Trader) enter(result *models.ScoreResult) {
 		EntryPriceSOL:  result.PositionSOL, // refined by monitor on first price tick
 		EntryAmountSOL: result.PositionSOL,
 		Score:          result.Total,
+		Decision:       result.Decision,
 		OpenedAt:       time.Now(),
 		PeakPriceSOL:   result.PositionSOL,
 	}
@@ -223,6 +224,17 @@ func (t *Trader) handleExit(sig monitor.ExitSignal) {
 	}
 }
 
+
+// Restore resumes monitoring for a position loaded from DB on startup.
+// Does NOT execute a swap — the position was already entered in a previous run.
+func (t *Trader) Restore(pos *models.Position) {
+	t.portfolio.RestoreOpen(pos)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.cancelFns.Store(pos.Mint, cancel)
+	m := monitor.New(pos, t.cricket, t.exitCh, t.monitorCfg)
+	go m.Watch(ctx)
+	log.Printf("[trader] restored position %s from DB", pos.Mint[:8])
+}
 
 // ExitAll closes all open positions immediately (e.g. on /stop command).
 func (t *Trader) ExitAll(reason models.ExitReason) {

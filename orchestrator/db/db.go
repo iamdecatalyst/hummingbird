@@ -15,6 +15,7 @@ import (
 	_ "github.com/lib/pq"
 
 	"github.com/iamdecatalyst/hummingbird/orchestrator/eventlog"
+	"github.com/iamdecatalyst/hummingbird/orchestrator/models"
 )
 
 // UserConfig holds per-user trading settings.
@@ -143,8 +144,136 @@ func (d *DB) migrate() error {
 	`); err != nil {
 		return err
 	}
-	_, err := d.sql.Exec(`CREATE INDEX IF NOT EXISTS hb_events_user_time ON hb_events (nexus_user_id, time DESC)`)
+	if _, err := d.sql.Exec(`CREATE INDEX IF NOT EXISTS hb_events_user_time ON hb_events (nexus_user_id, time DESC)`); err != nil {
+		return err
+	}
+	if _, err := d.sql.Exec(`
+		CREATE TABLE IF NOT EXISTS hb_positions (
+			id            TEXT PRIMARY KEY,
+			nexus_user_id TEXT NOT NULL REFERENCES hb_users(nexus_user_id),
+			mint          TEXT NOT NULL,
+			dev_wallet    TEXT NOT NULL DEFAULT '',
+			wallet_id     TEXT NOT NULL DEFAULT '',
+			entry_price   DOUBLE PRECISION NOT NULL DEFAULT 0,
+			entry_sol     DOUBLE PRECISION NOT NULL DEFAULT 0,
+			token_balance DOUBLE PRECISION NOT NULL DEFAULT 0,
+			score         INTEGER NOT NULL DEFAULT 0,
+			decision      TEXT NOT NULL DEFAULT '',
+			status        TEXT NOT NULL DEFAULT 'open',
+			opened_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			peak_price    DOUBLE PRECISION NOT NULL DEFAULT 0,
+			closed_at     TIMESTAMPTZ,
+			exit_price    DOUBLE PRECISION,
+			exit_sol      DOUBLE PRECISION,
+			exit_reason   TEXT,
+			pnl_sol       DOUBLE PRECISION,
+			pnl_percent   DOUBLE PRECISION
+		)
+	`); err != nil {
+		return err
+	}
+	_, err := d.sql.Exec(`CREATE INDEX IF NOT EXISTS idx_positions_user_status ON hb_positions (nexus_user_id, status)`)
 	return err
+}
+
+// SavePosition inserts a new open position into the DB.
+func (d *DB) SavePosition(nexusUserID string, pos *models.Position) error {
+	_, err := d.sql.Exec(`
+		INSERT INTO hb_positions
+			(id, nexus_user_id, mint, dev_wallet, wallet_id, entry_price, entry_sol, token_balance, score, decision, status, opened_at, peak_price)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'open',$11,$12)
+		ON CONFLICT (id) DO NOTHING
+	`, pos.ID, nexusUserID, pos.Mint, pos.DevWallet, pos.WalletID,
+		pos.EntryPriceSOL, pos.EntryAmountSOL, pos.TokenBalance,
+		pos.Score, pos.Decision, pos.OpenedAt, pos.PeakPriceSOL)
+	return err
+}
+
+// ClosePosition marks a position as closed with final P&L.
+func (d *DB) ClosePosition(nexusUserID string, closed *models.ClosedPosition) error {
+	_, err := d.sql.Exec(`
+		UPDATE hb_positions SET
+			status='closed', closed_at=$1, exit_price=$2, exit_sol=$3,
+			exit_reason=$4, pnl_sol=$5, pnl_percent=$6
+		WHERE id=$7 AND nexus_user_id=$8
+	`, closed.ClosedAt, closed.ExitPriceSOL, closed.ExitAmountSOL,
+		string(closed.Reason), closed.PnLSOL, closed.PnLPercent,
+		closed.ID, nexusUserID)
+	return err
+}
+
+// OpenPositionsByUser returns all open positions for a user (for restart recovery).
+func (d *DB) OpenPositionsByUser(nexusUserID string) ([]*models.Position, error) {
+	rows, err := d.sql.Query(`
+		SELECT id, mint, dev_wallet, wallet_id, entry_price, entry_sol, token_balance, score, decision, opened_at, peak_price
+		FROM hb_positions WHERE nexus_user_id=$1 AND status='open'
+		ORDER BY opened_at ASC
+	`, nexusUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var positions []*models.Position
+	for rows.Next() {
+		var p models.Position
+		if err := rows.Scan(
+			&p.ID, &p.Mint, &p.DevWallet, &p.WalletID,
+			&p.EntryPriceSOL, &p.EntryAmountSOL, &p.TokenBalance,
+			&p.Score, &p.Decision, &p.OpenedAt, &p.PeakPriceSOL,
+		); err == nil {
+			positions = append(positions, &p)
+		}
+	}
+	return positions, rows.Err()
+}
+
+// ClosedPositionsByUser returns the last N closed positions for a user (newest first).
+func (d *DB) ClosedPositionsByUser(nexusUserID string, limit int) ([]*models.ClosedPosition, error) {
+	rows, err := d.sql.Query(`
+		SELECT id, mint, dev_wallet, wallet_id, entry_price, entry_sol, token_balance, score, decision, opened_at, peak_price,
+		       closed_at, exit_price, exit_sol, exit_reason, pnl_sol, pnl_percent
+		FROM hb_positions
+		WHERE nexus_user_id=$1 AND status='closed'
+		ORDER BY closed_at DESC LIMIT $2
+	`, nexusUserID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []*models.ClosedPosition
+	for rows.Next() {
+		var c models.ClosedPosition
+		var closedAt sql.NullTime
+		var exitPrice, exitSOL, pnlSOL, pnlPct sql.NullFloat64
+		var exitReason sql.NullString
+		if err := rows.Scan(
+			&c.ID, &c.Mint, &c.DevWallet, &c.WalletID,
+			&c.EntryPriceSOL, &c.EntryAmountSOL, &c.TokenBalance,
+			&c.Score, &c.Decision, &c.OpenedAt, &c.PeakPriceSOL,
+			&closedAt, &exitPrice, &exitSOL, &exitReason, &pnlSOL, &pnlPct,
+		); err == nil {
+			if closedAt.Valid {
+				c.ClosedAt = closedAt.Time
+			}
+			if exitPrice.Valid {
+				c.ExitPriceSOL = exitPrice.Float64
+			}
+			if exitSOL.Valid {
+				c.ExitAmountSOL = exitSOL.Float64
+			}
+			if exitReason.Valid {
+				c.Reason = models.ExitReason(exitReason.String)
+			}
+			if pnlSOL.Valid {
+				c.PnLSOL = pnlSOL.Float64
+			}
+			if pnlPct.Valid {
+				c.PnLPercent = pnlPct.Float64
+			}
+			out = append(out, &c)
+		}
+	}
+	return out, rows.Err()
 }
 
 // InsertEvent persists a single event for a user. Fire-and-forget safe.

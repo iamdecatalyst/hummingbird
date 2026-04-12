@@ -578,13 +578,17 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
-		inst := mgr.Get(nexusID)
 		w.Header().Set("Content-Type", "application/json")
-		if inst == nil {
+		closed, err := database.ClosedPositionsByUser(nexusID, 50)
+		if err != nil {
+			log.Printf("[closed] db query failed for user %s: %v", nexusID[:8], err)
 			json.NewEncoder(w).Encode([]*models.ClosedPosition{})
 			return
 		}
-		json.NewEncoder(w).Encode(inst.Port.RecentClosed(50))
+		if closed == nil {
+			closed = []*models.ClosedPosition{}
+		}
+		json.NewEncoder(w).Encode(closed)
 	})
 
 	mux.HandleFunc("GET /logs", func(w http.ResponseWriter, r *http.Request) {

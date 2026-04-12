@@ -2,6 +2,8 @@ package portfolio
 
 import (
 	"fmt"
+	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -10,7 +12,7 @@ import (
 
 // Portfolio manages all open positions and tracks P&L.
 type Portfolio struct {
-	mu sync.RWMutex
+	mu sync.Mutex
 
 	positions map[string]*models.Position // mint → position
 	closed    []*models.ClosedPosition
@@ -27,6 +29,9 @@ type Portfolio struct {
 	maxDailyLoss    float64 // e.g. 0.30 = stop if down 30% today
 	paused          bool
 	pauseReason     string
+
+	onOpen  func(*models.Position)
+	onClose func(*models.ClosedPosition)
 }
 
 func New(startingSOL float64, maxConcurrent int, maxDailyLoss float64) *Portfolio {
@@ -41,10 +46,18 @@ func New(startingSOL float64, maxConcurrent int, maxDailyLoss float64) *Portfoli
 	}
 }
 
+// SetPersistHooks registers callbacks invoked on Open and Close for DB persistence.
+// Must be called before the portfolio is used. Either hook may be nil.
+func (p *Portfolio) SetPersistHooks(onOpen func(*models.Position), onClose func(*models.ClosedPosition)) {
+	p.onOpen = onOpen
+	p.onClose = onClose
+}
+
 // CanEnter returns true if we're allowed to open a new position.
 func (p *Portfolio) CanEnter() (bool, string) {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.refreshToday()
 
 	if p.paused {
 		return false, "bot paused: " + p.pauseReason
@@ -57,14 +70,26 @@ func (p *Portfolio) CanEnter() (bool, string) {
 
 // AlreadyOpen returns true if we already have a position in this mint.
 func (p *Portfolio) AlreadyOpen(mint string) bool {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	_, ok := p.positions[mint]
 	return ok
 }
 
-// Open records a new position.
+// Open records a new position and persists it via the onOpen hook if set.
 func (p *Portfolio) Open(pos *models.Position) {
+	p.mu.Lock()
+	p.refreshToday()
+	p.positions[pos.Mint] = pos
+	hook := p.onOpen
+	p.mu.Unlock()
+	if hook != nil {
+		go hook(pos)
+	}
+}
+
+// RestoreOpen loads a position recovered from DB without triggering the onOpen hook.
+func (p *Portfolio) RestoreOpen(pos *models.Position) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.positions[pos.Mint] = pos
@@ -72,22 +97,20 @@ func (p *Portfolio) Open(pos *models.Position) {
 
 // Get returns the position for a mint.
 func (p *Portfolio) Get(mint string) (*models.Position, bool) {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	pos, ok := p.positions[mint]
 	return pos, ok
 }
 
-// Close records exit and updates P&L.
+// Close records exit, updates P&L, and persists via the onClose hook if set.
 func (p *Portfolio) Close(closed *models.ClosedPosition) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-
+	p.refreshToday()
 	delete(p.positions, closed.Mint)
 	p.closed = append(p.closed, closed)
 
 	p.totalPnL += closed.PnLSOL
-	p.refreshToday()
 	p.todayPnL += closed.PnLSOL
 
 	if closed.PnLSOL >= 0 {
@@ -104,12 +127,17 @@ func (p *Portfolio) Close(closed *models.ClosedPosition) {
 			p.pauseReason = fmt.Sprintf("daily loss limit hit (%.0f%%)", lossPercent*100)
 		}
 	}
+	hook := p.onClose
+	p.mu.Unlock()
+	if hook != nil {
+		go hook(closed)
+	}
 }
 
 // Stats returns a snapshot of portfolio performance.
 func (p *Portfolio) Stats() Stats {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
 	total := p.wins + p.losses
 	winRate := 0.0
@@ -132,8 +160,8 @@ func (p *Portfolio) Stats() Stats {
 
 // OpenPositions returns a snapshot of all open positions.
 func (p *Portfolio) OpenPositions() []*models.Position {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	out := make([]*models.Position, 0, len(p.positions))
 	for _, pos := range p.positions {
 		out = append(out, pos)
@@ -159,8 +187,8 @@ func (p *Portfolio) Resume() {
 
 // RecentClosed returns the last n closed positions (most recent first).
 func (p *Portfolio) RecentClosed(n int) []*models.ClosedPosition {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	if len(p.closed) == 0 {
 		return nil
 	}
@@ -175,12 +203,20 @@ func (p *Portfolio) RecentClosed(n int) []*models.ClosedPosition {
 	return out
 }
 
+// refreshToday resets daily P&L tracking when UTC date has changed.
+// Must be called with p.mu held.
 func (p *Portfolio) refreshToday() {
-	today := time.Now().Format("2006-01-02")
+	today := time.Now().UTC().Format("2006-01-02")
 	if today != p.todayDate {
 		p.todayDate = today
 		p.todayPnL = 0
 		p.todayStartSOL = p.startingSOL + p.totalPnL
+		// Lift a daily-loss pause — new day, fresh start
+		if p.paused && strings.Contains(p.pauseReason, "daily loss limit") {
+			p.paused = false
+			p.pauseReason = ""
+		}
+		log.Printf("[portfolio] daily P&L reset — new trading day %s", today)
 	}
 }
 
