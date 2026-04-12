@@ -1334,78 +1334,6 @@ function TabOverview({ stats, positions, closed, online, error }: {
   )
 }
 
-function TabTrades({ positions, closed }: { positions: Position[]; closed: ClosedPosition[] }) {
-  return (
-    <div className="p-6 space-y-6">
-      {/* Open positions */}
-      <div>
-        <div className="flex items-center gap-3 mb-4">
-          <h2 className="font-mono font-bold text-lg text-white">Open Positions</h2>
-          <span className="font-mono text-xs px-2.5 py-1 rounded-full bg-[#00A8FF]/10 text-[#00A8FF]">{positions.length}</span>
-        </div>
-        {positions.length === 0 ? (
-          <div className="neu-tile p-8 text-center">
-            <p className="font-mono text-[#444] text-sm">No open positions — bot is scanning.</p>
-          </div>
-        ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {positions.map(pos => <PositionCard key={pos.id} pos={pos} />)}
-          </div>
-        )}
-      </div>
-
-      {/* Closed trades */}
-      <div>
-        <div className="flex items-center gap-3 mb-4">
-          <h2 className="font-mono font-bold text-lg text-white">Trade History</h2>
-          <span className="font-mono text-xs px-2.5 py-1 rounded-full bg-white/5 text-[#555]">{closed.length}</span>
-        </div>
-        <div className="neu-tile p-5">
-          {closed.length === 0 ? (
-            <p className="font-mono text-xs text-[#444] text-center py-10">No closed trades yet.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="text-left border-b border-white/5">
-                    {['Token', 'Mode', 'Entry SOL', 'Exit SOL', 'P&L', '%', 'Reason', 'Time'].map(h => (
-                      <th key={h} className="font-mono text-[10px] text-[#333] uppercase tracking-wider pb-3 pr-5">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {closed.map((t, i) => (
-                    <tr key={i} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
-                      <td className="font-mono text-xs text-white py-2.5 pr-5">{shortMint(t.mint)}</td>
-                      <td className="font-mono text-xs text-[#00A8FF] py-2.5 pr-5">{t.score >= 75 ? 'SNIPER' : 'SCALPER'}</td>
-                      <td className="font-mono text-xs text-[#666] py-2.5 pr-5">{t.entry_amount_sol.toFixed(3)}</td>
-                      <td className="font-mono text-xs text-[#666] py-2.5 pr-5">{t.exit_amount_sol.toFixed(3)}</td>
-                      <td className={`font-mono text-xs font-bold py-2.5 pr-5 ${t.pnl_sol >= 0 ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
-                        {t.pnl_sol >= 0 ? '+' : ''}{t.pnl_sol.toFixed(4)}
-                      </td>
-                      <td className={`font-mono text-xs py-2.5 pr-5 ${t.pnl_percent >= 0 ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
-                        {t.pnl_percent >= 0 ? '+' : ''}{t.pnl_percent.toFixed(1)}%
-                      </td>
-                      <td className="py-2.5 pr-5">
-                        <span className={`font-mono text-[10px] px-2 py-0.5 rounded-full ${t.reason.startsWith('take') || t.reason === 'scalp' ? 'bg-[#4ADE80]/10 text-[#4ADE80]' : 'bg-[#EF4444]/10 text-[#EF4444]'}`}>
-                          {t.reason.replace('_', ' ').toUpperCase()}
-                        </span>
-                      </td>
-                      <td className="font-mono text-[10px] text-[#333] py-2.5">
-                        {new Date(t.closed_at).toLocaleTimeString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 const LOG_META: Record<string, { color: string; bg: string; icon: React.ReactNode }> = {
   ENTER: { color: '#4ADE80', bg: 'bg-[#4ADE80]/10', icon: <ArrowUp size={12} weight="bold" /> },
   EXIT:  { color: '#00A8FF', bg: 'bg-[#00A8FF]/10', icon: <ArrowDown size={12} weight="bold" /> },
@@ -1413,6 +1341,181 @@ const LOG_META: Record<string, { color: string; bg: string; icon: React.ReactNod
   STOP:  { color: '#F59E0B', bg: 'bg-[#F59E0B]/10', icon: <Stop size={12} weight="fill" /> },
   ALERT: { color: '#EF4444', bg: 'bg-[#EF4444]/10', icon: <Warning size={12} weight="fill" /> },
   INFO:  { color: '#555',    bg: 'bg-white/5',       icon: <Info size={12} weight="fill" /> },
+}
+
+function ClosedTradeCard({ t }: { t: ClosedPosition }) {
+  const isWin = t.pnl_sol >= 0
+  const isGreenReason = t.reason.startsWith('take') || t.reason === 'scalp'
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.04] last:border-0 hover:bg-white/[0.015] transition-colors">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-0.5">
+          <span className="font-mono text-xs text-white truncate">{shortMint(t.mint)}</span>
+          <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full bg-[#00A8FF]/10 text-[#00A8FF] shrink-0">
+            {t.score >= 75 ? 'SNP' : 'SCP'}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`font-mono text-[10px] px-1.5 py-0.5 rounded-full ${isGreenReason ? 'bg-[#4ADE80]/10 text-[#4ADE80]' : 'bg-[#EF4444]/10 text-[#EF4444]'}`}>
+            {t.reason.replace('_', ' ').toUpperCase()}
+          </span>
+          <span className="font-mono text-[10px] text-[#333]">{new Date(t.closed_at).toLocaleTimeString()}</span>
+        </div>
+      </div>
+      <div className="text-right shrink-0">
+        <p className={`font-mono text-sm font-bold ${isWin ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
+          {isWin ? '+' : ''}{t.pnl_sol.toFixed(3)}
+        </p>
+        <p className={`font-mono text-[10px] ${isWin ? 'text-[#4ADE80]' : 'text-[#EF4444]'} opacity-70`}>
+          {t.pnl_percent >= 0 ? '+' : ''}{t.pnl_percent.toFixed(1)}%
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function ActivityItem({ log }: { log: LogEntry }) {
+  const meta = LOG_META[log.type] ?? LOG_META.INFO
+  return (
+    <div className="flex items-start gap-3 px-4 py-2.5 border-b border-white/[0.04] last:border-0 hover:bg-white/[0.015] transition-colors">
+      <span className={`shrink-0 mt-0.5 w-5 h-5 rounded-full flex items-center justify-center ${meta.bg}`} style={{ color: meta.color }}>
+        {meta.icon}
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="font-mono text-[11px] text-[#a0a0a0] leading-relaxed break-words">{log.message}</p>
+        {log.type === 'EXIT' && log.pnl_sol !== undefined && (
+          <span className={`font-mono text-[10px] font-bold ${log.pnl_sol >= 0 ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
+            {log.pnl_sol >= 0 ? '+' : ''}{log.pnl_sol.toFixed(4)} SOL
+          </span>
+        )}
+      </div>
+      <span className="shrink-0 font-mono text-[10px] text-[#333] mt-0.5">{new Date(log.time).toLocaleTimeString()}</span>
+    </div>
+  )
+}
+
+function TabTrades({ positions, closed, mainWalletId }: { positions: Position[]; closed: ClosedPosition[]; mainWalletId?: string }) {
+  const [wallets, setWallets]   = useState<WalletEntry[]>([])
+  const [logs, setLogs]         = useState<LogEntry[]>([])
+
+  useEffect(() => {
+    api.wallets().then(setWallets).catch(() => {})
+    const fetchLogs = () => api.logs().then(setLogs).catch(() => {})
+    fetchLogs()
+    const id = setInterval(fetchLogs, 4000)
+    return () => clearInterval(id)
+  }, [])
+
+  const mainWallet = wallets.find(w => w.id === mainWalletId) ?? wallets[0]
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 p-3 h-[calc(100vh-3.5rem)] overflow-hidden">
+
+      {/* Card 1 — Open Positions */}
+      <div className="neu-tile flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.04] shrink-0">
+          <span className="font-mono text-xs font-bold text-white">Open Positions</span>
+          <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-[#00A8FF]/10 text-[#00A8FF]">{positions.length}</span>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {positions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full gap-2 py-8">
+              <p className="font-mono text-[11px] text-[#333] text-center">No open positions.</p>
+              <p className="font-mono text-[10px] text-[#222] text-center">Bot is scanning for tokens.</p>
+            </div>
+          ) : (
+            <div className="p-3 space-y-2">
+              {positions.map(pos => <PositionCard key={pos.id} pos={pos} />)}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Card 2 — Wallet */}
+      <div className="neu-tile flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.04] shrink-0">
+          <span className="font-mono text-xs font-bold text-white">Wallet</span>
+          {mainWallet && (
+            <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full bg-[#4ADE80]/10 text-[#4ADE80]">main</span>
+          )}
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">
+          {!mainWallet ? (
+            <p className="font-mono text-[11px] text-[#333] text-center py-8">No wallet configured.</p>
+          ) : (
+            <div className="space-y-4">
+              <div className="text-center py-3">
+                <p className="font-mono text-3xl font-bold text-white">
+                  {mainWallet.balance_sol != null ? mainWallet.balance_sol.toFixed(4) : '—'}
+                </p>
+                <p className="font-mono text-xs text-[#444] mt-1">SOL</p>
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="font-mono text-[10px] text-[#444]">Label</span>
+                  <span className="font-mono text-[10px] text-white">{mainWallet.label || 'Wallet'}</span>
+                </div>
+                <div className="flex justify-between items-start gap-2">
+                  <span className="font-mono text-[10px] text-[#444] shrink-0">Address</span>
+                  <span className="font-mono text-[10px] text-[#666] text-right break-all">
+                    {mainWallet.address ? `${mainWallet.address.slice(0, 8)}…${mainWallet.address.slice(-6)}` : '—'}
+                  </span>
+                </div>
+                {wallets.length > 1 && (
+                  <div className="flex justify-between items-center">
+                    <span className="font-mono text-[10px] text-[#444]">Wallets</span>
+                    <span className="font-mono text-[10px] text-[#555]">{wallets.length} total</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Card 3 — Closed Trades */}
+      <div className="neu-tile flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.04] shrink-0">
+          <span className="font-mono text-xs font-bold text-white">Trade History</span>
+          <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-[#555]">{closed.length}</span>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {closed.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full gap-2 py-8">
+              <p className="font-mono text-[11px] text-[#333] text-center">No closed trades yet.</p>
+            </div>
+          ) : (
+            <div>
+              {closed.map((t, i) => <ClosedTradeCard key={i} t={t} />)}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Card 4 — Activity Feed */}
+      <div className="neu-tile flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.04] shrink-0">
+          <span className="font-mono text-xs font-bold text-white">Activity</span>
+          <span className="flex items-center gap-1 font-mono text-[10px] text-[#4ADE80]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#4ADE80] animate-pulse" />
+            live
+          </span>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {logs.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full gap-2 py-8">
+              <p className="font-mono text-[11px] text-[#333] text-center">No activity yet.</p>
+            </div>
+          ) : (
+            <div>
+              {[...logs].reverse().map((log, i) => <ActivityItem key={i} log={log} />)}
+            </div>
+          )}
+        </div>
+      </div>
+
+    </div>
+  )
 }
 
 function TabLogs() {
@@ -1875,7 +1978,7 @@ export default function Dashboard({ onLogout, walletId, userName, userUsername, 
       />
 
       {tab === 'overview' && <TabOverview stats={stats} positions={positions} closed={closed} online={online} error={error} />}
-      {tab === 'trades'   && <TabTrades positions={positions} closed={closed} />}
+      {tab === 'trades'   && <TabTrades positions={positions} closed={closed} mainWalletId={mainWalletId} />}
       {tab === 'logs'     && <TabLogs />}
       {tab === 'wallets'  && <TabWallets mainWalletId={mainWalletId} onMainWalletSet={onCredentialsSaved} />}
 
