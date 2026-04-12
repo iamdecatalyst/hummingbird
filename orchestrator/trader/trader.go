@@ -29,13 +29,14 @@ type ScalperCloser interface {
 
 // Trader executes trades via Signet and manages position lifecycle.
 type Trader struct {
-	signet     *signet.Client
-	walletID   string
-	portfolio  *portfolio.Portfolio
-	telegram   alerts.Notifier
-	cricket    *cricket.Client // passed to per-position monitors
-	scalper    ScalperCloser   // notified on close to free scalp slots
-	monitorCfg monitor.MonitorConfig
+	signet        *signet.Client
+	walletID      string
+	portfolio     *portfolio.Portfolio
+	telegram      alerts.Notifier
+	cricket       *cricket.Client // passed to per-position monitors
+	scalper       ScalperCloser   // notified on close to free scalp slots
+	monitorCfg    monitor.MonitorConfig
+	minBalanceSOL float64
 
 	exitCh    chan monitor.ExitSignal
 	cancelFns sync.Map // mint → context.CancelFunc
@@ -49,16 +50,18 @@ func New(
 	cc *cricket.Client,
 	sc ScalperCloser,
 	monitorCfg monitor.MonitorConfig,
+	minBalanceSOL float64,
 ) *Trader {
 	t := &Trader{
-		signet:     signetClient,
-		walletID:   walletID,
-		portfolio:  port,
-		telegram:   tg,
-		cricket:    cc,
-		scalper:    sc,
-		monitorCfg: monitorCfg,
-		exitCh:     make(chan monitor.ExitSignal, 32),
+		signet:        signetClient,
+		walletID:      walletID,
+		portfolio:     port,
+		telegram:      tg,
+		cricket:       cc,
+		scalper:       sc,
+		monitorCfg:    monitorCfg,
+		minBalanceSOL: minBalanceSOL,
+		exitCh:        make(chan monitor.ExitSignal, 32),
 	}
 
 	go t.processExits()
@@ -87,6 +90,16 @@ func (t *Trader) Execute(result *models.ScoreResult) {
 
 func (t *Trader) enter(result *models.ScoreResult) {
 	log.Printf("[trader] entering %s | score=%d | %.3f SOL", result.Mint[:8], result.Total, result.PositionSOL)
+
+	// Min balance guard — check before swap so users' floor is respected
+	if t.minBalanceSOL > 0 {
+		balance := t.Balance()
+		if balance-result.PositionSOL < t.minBalanceSOL {
+			log.Printf("[trader] skip %s — would drop below min balance (balance=%.3f pos=%.3f min=%.3f)",
+				result.Mint[:8], balance, result.PositionSOL, t.minBalanceSOL)
+			return
+		}
+	}
 
 	params := signet.SwapParams{
 		FromToken:       "SOL",

@@ -133,7 +133,7 @@ func (m *Manager) startInstance(userID, apiKey, apiSecret, walletID, telegramCha
 		TimeoutMinutes:  userCfg.TimeoutMinutes,
 	}
 
-	tr := trader.New(client, walletID, port, n, m.cricket, m.scalper, monCfg)
+	tr := trader.New(client, walletID, port, n, m.cricket, m.scalper, monCfg, userCfg.MinBalanceSOL)
 
 	// Restore open positions from DB so monitors resume after a restart.
 	if m.db != nil {

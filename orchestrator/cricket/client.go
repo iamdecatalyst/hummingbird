@@ -7,11 +7,15 @@ package cricket
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
 )
+
+// ErrNoCricketKey is returned when a Cricket API call is attempted without a key.
+var ErrNoCricketKey = errors.New("CRICKET_API_KEY not set — sign up at https://cricket.vylth.com")
 
 // Client is an HTTP client for the Cricket Protocol API.
 type Client struct {
@@ -70,13 +74,14 @@ func (c *Client) FireflySignals(ctx context.Context) (*FireflySignalsResponse, e
 }
 
 func doGet[T any](ctx context.Context, c *Client, url string) (*T, error) {
+	if c.apiKey == "" {
+		return nil, ErrNoCricketKey
+	}
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
-	if c.apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+c.apiKey)
-	}
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	req.Header.Set("User-Agent", "hummingbird/1.0")
 
 	resp, err := c.http.Do(req)

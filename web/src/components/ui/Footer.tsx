@@ -11,6 +11,8 @@ export default function Footer() {
             className="hover:text-[#00A8FF] transition-colors">GitHub</a>
           <a href="https://signet.vylth.com" target="_blank" rel="noopener noreferrer"
             className="hover:text-[#00A8FF] transition-colors">Signet API</a>
+          <a href="https://x.com/vylthofficial" target="_blank" rel="noopener noreferrer"
+            className="hover:text-[#00A8FF] transition-colors">X / Twitter</a>
           <a href="https://t.me/iamdecatalyst" target="_blank" rel="noopener noreferrer"
             className="hover:text-[#00A8FF] transition-colors">Telegram</a>
           <span className="text-[#333]">Built by De Catalyst</span>

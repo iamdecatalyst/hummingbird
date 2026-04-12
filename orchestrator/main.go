@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	signet "github.com/VYLTH/signet-sdk-go/signet"
@@ -29,18 +30,63 @@ import (
 
 func main() {
 	cfg := config.Load()
-	mux := http.NewServeMux()
 
-	// Cricket client — powers all scoring, signal detection, and rug monitoring.
-	// Users need a Cricket account: https://cricket.vylth.com
-	cc := cricket.New(cfg.CricketURL, cfg.CricketKey)
-	if cfg.CricketKey == "" {
-		log.Printf("[main] WARNING: CRICKET_API_KEY not set — scoring will fail. Get your key at https://cricket.vylth.com")
+	// ── Startup validation ────────────────────────────────────────────────────
+	if cfg.MultiTenant {
+		if cfg.DatabaseURL == "" {
+			log.Fatal("[main] DATABASE_URL is required in multi-tenant mode")
+		}
+		if cfg.EncryptionKey == "" {
+			log.Fatal("[main] ENCRYPTION_KEY is required in multi-tenant mode")
+		}
+		if cfg.CricketKey == "" {
+			log.Fatal("[main] CRICKET_API_KEY is required in multi-tenant mode — get your key at https://cricket.vylth.com")
+		}
 	} else {
-		log.Printf("[main] Cricket Protocol connected (%s)", cfg.CricketURL)
+		if cfg.SignetAPIKey == "" || cfg.SignetAPISecret == "" {
+			log.Printf("[main] WARNING: SIGNET_API_KEY / SIGNET_API_SECRET not set — trading disabled until configured")
+		}
+		if cfg.CricketKey == "" {
+			log.Printf("[main] WARNING: CRICKET_API_KEY not set — all tokens will be scored as 0 and skipped")
+		}
+	}
+	if cfg.JWTSecret == "change-me-in-production" {
+		log.Printf("[main] WARNING: JWT_SECRET is using the default value — set a real secret before going live")
+	}
+	if cfg.TelegramToken == "" {
+		log.Printf("[main] WARNING: TELEGRAM_BOT_TOKEN not set — Telegram alerts disabled")
 	}
 
-	// Always public — lets the frontend know which mode to render
+	// ── Startup banner ────────────────────────────────────────────────────────
+	mode := "single-tenant"
+	if cfg.MultiTenant {
+		mode = "multi-tenant"
+	}
+	check := func(v string) string {
+		if v != "" {
+			return "✓"
+		}
+		return "✗"
+	}
+	log.Printf("[main] Hummingbird starting\n"+
+		"  Mode:     %s\n"+
+		"  Cricket:  %s %s\n"+
+		"  Signet:   %s %s\n"+
+		"  Telegram: %s\n"+
+		"  Database: %s\n"+
+		"  Listener: waiting on :%s/score",
+		mode,
+		check(cfg.CricketKey), cfg.CricketURL,
+		check(cfg.SignetBaseURL), cfg.SignetBaseURL,
+		check(cfg.TelegramToken),
+		check(cfg.DatabaseURL),
+		cfg.Port,
+	)
+
+	// ── Services ──────────────────────────────────────────────────────────────
+	mux := http.NewServeMux()
+	cc := cricket.New(cfg.CricketURL, cfg.CricketKey)
+
 	mux.HandleFunc("GET /mode", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"multi_tenant":%v}`, cfg.MultiTenant)
@@ -57,8 +103,12 @@ func main() {
 	}
 
 	addr := ":" + cfg.Port
-	log.Printf("[main] Hummingbird listening on %s (multi_tenant=%v)", addr, cfg.MultiTenant)
-	if err := http.ListenAndServe(addr, withCORS(mux)); err != nil {
+	log.Printf("[main] Hummingbird listening on %s", addr)
+	var handler http.Handler = withCORS(mux)
+	if cfg.MultiTenant {
+		handler = withRateLimit(handler, cfg.JWTSecret)
+	}
+	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatalf("[main] server error: %v", err)
 	}
 }
@@ -107,7 +157,7 @@ func startSingleTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMu
 			tr.Execute(r)
 		}
 	})
-	tr = trader.New(signetClient, walletID, port, notifier, cc, sc, monitor.DefaultMonitorConfig())
+	tr = trader.New(signetClient, walletID, port, notifier, cc, sc, monitor.DefaultMonitorConfig(), 0)
 
 	go sc.Run(context.Background())
 
@@ -1119,6 +1169,72 @@ func dailyStats(tgBot *bot.Bot, port *portfolio.Portfolio) {
 			tgBot.DailyStats(port.Stats())
 		}
 	}
+}
+
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+
+type rateBucket struct {
+	mu          sync.Mutex
+	count       int
+	windowStart time.Time
+}
+
+func (b *rateBucket) allow(limit int) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	now := time.Now()
+	if now.Sub(b.windowStart) >= time.Minute {
+		b.count = 0
+		b.windowStart = now
+	}
+	if b.count >= limit {
+		return false
+	}
+	b.count++
+	return true
+}
+
+// withRateLimit wraps the handler with per-user (60/min) and score-endpoint (100/min) rate limiting.
+func withRateLimit(next http.Handler, jwtSecret string) http.Handler {
+	var userBuckets sync.Map
+	var scoreBuckets sync.Map
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		// Public routes — no limit
+		if path == "/health" || path == "/mode" || strings.HasPrefix(path, "/auth/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		// Score/trade ingest — IP-based 100/min
+		if path == "/score" || path == "/trade" {
+			ip := r.RemoteAddr
+			if idx := strings.LastIndex(ip, ":"); idx >= 0 {
+				ip = ip[:idx]
+			}
+			v, _ := scoreBuckets.LoadOrStore(ip, &rateBucket{windowStart: time.Now()})
+			if !v.(*rateBucket).allow(100) {
+				w.Header().Set("Retry-After", "60")
+				http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
+				log.Printf("[ratelimit] WARN score endpoint throttled for %s", ip)
+				return
+			}
+			next.ServeHTTP(w, r)
+			return
+		}
+		// All other routes — JWT-based 60/min per user
+		if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
+			if nexusID, err := auth.ParseToken(strings.TrimPrefix(h, "Bearer "), jwtSecret); err == nil {
+				v, _ := userBuckets.LoadOrStore(nexusID, &rateBucket{windowStart: time.Now()})
+				if !v.(*rateBucket).allow(60) {
+					w.Header().Set("Retry-After", "60")
+					http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
+					log.Printf("[ratelimit] WARN user %s throttled", safeShort(nexusID))
+					return
+				}
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func withCORS(h http.Handler) http.Handler {

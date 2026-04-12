@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { GithubLogo, List, X, ArrowRight } from '@phosphor-icons/react'
+import { GithubLogo, XLogo, List, X } from '@phosphor-icons/react'
 
 export default function Nav() {
   const [scrolled, setScrolled] = useState(false)
@@ -46,6 +46,9 @@ export default function Nav() {
           <NavLink href="https://github.com/iamdecatalyst/hummingbird" external>
             <GithubLogo size={15} className="inline -mt-0.5 mr-1" />GitHub
           </NavLink>
+          <NavLink href="https://x.com/vylthofficial" external>
+            <XLogo size={15} className="inline -mt-0.5 mr-1" />X
+          </NavLink>
           {pathname !== '/dashboard' && (
             <Link
               to="/dashboard"
@@ -80,6 +83,9 @@ export default function Nav() {
               <MobileLink href="/#features" onClick={() => setOpen(false)}>Features</MobileLink>
               <MobileLink href="https://github.com/iamdecatalyst/hummingbird" onClick={() => setOpen(false)}>
                 GitHub ↗
+              </MobileLink>
+              <MobileLink href="https://x.com/vylthofficial" onClick={() => setOpen(false)}>
+                X / Twitter ↗
               </MobileLink>
               <Link to="/dashboard" className="hb-btn justify-center mt-2" onClick={() => setOpen(false)}>
                 Launch Dashboard →
