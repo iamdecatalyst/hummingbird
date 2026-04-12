@@ -110,10 +110,9 @@ function PositionCard({ pos }: { pos: Position }) {
 // ── Top nav ───────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'overview', label: 'Overview', icon: <ChartBar size={14} weight="duotone" /> },
-  { id: 'trades',   label: 'Trades',   icon: <ArrowsLeftRight size={14} weight="duotone" /> },
-  { id: 'logs',     label: 'Logs',     icon: <Terminal size={14} weight="duotone" /> },
-  { id: 'wallets',  label: 'Wallets',  icon: <Wallet size={14} weight="duotone" /> },
+  { id: 'overview',  label: 'Overview',  icon: <ChartBar size={14} weight="duotone" /> },
+  { id: 'accounts',  label: 'Accounts',  icon: <ArrowsLeftRight size={14} weight="duotone" /> },
+  { id: 'logs',      label: 'Logs',      icon: <Terminal size={14} weight="duotone" /> },
 ]
 
 function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpenCredentials, onOpenTelegram, onOpenConfig, telegramConnected, userName, userUsername, userAvatar }: {
@@ -1394,24 +1393,173 @@ function ActivityItem({ log }: { log: LogEntry }) {
   )
 }
 
-function TabTrades({ positions, closed, mainWalletId }: { positions: Position[]; closed: ClosedPosition[]; mainWalletId?: string }) {
-  const [wallets, setWallets]   = useState<WalletEntry[]>([])
-  const [logs, setLogs]         = useState<LogEntry[]>([])
+function WalletCard({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; onMainWalletSet?: () => void }) {
+  const [wallets,      setWallets]      = useState<WalletEntry[]>([])
+  const [loading,      setLoading]      = useState(true)
+  const [creating,     setCreating]     = useState(false)
+  const [createLabel,  setCreateLabel]  = useState('')
+  const [showCreate,   setShowCreate]   = useState(false)
+  const [activeWallet, setActiveWallet] = useState<string | null>(null)
+  const [dropOpen,     setDropOpen]     = useState(false)
+
+  const load = () => {
+    setLoading(true)
+    api.wallets().then(ws => {
+      setWallets(ws)
+      setActiveWallet(prev => prev ?? (ws.find(w => w.id === mainWalletId)?.id ?? ws[0]?.id ?? null))
+    }).catch(() => {}).finally(() => setLoading(false))
+  }
+  useEffect(() => { load() }, [])
+
+  const handleCreate = async () => {
+    if (creating) return
+    setCreating(true)
+    try {
+      await api.createWallet(createLabel.trim() || undefined)
+      setCreateLabel(''); setShowCreate(false); load()
+    } catch { /* ignore */ } finally { setCreating(false) }
+  }
+
+  const active = wallets.find(w => w.id === activeWallet)
+
+  return (
+    <div className="neu-tile flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-white/[0.04] shrink-0">
+        <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(153,69,255,0.15)' }}>
+          <SolanaIcon size={11} />
+        </div>
+        <span className="font-mono text-xs font-bold text-white">Solana Wallets</span>
+      </div>
+      <div className="flex-1 overflow-y-auto p-4">
+        {loading ? (
+          <p className="font-mono text-xs text-[#333] text-center py-8">Loading…</p>
+        ) : wallets.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="font-mono text-xs text-[#444] mb-4">No wallets yet.</p>
+            {showCreate ? (
+              <div className="flex gap-2 justify-center">
+                <input autoFocus type="text" placeholder="Label (optional)"
+                  value={createLabel} onChange={e => setCreateLabel(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleCreate()}
+                  className="neu-card-inset rounded-xl px-3 py-2 font-mono text-xs text-white placeholder-[#444] outline-none w-40" />
+                <button onClick={handleCreate} disabled={creating}
+                  className="px-4 py-2 rounded-xl font-mono text-xs disabled:opacity-40"
+                  style={{ background: 'rgba(0,168,255,0.1)', color: '#00A8FF' }}>
+                  {creating ? '…' : 'Create'}
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => setShowCreate(true)}
+                className="flex items-center gap-2 mx-auto px-4 py-2.5 rounded-xl font-mono text-xs text-[#555] hover:text-white transition-colors"
+                style={{ background: 'rgba(255,255,255,0.04)' }}>
+                <Plus size={13} /> Create first wallet
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* Wallet switcher dropdown */}
+            <div className="relative mb-4">
+              <button
+                onClick={() => setDropOpen(v => !v)}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
+              >
+                <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(153,69,255,0.15)' }}>
+                  <SolanaIcon size={13} />
+                </div>
+                <div className="flex-1 text-left min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-mono text-xs text-white font-bold truncate">
+                      {active?.label || 'Wallet'}
+                    </p>
+                    {mainWalletId && mainWalletId === activeWallet && (
+                      <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full shrink-0"
+                        style={{ background: 'rgba(74,222,128,0.12)', color: '#4ADE80' }}>main</span>
+                    )}
+                  </div>
+                  <p className="font-mono text-[10px] text-[#555]">{active?.balance_sol.toFixed(4)} SOL</p>
+                </div>
+                <CaretDown size={13} className="text-[#555] shrink-0 transition-transform" style={{ transform: dropOpen ? 'rotate(180deg)' : 'none' }} />
+              </button>
+
+              {dropOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setDropOpen(false)} />
+                  <div className="absolute left-0 right-0 top-full mt-1.5 z-20 rounded-xl overflow-hidden"
+                    style={{ background: '#111', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 12px 40px rgba(0,0,0,0.7)' }}>
+                    {wallets.map(w => (
+                      <button key={w.id} onClick={() => { setActiveWallet(w.id); setDropOpen(false) }}
+                        className="w-full flex items-center gap-3 px-4 py-3 transition-colors hover:bg-white/[0.04]"
+                        style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(153,69,255,0.12)' }}>
+                          <SolanaIcon size={11} />
+                        </div>
+                        <div className="flex-1 text-left min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-mono text-xs text-white truncate">{w.label || 'Wallet'}</p>
+                            {mainWalletId === w.id && (
+                              <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full shrink-0"
+                                style={{ background: 'rgba(74,222,128,0.12)', color: '#4ADE80' }}>main</span>
+                            )}
+                          </div>
+                          <p className="font-mono text-[10px] text-[#555]">{w.balance_sol.toFixed(4)} SOL</p>
+                        </div>
+                        {activeWallet === w.id && <Check size={13} className="text-[#00A8FF] shrink-0" />}
+                      </button>
+                    ))}
+                    {showCreate ? (
+                      <div className="flex items-center gap-2 px-3 py-2.5">
+                        <input autoFocus type="text" placeholder="Label (optional)…"
+                          value={createLabel} onChange={e => setCreateLabel(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && handleCreate()}
+                          className="flex-1 bg-[#1a1a1a] rounded-lg px-3 py-1.5 font-mono text-xs text-white placeholder-[#444] outline-none" />
+                        <button onClick={handleCreate} disabled={creating}
+                          className="px-3 py-1.5 rounded-lg font-mono text-[10px] disabled:opacity-40 shrink-0"
+                          style={{ background: 'rgba(0,168,255,0.1)', color: '#00A8FF' }}>
+                          {creating ? '…' : 'Create'}
+                        </button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setShowCreate(true)}
+                        className="w-full flex items-center gap-2 px-4 py-3 text-[#555] hover:text-white transition-colors">
+                        <Plus size={13} />
+                        <span className="font-mono text-xs">New wallet</span>
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {active && <WalletDetail wal={active} onRefresh={load} mainWalletId={mainWalletId} onMainWalletSet={onMainWalletSet} />}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function TabAccounts({ positions, closed, mainWalletId, onMainWalletSet }: {
+  positions: Position[]
+  closed: ClosedPosition[]
+  mainWalletId?: string
+  onMainWalletSet?: () => void
+}) {
+  const [logs, setLogs] = useState<LogEntry[]>([])
 
   useEffect(() => {
-    api.wallets().then(setWallets).catch(() => {})
     const fetchLogs = () => api.logs().then(setLogs).catch(() => {})
     fetchLogs()
     const id = setInterval(fetchLogs, 4000)
     return () => clearInterval(id)
   }, [])
 
-  const mainWallet = wallets.find(w => w.id === mainWalletId) ?? wallets[0]
-
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 p-3 h-[calc(100vh-3.5rem)] overflow-hidden">
+    <div className="grid grid-cols-2 grid-rows-2 gap-3 p-3 overflow-hidden" style={{ height: 'calc(100vh - 3.5rem)' }}>
 
-      {/* Card 1 — Open Positions */}
+      {/* Top-left — Open Positions */}
       <div className="neu-tile flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.04] shrink-0">
           <span className="font-mono text-xs font-bold text-white">Open Positions</span>
@@ -1419,9 +1567,9 @@ function TabTrades({ positions, closed, mainWalletId }: { positions: Position[];
         </div>
         <div className="flex-1 overflow-y-auto">
           {positions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full gap-2 py-8">
-              <p className="font-mono text-[11px] text-[#333] text-center">No open positions.</p>
-              <p className="font-mono text-[10px] text-[#222] text-center">Bot is scanning for tokens.</p>
+            <div className="flex flex-col items-center justify-center h-full gap-1.5">
+              <p className="font-mono text-[11px] text-[#333]">No open positions.</p>
+              <p className="font-mono text-[10px] text-[#222]">Bot is scanning for tokens.</p>
             </div>
           ) : (
             <div className="p-3 space-y-2">
@@ -1431,49 +1579,10 @@ function TabTrades({ positions, closed, mainWalletId }: { positions: Position[];
         </div>
       </div>
 
-      {/* Card 2 — Wallet */}
-      <div className="neu-tile flex flex-col overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.04] shrink-0">
-          <span className="font-mono text-xs font-bold text-white">Wallet</span>
-          {mainWallet && (
-            <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full bg-[#4ADE80]/10 text-[#4ADE80]">main</span>
-          )}
-        </div>
-        <div className="flex-1 overflow-y-auto p-4">
-          {!mainWallet ? (
-            <p className="font-mono text-[11px] text-[#333] text-center py-8">No wallet configured.</p>
-          ) : (
-            <div className="space-y-4">
-              <div className="text-center py-3">
-                <p className="font-mono text-3xl font-bold text-white">
-                  {mainWallet.balance_sol != null ? mainWallet.balance_sol.toFixed(4) : '—'}
-                </p>
-                <p className="font-mono text-xs text-[#444] mt-1">SOL</p>
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="font-mono text-[10px] text-[#444]">Label</span>
-                  <span className="font-mono text-[10px] text-white">{mainWallet.label || 'Wallet'}</span>
-                </div>
-                <div className="flex justify-between items-start gap-2">
-                  <span className="font-mono text-[10px] text-[#444] shrink-0">Address</span>
-                  <span className="font-mono text-[10px] text-[#666] text-right break-all">
-                    {mainWallet.address ? `${mainWallet.address.slice(0, 8)}…${mainWallet.address.slice(-6)}` : '—'}
-                  </span>
-                </div>
-                {wallets.length > 1 && (
-                  <div className="flex justify-between items-center">
-                    <span className="font-mono text-[10px] text-[#444]">Wallets</span>
-                    <span className="font-mono text-[10px] text-[#555]">{wallets.length} total</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Top-right — Wallet */}
+      <WalletCard mainWalletId={mainWalletId} onMainWalletSet={onMainWalletSet} />
 
-      {/* Card 3 — Closed Trades */}
+      {/* Bottom-left — Trade History */}
       <div className="neu-tile flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.04] shrink-0">
           <span className="font-mono text-xs font-bold text-white">Trade History</span>
@@ -1481,18 +1590,16 @@ function TabTrades({ positions, closed, mainWalletId }: { positions: Position[];
         </div>
         <div className="flex-1 overflow-y-auto">
           {closed.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full gap-2 py-8">
-              <p className="font-mono text-[11px] text-[#333] text-center">No closed trades yet.</p>
+            <div className="flex flex-col items-center justify-center h-full gap-1.5">
+              <p className="font-mono text-[11px] text-[#333]">No closed trades yet.</p>
             </div>
           ) : (
-            <div>
-              {closed.map((t, i) => <ClosedTradeCard key={i} t={t} />)}
-            </div>
+            <div>{closed.map((t, i) => <ClosedTradeCard key={i} t={t} />)}</div>
           )}
         </div>
       </div>
 
-      {/* Card 4 — Activity Feed */}
+      {/* Bottom-right — Activity Feed */}
       <div className="neu-tile flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.04] shrink-0">
           <span className="font-mono text-xs font-bold text-white">Activity</span>
@@ -1503,13 +1610,11 @@ function TabTrades({ positions, closed, mainWalletId }: { positions: Position[];
         </div>
         <div className="flex-1 overflow-y-auto">
           {logs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full gap-2 py-8">
-              <p className="font-mono text-[11px] text-[#333] text-center">No activity yet.</p>
+            <div className="flex flex-col items-center justify-center h-full gap-1.5">
+              <p className="font-mono text-[11px] text-[#333]">No activity yet.</p>
             </div>
           ) : (
-            <div>
-              {[...logs].reverse().map((log, i) => <ActivityItem key={i} log={log} />)}
-            </div>
+            <div>{[...logs].reverse().map((log, i) => <ActivityItem key={i} log={log} />)}</div>
           )}
         </div>
       </div>
@@ -1977,10 +2082,9 @@ export default function Dashboard({ onLogout, walletId, userName, userUsername, 
         userAvatar={userAvatar}
       />
 
-      {tab === 'overview' && <TabOverview stats={stats} positions={positions} closed={closed} online={online} error={error} />}
-      {tab === 'trades'   && <TabTrades positions={positions} closed={closed} mainWalletId={mainWalletId} />}
-      {tab === 'logs'     && <TabLogs />}
-      {tab === 'wallets'  && <TabWallets mainWalletId={mainWalletId} onMainWalletSet={onCredentialsSaved} />}
+      {tab === 'overview'  && <TabOverview stats={stats} positions={positions} closed={closed} online={online} error={error} />}
+      {tab === 'accounts'  && <TabAccounts positions={positions} closed={closed} mainWalletId={mainWalletId} onMainWalletSet={onCredentialsSaved} />}
+      {tab === 'logs'      && <TabLogs />}
 
       {showConfig      && <ConfigModal onClose={() => setShowConfig(false)} />}
       {showCredentials && (
