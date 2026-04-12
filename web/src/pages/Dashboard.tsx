@@ -1393,6 +1393,101 @@ function ActivityItem({ log }: { log: LogEntry }) {
   )
 }
 
+function DepositDialog({ wal, onClose }: { wal: WalletEntry; onClose: () => void }) {
+  const [copied, setCopied] = useState(false)
+  const copy = () => {
+    navigator.clipboard.writeText(wal.address)
+    setCopied(true); setTimeout(() => setCopied(false), 1500)
+  }
+  return (
+    <Modal onClose={onClose} maxWidth={400}>
+      <ModalHeader icon={<QrCode size={16} />} title="Deposit SOL" sub={wal.label || 'Wallet'} onClose={onClose} />
+      <div className="p-5 text-center">
+        <div className="inline-flex p-4 rounded-2xl mb-4" style={{ background: '#fff' }}>
+          <QRCodeSVG value={wal.address} size={180} bgColor="#ffffff" fgColor="#0a0a0a" level="M" />
+        </div>
+        <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-1">Scan to deposit SOL</p>
+        <p className="font-mono text-[10px] text-[#333] mb-4">Solana network only</p>
+        <div className="flex items-center gap-2 p-3 rounded-xl text-left" style={{ background: '#0d0d0d', boxShadow: 'inset 2px 2px 6px #070707' }}>
+          <span className="font-mono text-[10px] text-[#666] flex-1 break-all leading-relaxed">{wal.address}</span>
+          <button onClick={copy} className="text-[#444] hover:text-white transition-colors shrink-0">
+            {copied ? <Check size={13} className="text-[#4ADE80]" /> : <Copy size={13} />}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function WithdrawDialog({ wal, onClose, onDone }: { wal: WalletEntry; onClose: () => void; onDone: () => void }) {
+  const [sendTo,  setSendTo]  = useState('')
+  const [sendAmt, setSendAmt] = useState('')
+  const [sending, setSending] = useState(false)
+  const [sendErr, setSendErr] = useState('')
+  const [txHash,  setTxHash]  = useState('')
+
+  const handleWithdraw = async () => {
+    if (!sendTo.trim() || !sendAmt.trim()) { setSendErr('Address and amount required'); return }
+    setSending(true); setSendErr(''); setTxHash('')
+    try {
+      const res = await api.withdraw(wal.id, sendTo.trim(), sendAmt.trim())
+      setTxHash(res.tx_hash); setSendTo(''); setSendAmt('')
+      onDone()
+    } catch (e: unknown) {
+      setSendErr(e instanceof Error ? e.message : 'Transaction failed')
+    } finally { setSending(false) }
+  }
+
+  return (
+    <Modal onClose={onClose} maxWidth={420}>
+      <ModalHeader icon={<PaperPlaneTilt size={16} />} title="Send SOL" sub={`${wal.balance_sol.toFixed(4)} SOL available`} onClose={onClose} />
+      <div className="p-5 space-y-3">
+        <div className="flex items-center justify-between px-3 py-2.5 rounded-xl" style={{ background: '#0d0d0d', boxShadow: 'inset 2px 2px 6px #070707' }}>
+          <span className="font-mono text-xs text-[#555]">Available</span>
+          <div className="flex items-center gap-1.5">
+            <SolanaIcon size={12} />
+            <span className="font-mono text-xs font-bold text-white">{wal.balance_sol.toFixed(4)} SOL</span>
+          </div>
+        </div>
+        <div>
+          <label className="font-mono text-[10px] text-[#555] uppercase tracking-wider block mb-1.5">Recipient Address</label>
+          <input type="text" value={sendTo} onChange={e => setSendTo(e.target.value)}
+            placeholder="Solana address (base58)"
+            className="w-full neu-card-inset rounded-xl px-3 py-2.5 font-mono text-xs text-white placeholder-[#333] outline-none" />
+        </div>
+        <div>
+          <label className="font-mono text-[10px] text-[#555] uppercase tracking-wider block mb-1.5">Amount (SOL)</label>
+          <div className="flex items-center neu-card-inset rounded-xl overflow-hidden">
+            <input type="text" inputMode="decimal" value={sendAmt} onChange={e => setSendAmt(e.target.value)}
+              placeholder="0.000"
+              className="flex-1 px-3 py-2.5 bg-transparent font-mono text-sm text-white placeholder-[#333] outline-none" />
+            <button onClick={() => setSendAmt(wal.balance_sol.toFixed(4))}
+              className="px-3 py-1.5 mr-1.5 rounded-lg font-mono text-[10px] font-bold tracking-widest"
+              style={{ background: 'rgba(0,168,255,0.1)', color: '#00A8FF' }}>MAX</button>
+          </div>
+        </div>
+        {sendErr && <p className="font-mono text-xs text-[#EF4444]">{sendErr}</p>}
+        {txHash && (
+          <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.15)' }}>
+            <Check size={13} className="text-[#4ADE80] shrink-0" />
+            <span className="font-mono text-[10px] text-[#4ADE80] flex-1 truncate">Sent · {txHash.slice(0, 16)}…</span>
+          </div>
+        )}
+        <button onClick={handleWithdraw} disabled={sending || !sendTo || !sendAmt}
+          className="w-full py-3 rounded-xl font-mono text-xs font-bold flex items-center justify-center gap-2 transition-all disabled:opacity-40"
+          style={{ background: 'rgba(0,168,255,0.12)', color: '#00A8FF' }}>
+          <PaperPlaneTilt size={13} weight="fill" />
+          {sending ? 'Sending…' : 'Send SOL'}
+        </button>
+        <div className="flex items-start gap-2 p-3 rounded-xl" style={{ background: 'rgba(251,191,36,0.05)', border: '1px solid rgba(251,191,36,0.1)' }}>
+          <Warning size={12} className="text-[#F59E0B] shrink-0 mt-0.5" weight="fill" />
+          <span className="font-mono text-[10px] text-[#555] leading-relaxed">Double-check the address. Blockchain transactions are irreversible.</span>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 function WalletCard({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; onMainWalletSet?: () => void }) {
   const [wallets,      setWallets]      = useState<WalletEntry[]>([])
   const [loading,      setLoading]      = useState(true)
@@ -1401,6 +1496,10 @@ function WalletCard({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; 
   const [showCreate,   setShowCreate]   = useState(false)
   const [activeWallet, setActiveWallet] = useState<string | null>(null)
   const [dropOpen,     setDropOpen]     = useState(false)
+  const [showDeposit,  setShowDeposit]  = useState(false)
+  const [showWithdraw, setShowWithdraw] = useState(false)
+  const [settingMain,  setSettingMain]  = useState(false)
+  const [addrCopied,   setAddrCopied]   = useState(false)
 
   const load = () => {
     setLoading(true)
@@ -1420,124 +1519,184 @@ function WalletCard({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; 
     } catch { /* ignore */ } finally { setCreating(false) }
   }
 
+  const handleSetMain = async (walId: string) => {
+    if (settingMain) return
+    setSettingMain(true)
+    try { await api.setMainWallet(walId); onMainWalletSet?.(); load() }
+    catch { /* ignore */ } finally { setSettingMain(false) }
+  }
+
+  const copyAddr = (addr: string) => {
+    navigator.clipboard.writeText(addr)
+    setAddrCopied(true); setTimeout(() => setAddrCopied(false), 1500)
+  }
+
   const active = wallets.find(w => w.id === activeWallet)
+  const isMain = activeWallet === mainWalletId
 
   return (
-    <div className="neu-tile flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-white/[0.04] shrink-0">
-        <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(153,69,255,0.15)' }}>
-          <SolanaIcon size={11} />
-        </div>
-        <span className="font-mono text-xs font-bold text-white">Solana Wallets</span>
-      </div>
-      <div className="flex-1 overflow-y-auto p-4">
-        {loading ? (
-          <p className="font-mono text-xs text-[#333] text-center py-8">Loading…</p>
-        ) : wallets.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="font-mono text-xs text-[#444] mb-4">No wallets yet.</p>
-            {showCreate ? (
-              <div className="flex gap-2 justify-center">
-                <input autoFocus type="text" placeholder="Label (optional)"
-                  value={createLabel} onChange={e => setCreateLabel(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleCreate()}
-                  className="neu-card-inset rounded-xl px-3 py-2 font-mono text-xs text-white placeholder-[#444] outline-none w-40" />
-                <button onClick={handleCreate} disabled={creating}
-                  className="px-4 py-2 rounded-xl font-mono text-xs disabled:opacity-40"
-                  style={{ background: 'rgba(0,168,255,0.1)', color: '#00A8FF' }}>
-                  {creating ? '…' : 'Create'}
-                </button>
-              </div>
-            ) : (
-              <button onClick={() => setShowCreate(true)}
-                className="flex items-center gap-2 mx-auto px-4 py-2.5 rounded-xl font-mono text-xs text-[#555] hover:text-white transition-colors"
-                style={{ background: 'rgba(255,255,255,0.04)' }}>
-                <Plus size={13} /> Create first wallet
-              </button>
-            )}
+    <>
+      <div className="neu-tile flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center gap-2.5 px-4 py-3 border-b border-white/[0.04] shrink-0">
+          <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(153,69,255,0.15)' }}>
+            <SolanaIcon size={11} />
           </div>
-        ) : (
-          <>
-            {/* Wallet switcher dropdown */}
-            <div className="relative mb-4">
-              <button
-                onClick={() => setDropOpen(v => !v)}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all"
-                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
-              >
-                <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(153,69,255,0.15)' }}>
-                  <SolanaIcon size={13} />
-                </div>
-                <div className="flex-1 text-left min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="font-mono text-xs text-white font-bold truncate">
-                      {active?.label || 'Wallet'}
-                    </p>
-                    {mainWalletId && mainWalletId === activeWallet && (
-                      <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full shrink-0"
-                        style={{ background: 'rgba(74,222,128,0.12)', color: '#4ADE80' }}>main</span>
-                    )}
-                  </div>
-                  <p className="font-mono text-[10px] text-[#555]">{active?.balance_sol.toFixed(4)} SOL</p>
-                </div>
-                <CaretDown size={13} className="text-[#555] shrink-0 transition-transform" style={{ transform: dropOpen ? 'rotate(180deg)' : 'none' }} />
-              </button>
+          <span className="font-mono text-xs font-bold text-white">Solana Wallets</span>
+        </div>
 
-              {dropOpen && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setDropOpen(false)} />
-                  <div className="absolute left-0 right-0 top-full mt-1.5 z-20 rounded-xl overflow-hidden"
-                    style={{ background: '#111', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 12px 40px rgba(0,0,0,0.7)' }}>
-                    {wallets.map(w => (
-                      <button key={w.id} onClick={() => { setActiveWallet(w.id); setDropOpen(false) }}
-                        className="w-full flex items-center gap-3 px-4 py-3 transition-colors hover:bg-white/[0.04]"
-                        style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                        <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(153,69,255,0.12)' }}>
-                          <SolanaIcon size={11} />
-                        </div>
-                        <div className="flex-1 text-left min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <p className="font-mono text-xs text-white truncate">{w.label || 'Wallet'}</p>
-                            {mainWalletId === w.id && (
-                              <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full shrink-0"
-                                style={{ background: 'rgba(74,222,128,0.12)', color: '#4ADE80' }}>main</span>
-                            )}
-                          </div>
-                          <p className="font-mono text-[10px] text-[#555]">{w.balance_sol.toFixed(4)} SOL</p>
-                        </div>
-                        {activeWallet === w.id && <Check size={13} className="text-[#00A8FF] shrink-0" />}
-                      </button>
-                    ))}
-                    {showCreate ? (
-                      <div className="flex items-center gap-2 px-3 py-2.5">
-                        <input autoFocus type="text" placeholder="Label (optional)…"
-                          value={createLabel} onChange={e => setCreateLabel(e.target.value)}
-                          onKeyDown={e => e.key === 'Enter' && handleCreate()}
-                          className="flex-1 bg-[#1a1a1a] rounded-lg px-3 py-1.5 font-mono text-xs text-white placeholder-[#444] outline-none" />
-                        <button onClick={handleCreate} disabled={creating}
-                          className="px-3 py-1.5 rounded-lg font-mono text-[10px] disabled:opacity-40 shrink-0"
-                          style={{ background: 'rgba(0,168,255,0.1)', color: '#00A8FF' }}>
-                          {creating ? '…' : 'Create'}
-                        </button>
-                      </div>
-                    ) : (
-                      <button onClick={() => setShowCreate(true)}
-                        className="w-full flex items-center gap-2 px-4 py-3 text-[#555] hover:text-white transition-colors">
-                        <Plus size={13} />
-                        <span className="font-mono text-xs">New wallet</span>
-                      </button>
-                    )}
-                  </div>
-                </>
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+          {loading ? (
+            <p className="font-mono text-xs text-[#333] text-center py-8">Loading…</p>
+          ) : wallets.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="font-mono text-xs text-[#444] mb-4">No wallets yet.</p>
+              {showCreate ? (
+                <div className="flex gap-2 justify-center">
+                  <input autoFocus type="text" placeholder="Label (optional)"
+                    value={createLabel} onChange={e => setCreateLabel(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleCreate()}
+                    className="neu-card-inset rounded-xl px-3 py-2 font-mono text-xs text-white placeholder-[#444] outline-none w-40" />
+                  <button onClick={handleCreate} disabled={creating}
+                    className="px-4 py-2 rounded-xl font-mono text-xs disabled:opacity-40"
+                    style={{ background: 'rgba(0,168,255,0.1)', color: '#00A8FF' }}>
+                    {creating ? '…' : 'Create'}
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => setShowCreate(true)}
+                  className="flex items-center gap-2 mx-auto px-4 py-2.5 rounded-xl font-mono text-xs text-[#555] hover:text-white transition-colors"
+                  style={{ background: 'rgba(255,255,255,0.04)' }}>
+                  <Plus size={13} /> Create first wallet
+                </button>
               )}
             </div>
+          ) : (
+            <>
+              {/* Wallet switcher */}
+              <div className="relative">
+                <button onClick={() => setDropOpen(v => !v)}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all"
+                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(153,69,255,0.15)' }}>
+                    <SolanaIcon size={13} />
+                  </div>
+                  <div className="flex-1 text-left min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-mono text-xs text-white font-bold truncate">{active?.label || 'Wallet'}</p>
+                      {isMain && (
+                        <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full shrink-0"
+                          style={{ background: 'rgba(74,222,128,0.12)', color: '#4ADE80' }}>main</span>
+                      )}
+                    </div>
+                    <p className="font-mono text-[10px] text-[#555]">{active?.balance_sol.toFixed(4)} SOL</p>
+                  </div>
+                  <CaretDown size={13} className="text-[#555] shrink-0" style={{ transform: dropOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+                </button>
 
-            {active && <WalletDetail wal={active} onRefresh={load} mainWalletId={mainWalletId} onMainWalletSet={onMainWalletSet} />}
-          </>
-        )}
+                {dropOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setDropOpen(false)} />
+                    <div className="absolute left-0 right-0 top-full mt-1.5 z-20 rounded-xl overflow-hidden"
+                      style={{ background: '#111', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 12px 40px rgba(0,0,0,0.7)' }}>
+                      {wallets.map(w => (
+                        <button key={w.id} onClick={() => { setActiveWallet(w.id); setDropOpen(false) }}
+                          className="w-full flex items-center gap-3 px-4 py-3 transition-colors hover:bg-white/[0.04]"
+                          style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                          <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(153,69,255,0.12)' }}>
+                            <SolanaIcon size={11} />
+                          </div>
+                          <div className="flex-1 text-left min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-mono text-xs text-white truncate">{w.label || 'Wallet'}</p>
+                              {mainWalletId === w.id && (
+                                <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full shrink-0"
+                                  style={{ background: 'rgba(74,222,128,0.12)', color: '#4ADE80' }}>main</span>
+                              )}
+                            </div>
+                            <p className="font-mono text-[10px] text-[#555]">{w.balance_sol.toFixed(4)} SOL</p>
+                          </div>
+                          {activeWallet === w.id && <Check size={13} className="text-[#00A8FF] shrink-0" />}
+                        </button>
+                      ))}
+                      {showCreate ? (
+                        <div className="flex items-center gap-2 px-3 py-2.5">
+                          <input autoFocus type="text" placeholder="Label (optional)…"
+                            value={createLabel} onChange={e => setCreateLabel(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleCreate()}
+                            className="flex-1 bg-[#1a1a1a] rounded-lg px-3 py-1.5 font-mono text-xs text-white placeholder-[#444] outline-none" />
+                          <button onClick={handleCreate} disabled={creating}
+                            className="px-3 py-1.5 rounded-lg font-mono text-[10px] disabled:opacity-40 shrink-0"
+                            style={{ background: 'rgba(0,168,255,0.1)', color: '#00A8FF' }}>
+                            {creating ? '…' : 'Create'}
+                          </button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setShowCreate(true)}
+                          className="w-full flex items-center gap-2 px-4 py-3 text-[#555] hover:text-white transition-colors">
+                          <Plus size={13} /><span className="font-mono text-xs">New wallet</span>
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Balance display */}
+              {active && (
+                <div style={{ borderRadius: 14, background: 'linear-gradient(135deg, #0f1318 0%, #111827 100%)', border: '1px solid rgba(255,255,255,0.06)', padding: '16px 18px' }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="font-mono text-[10px] text-[#555]">SOLANA MAINNET</span>
+                    {isMain ? (
+                      <span className="font-mono text-[9px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(0,168,255,0.12)', color: '#00A8FF' }}>Trading</span>
+                    ) : (
+                      <button onClick={() => handleSetMain(active.id)} disabled={settingMain}
+                        className="font-mono text-[10px] px-2.5 py-1 rounded-lg transition-colors disabled:opacity-40"
+                        style={{ background: 'rgba(255,255,255,0.05)', color: '#555' }}
+                        onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
+                        onMouseLeave={e => (e.currentTarget.style.color = '#555')}>
+                        {settingMain ? '…' : 'Set as main'}
+                      </button>
+                    )}
+                  </div>
+                  <div className="mb-3">
+                    <span className="font-mono text-3xl font-bold text-white">{active.balance_sol.toFixed(4)}</span>
+                    <span className="font-mono text-sm text-[#555] ml-2">SOL</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[10px] text-[#444] flex-1 truncate">
+                      {active.address.slice(0, 12)}…{active.address.slice(-8)}
+                    </span>
+                    <button onClick={() => copyAddr(active.address)} className="text-[#444] hover:text-white transition-colors shrink-0">
+                      {addrCopied ? <Check size={11} className="text-[#4ADE80]" /> : <Copy size={11} />}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Action buttons */}
+              {active && (
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => setShowDeposit(true)}
+                    className="flex items-center justify-center gap-2 py-2.5 rounded-xl font-mono text-xs transition-all"
+                    style={{ background: 'rgba(74,222,128,0.08)', color: '#4ADE80', border: '1px solid rgba(74,222,128,0.12)' }}>
+                    <QrCode size={13} /> Deposit
+                  </button>
+                  <button onClick={() => setShowWithdraw(true)}
+                    className="flex items-center justify-center gap-2 py-2.5 rounded-xl font-mono text-xs transition-all"
+                    style={{ background: 'rgba(0,168,255,0.08)', color: '#00A8FF', border: '1px solid rgba(0,168,255,0.12)' }}>
+                    <PaperPlaneTilt size={13} /> Withdraw
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
-    </div>
+
+      {showDeposit  && active && <DepositDialog  wal={active} onClose={() => setShowDeposit(false)} />}
+      {showWithdraw && active && <WithdrawDialog wal={active} onClose={() => setShowWithdraw(false)} onDone={() => { load(); setShowWithdraw(false) }} />}
+    </>
   )
 }
 
