@@ -113,10 +113,9 @@ const TABS = [
   { id: 'overview', label: 'Overview', icon: <ChartBar size={14} weight="duotone" /> },
   { id: 'trades',   label: 'Trades',   icon: <ArrowsLeftRight size={14} weight="duotone" /> },
   { id: 'logs',     label: 'Logs',     icon: <Terminal size={14} weight="duotone" /> },
-  { id: 'config',   label: 'Config',   icon: <SlidersHorizontal size={14} weight="duotone" /> },
 ]
 
-function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpenCredentials, onOpenWallets, onOpenTelegram, telegramConnected, userName, userUsername, userAvatar }: {
+function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpenCredentials, onOpenWallets, onOpenTelegram, onOpenConfig, telegramConnected, userName, userUsername, userAvatar }: {
   tab: string
   setTab: (t: string) => void
   paused: boolean
@@ -127,6 +126,7 @@ function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpe
   onOpenCredentials?: () => void
   onOpenWallets?: () => void
   onOpenTelegram?: () => void
+  onOpenConfig?: () => void
   telegramConnected?: boolean
   userName?: string
   userUsername?: string
@@ -184,6 +184,12 @@ function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpe
         }
 
         {/* Icon buttons — Wallets + Credentials + Telegram */}
+        {onOpenConfig && (
+          <button onClick={onOpenConfig} title="Config"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#555] hover:text-white hover:bg-white/5 transition-colors">
+            <SlidersHorizontal size={15} />
+          </button>
+        )}
         {onOpenWallets && (
           <button onClick={onOpenWallets} title="Wallets"
             className="w-8 h-8 rounded-lg flex items-center justify-center text-[#555] hover:text-white hover:bg-white/5 transition-colors">
@@ -244,7 +250,7 @@ function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpe
 
 // ── Modals ────────────────────────────────────────────────────────────────────
 
-function Modal({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
+function Modal({ onClose, children, maxWidth = 480 }: { onClose: () => void; children: React.ReactNode; maxWidth?: number }) {
   return (
     <>
       <div
@@ -260,7 +266,7 @@ function Modal({ onClose, children }: { onClose: () => void; children: React.Rea
         position: 'fixed', top: '50%', left: '50%',
         transform: 'translate(-50%, -50%)',
         zIndex: 101,
-        width: '92vw', maxWidth: 480, maxHeight: '85vh',
+        width: '92vw', maxWidth, maxHeight: '85vh',
         background: '#111',
         borderRadius: 20,
         boxShadow: '8px 8px 24px #050505, -4px -4px 16px rgba(255,255,255,0.03)',
@@ -1400,8 +1406,10 @@ function ToggleRow({ label, sub, value, onToggle }: {
   )
 }
 
-function TabConfig() {
-  const [cfg, setCfg]       = useState<UserConfig | null>(null)
+// ── Config modal ──────────────────────────────────────────────────────────────
+
+function ConfigModal({ onClose }: { onClose: () => void }) {
+  const [cfg, setCfg]         = useState<UserConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving,  setSaving]  = useState(false)
   const [saved,   setSaved]   = useState(false)
@@ -1420,8 +1428,7 @@ function TabConfig() {
     if (!cfg) return
     const raw = (cfg[field] as number) + delta
     const clamped = Math.max(min, Math.min(max, raw))
-    const rounded = parseFloat(clamped.toFixed(decimals))
-    update({ [field]: rounded })
+    update({ [field]: parseFloat(clamped.toFixed(decimals)) })
   }
 
   const handleSave = async () => {
@@ -1438,128 +1445,93 @@ function TabConfig() {
     } finally { setSaving(false) }
   }
 
-  if (loading || !cfg) {
-    return (
-      <div className="p-6 flex items-center justify-center h-64">
-        <Spinner size={20} className="text-[#333] animate-spin" />
-      </div>
-    )
-  }
-
   return (
-    <div className="p-6 max-w-2xl">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="font-mono font-bold text-xl text-white">Config</h1>
-          <p className="font-mono text-xs text-[#555] mt-0.5">Per-trade and portfolio settings</p>
+    <Modal onClose={onClose} maxWidth={540}>
+      <ModalHeader
+        icon={<SlidersHorizontal size={16} className="text-[#00A8FF]" />}
+        title="Config"
+        sub="Per-trade and portfolio settings"
+        onClose={onClose}
+      />
+
+      {loading || !cfg ? (
+        <div className="flex items-center justify-center h-40">
+          <Spinner size={20} className="text-[#333] animate-spin" />
         </div>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl font-mono text-xs font-bold transition-all disabled:opacity-50"
-          style={{ background: saved ? 'rgba(74,222,128,0.12)' : 'rgba(0,168,255,0.12)', color: saved ? '#4ADE80' : '#00A8FF' }}
-        >
-          {saving ? <Spinner size={12} className="animate-spin" /> : null}
-          {saved ? '✓ Saved' : 'Save'}
-        </button>
-      </div>
+      ) : (
+        <div className="p-5 space-y-3">
+          {error && <p className="font-mono text-xs text-[#EF4444]">{error}</p>}
 
-      {error && <p className="font-mono text-xs text-[#EF4444] mb-4">{error}</p>}
+          {/* Modes */}
+          <div className="neu-tile p-4">
+            <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-3">Trading Modes</p>
+            <ToggleRow label="Sniper" sub="High-score tokens (≥75) — larger position" value={cfg.sniper_enabled} onToggle={() => update({ sniper_enabled: !cfg.sniper_enabled })} />
+            <ToggleRow label="Scalper" sub="Lower-score tokens — smaller position, quick exits" value={cfg.scalper_enabled} onToggle={() => update({ scalper_enabled: !cfg.scalper_enabled })} />
+          </div>
 
-      {/* Modes */}
-      <div className="neu-tile p-5 mb-4">
-        <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-3">Trading Modes</p>
-        <ToggleRow label="Sniper" sub="High-score tokens (≥75) — larger position" value={cfg.sniper_enabled} onToggle={() => update({ sniper_enabled: !cfg.sniper_enabled })} />
-        <ToggleRow label="Scalper" sub="Lower-score tokens — smaller position, quick exits" value={cfg.scalper_enabled} onToggle={() => update({ scalper_enabled: !cfg.scalper_enabled })} />
-      </div>
+          {/* Position sizing */}
+          <div className="neu-tile p-4">
+            <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-3">Position Sizing</p>
+            <ConfigRow label="Max position size" sub="SOL per trade"
+              value={cfg.max_position_sol} display={`${cfg.max_position_sol.toFixed(2)} SOL`}
+              onDec={() => step('max_position_sol', -0.05, 0.01, 5.0, 2)}
+              onInc={() => step('max_position_sol', +0.05, 0.01, 5.0, 2)} />
+            <ConfigRow label="Max concurrent positions" sub="Open trades at once"
+              value={cfg.max_positions} display={`${cfg.max_positions}`}
+              onDec={() => step('max_positions', -1, 1, 20, 0)}
+              onInc={() => step('max_positions', +1, 1, 20, 0)} />
+            <ConfigRow label="Min wallet balance" sub="Stop trading below this"
+              value={cfg.min_balance_sol} display={`${cfg.min_balance_sol.toFixed(2)} SOL`}
+              onDec={() => step('min_balance_sol', -0.1, 0.0, 10.0, 2)}
+              onInc={() => step('min_balance_sol', +0.1, 0.0, 10.0, 2)} />
+          </div>
 
-      {/* Position sizing */}
-      <div className="neu-tile p-5 mb-4">
-        <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-3">Position Sizing</p>
-        <ConfigRow
-          label="Max position size"
-          sub="SOL per trade"
-          value={cfg.max_position_sol}
-          display={`${cfg.max_position_sol.toFixed(2)} SOL`}
-          onDec={() => step('max_position_sol', -0.05, 0.01, 5.0, 2)}
-          onInc={() => step('max_position_sol', +0.05, 0.01, 5.0, 2)}
-        />
-        <ConfigRow
-          label="Max concurrent positions"
-          sub="Open trades at once"
-          value={cfg.max_positions}
-          display={`${cfg.max_positions}`}
-          onDec={() => step('max_positions', -1, 1, 20, 0)}
-          onInc={() => step('max_positions', +1, 1, 20, 0)}
-        />
-        <ConfigRow
-          label="Min wallet balance"
-          sub="Stop trading below this"
-          value={cfg.min_balance_sol}
-          display={`${cfg.min_balance_sol.toFixed(2)} SOL`}
-          onDec={() => step('min_balance_sol', -0.1, 0.0, 10.0, 2)}
-          onInc={() => step('min_balance_sol', +0.1, 0.0, 10.0, 2)}
-        />
-      </div>
+          {/* Risk */}
+          <div className="neu-tile p-4">
+            <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-3">Risk Controls</p>
+            <ConfigRow label="Stop loss" sub="Exit immediately below this"
+              value={cfg.stop_loss_pct} display={`−${(cfg.stop_loss_pct * 100).toFixed(0)}%`}
+              onDec={() => step('stop_loss_pct', -0.05, 0.05, 0.90, 2)}
+              onInc={() => step('stop_loss_pct', +0.05, 0.05, 0.90, 2)} />
+            <ConfigRow label="Daily loss limit" sub="Pause bot when portfolio drops this much"
+              value={cfg.daily_loss_limit} display={`−${(cfg.daily_loss_limit * 100).toFixed(0)}%`}
+              onDec={() => step('daily_loss_limit', -0.05, 0.05, 0.90, 2)}
+              onInc={() => step('daily_loss_limit', +0.05, 0.05, 0.90, 2)} />
+            <ConfigRow label="Position timeout" sub="Force-exit after this long"
+              value={cfg.timeout_minutes} display={`${cfg.timeout_minutes} min`}
+              onDec={() => step('timeout_minutes', -1, 1, 60, 0)}
+              onInc={() => step('timeout_minutes', +1, 1, 60, 0)} />
+          </div>
 
-      {/* Risk */}
-      <div className="neu-tile p-5 mb-4">
-        <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-3">Risk Controls</p>
-        <ConfigRow
-          label="Stop loss"
-          sub="Exit immediately below this"
-          value={cfg.stop_loss_pct}
-          display={`−${(cfg.stop_loss_pct * 100).toFixed(0)}%`}
-          onDec={() => step('stop_loss_pct', -0.05, 0.05, 0.90, 2)}
-          onInc={() => step('stop_loss_pct', +0.05, 0.05, 0.90, 2)}
-        />
-        <ConfigRow
-          label="Daily loss limit"
-          sub="Pause bot when portfolio drops this much"
-          value={cfg.daily_loss_limit}
-          display={`−${(cfg.daily_loss_limit * 100).toFixed(0)}%`}
-          onDec={() => step('daily_loss_limit', -0.05, 0.05, 0.90, 2)}
-          onInc={() => step('daily_loss_limit', +0.05, 0.05, 0.90, 2)}
-        />
-        <ConfigRow
-          label="Position timeout"
-          sub="Force-exit after this long"
-          value={cfg.timeout_minutes}
-          display={`${cfg.timeout_minutes} min`}
-          onDec={() => step('timeout_minutes', -1, 1, 60, 0)}
-          onInc={() => step('timeout_minutes', +1, 1, 60, 0)}
-        />
-      </div>
+          {/* Take profit */}
+          <div className="neu-tile p-4">
+            <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-3">Take Profit — Staged Exits</p>
+            <ConfigRow label="TP1 — sell 40%" sub="First partial exit at this price multiple"
+              value={cfg.take_profit_1x} display={`${cfg.take_profit_1x.toFixed(1)}x`}
+              onDec={() => step('take_profit_1x', -0.5, 1.2, 10.0, 1)}
+              onInc={() => step('take_profit_1x', +0.5, 1.2, 10.0, 1)} />
+            <ConfigRow label="TP2 — sell 40%" sub="Second partial exit"
+              value={cfg.take_profit_2x} display={`${cfg.take_profit_2x.toFixed(1)}x`}
+              onDec={() => step('take_profit_2x', -0.5, 1.5, 20.0, 1)}
+              onInc={() => step('take_profit_2x', +0.5, 1.5, 20.0, 1)} />
+            <ConfigRow label="TP3 — sell rest" sub="Full exit at this multiple"
+              value={cfg.take_profit_3x} display={`${cfg.take_profit_3x.toFixed(1)}x`}
+              onDec={() => step('take_profit_3x', -1.0, 2.0, 50.0, 1)}
+              onInc={() => step('take_profit_3x', +1.0, 2.0, 50.0, 1)} />
+          </div>
 
-      {/* Take profit */}
-      <div className="neu-tile p-5 mb-4">
-        <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-3">Take Profit — Staged Exits</p>
-        <ConfigRow
-          label="TP1 — sell 40%"
-          sub="First partial exit at this price multiple"
-          value={cfg.take_profit_1x}
-          display={`${cfg.take_profit_1x.toFixed(1)}x`}
-          onDec={() => step('take_profit_1x', -0.5, 1.2, 10.0, 1)}
-          onInc={() => step('take_profit_1x', +0.5, 1.2, 10.0, 1)}
-        />
-        <ConfigRow
-          label="TP2 — sell 40%"
-          sub="Second partial exit"
-          value={cfg.take_profit_2x}
-          display={`${cfg.take_profit_2x.toFixed(1)}x`}
-          onDec={() => step('take_profit_2x', -0.5, 1.5, 20.0, 1)}
-          onInc={() => step('take_profit_2x', +0.5, 1.5, 20.0, 1)}
-        />
-        <ConfigRow
-          label="TP3 — sell rest"
-          sub="Full exit at this multiple"
-          value={cfg.take_profit_3x}
-          display={`${cfg.take_profit_3x.toFixed(1)}x`}
-          onDec={() => step('take_profit_3x', -1.0, 2.0, 50.0, 1)}
-          onInc={() => step('take_profit_3x', +1.0, 2.0, 50.0, 1)}
-        />
-      </div>
-    </div>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-mono text-xs font-bold transition-all disabled:opacity-50"
+            style={{ background: saved ? 'rgba(74,222,128,0.12)' : 'rgba(0,168,255,0.12)', color: saved ? '#4ADE80' : '#00A8FF' }}
+          >
+            {saving && <Spinner size={12} className="animate-spin" />}
+            {saved ? '✓ Saved' : saving ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      )}
+    </Modal>
   )
 }
 
@@ -1719,6 +1691,7 @@ export default function Dashboard({ onLogout, walletId, userName, userUsername, 
   const [tab, setTab] = useState('overview')
   const [showCredentials, setShowCredentials] = useState(false)
   const [showWallets,     setShowWallets]     = useState(false)
+  const [showConfig,      setShowConfig]      = useState(false)
 
   if (loading) {
     return (
@@ -1763,6 +1736,7 @@ export default function Dashboard({ onLogout, walletId, userName, userUsername, 
         onOpenCredentials={() => setShowCredentials(true)}
         onOpenWallets={() => setShowWallets(true)}
         onOpenTelegram={() => setShowCredentials(true)}
+        onOpenConfig={() => setShowConfig(true)}
         telegramConnected={!!telegramChatId}
         userName={userName}
         userUsername={userUsername}
@@ -1772,8 +1746,8 @@ export default function Dashboard({ onLogout, walletId, userName, userUsername, 
       {tab === 'overview' && <TabOverview stats={stats} positions={positions} closed={closed} online={online} error={error} />}
       {tab === 'trades'   && <TabTrades positions={positions} closed={closed} />}
       {tab === 'logs'     && <TabLogs />}
-      {tab === 'config'   && <TabConfig />}
 
+      {showConfig      && <ConfigModal onClose={() => setShowConfig(false)} />}
       {showCredentials && (
         <CredentialsModal
           signetKeyPrefix={signetKeyPrefix}
