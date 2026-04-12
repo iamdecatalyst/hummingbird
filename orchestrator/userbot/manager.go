@@ -104,7 +104,7 @@ func (m *Manager) startInstance(userID, apiKey, apiSecret, walletID, telegramCha
 
 	var n alerts.Notifier
 	if telegramChatID != "" && m.cfg.TelegramToken != "" {
-		n = alerts.NewTelegram(m.cfg.TelegramToken, telegramChatID).WithLog(userLog)
+		n = alerts.NewTelegram(m.cfg.TelegramToken, telegramChatID).WithChannel(m.cfg.TelegramChannelID).WithLog(userLog)
 	} else {
 		n = noopNotifier{userID, userLog}
 	}

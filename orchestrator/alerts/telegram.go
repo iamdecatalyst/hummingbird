@@ -20,10 +20,11 @@ type Notifier interface {
 }
 
 type Telegram struct {
-	token  string
-	chatID string
-	client *http.Client
-	log    *eventlog.Log
+	token     string
+	chatID    string
+	channelID string // public broadcast channel (optional)
+	client    *http.Client
+	log       *eventlog.Log
 }
 
 func NewTelegram(token, chatID string) *Telegram {
@@ -32,6 +33,11 @@ func NewTelegram(token, chatID string) *Telegram {
 		chatID: chatID,
 		client: &http.Client{Timeout: 5 * time.Second},
 	}
+}
+
+func (t *Telegram) WithChannel(channelID string) *Telegram {
+	t.channelID = channelID
+	return t
 }
 
 // WithLog attaches a per-user event log so trade events appear on the dashboard.
@@ -47,15 +53,29 @@ func (t *Telegram) Entered(p *models.Position) {
 		p.OpenedAt.Format("15:04:05"),
 	)
 	t.send(msg)
+
+	// Public channel — richer format
+	if t.channelID != "" {
+		mode := "SCALPER"
+		if p.Score >= 75 {
+			mode = "SNIPER"
+		}
+		pub := fmt.Sprintf(
+			"🐦 *SNIPED*\n\n`%s`\nMode: %s | Score: %d/100\nEntry: %.3f SOL\n\n⚡ [hummingbird.vylth.com](https://hummingbird.vylth.com)",
+			p.Mint, mode, p.Score, p.EntryAmountSOL,
+		)
+		t.sendTo(t.channelID, pub)
+	}
+
 	if t.log != nil {
 		short := p.Mint
 		if len(short) > 8 {
 			short = short[:8]
 		}
 		t.log.Emit(eventlog.Event{
-			Type:   "ENTER",
-			Token:  p.Mint,
-			AmtSOL: p.EntryAmountSOL,
+			Type:    "ENTER",
+			Token:   p.Mint,
+			AmtSOL:  p.EntryAmountSOL,
 			Message: fmt.Sprintf("Entered %s…  %.3f SOL", short, p.EntryAmountSOL),
 		})
 	}
@@ -77,6 +97,25 @@ func (t *Telegram) Exited(c *models.ClosedPosition) {
 		time.Since(c.OpenedAt).Round(time.Second),
 	)
 	t.send(msg)
+
+	// Public channel — richer format
+	if t.channelID != "" {
+		winEmoji := "🟢"
+		if c.PnLSOL < 0 {
+			winEmoji = "🔴"
+		}
+		held := c.ClosedAt.Sub(c.OpenedAt).Round(time.Second)
+		pub := fmt.Sprintf(
+			"%s *CLOSED %+.0f%%*\n\n`%s`\nEntry: %.4f SOL → Exit: %.4f SOL\nP&L: *%+.4f SOL*\nReason: %s | Held: %s\n\n⚡ [hummingbird.vylth.com](https://hummingbird.vylth.com)",
+			winEmoji, c.PnLPercent,
+			c.Mint,
+			c.EntryAmountSOL, c.ExitAmountSOL,
+			c.PnLSOL,
+			reasonLabel(c.Reason), held,
+		)
+		t.sendTo(t.channelID, pub)
+	}
+
 	if t.log != nil {
 		short := c.Mint
 		if len(short) > 8 {
@@ -117,13 +156,19 @@ func (t *Telegram) send(text string) {
 		log.Printf("[telegram] %s", text)
 		return
 	}
+	t.sendTo(t.chatID, text)
+}
 
+func (t *Telegram) sendTo(chatID, text string) {
+	if t.token == "" || chatID == "" {
+		return
+	}
 	body, _ := json.Marshal(map[string]any{
-		"chat_id":    t.chatID,
-		"text":       text,
-		"parse_mode": "Markdown",
+		"chat_id":                  chatID,
+		"text":                     text,
+		"parse_mode":               "Markdown",
+		"disable_web_page_preview": true,
 	})
-
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", t.token)
 	resp, err := t.client.Post(url, "application/json", bytes.NewReader(body))
 	if err != nil {

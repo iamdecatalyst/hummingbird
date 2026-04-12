@@ -104,7 +104,7 @@ func (t *Trader) enter(result *models.ScoreResult) {
 	params := signet.SwapParams{
 		FromToken:       "SOL",
 		ToToken:         result.Mint,
-		Amount:          fmt.Sprintf("%.6f", result.PositionSOL),
+		Amount:          fmt.Sprintf("%d", int64(result.PositionSOL*1e9)), // lamports
 		SlippageBps:     300, // 3% — generous for new tokens
 		DeadlineSeconds: 30,
 	}

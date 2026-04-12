@@ -23,8 +23,9 @@ type Config struct {
 	SolanaRPC string
 
 	// Telegram bot (single-tenant only)
-	TelegramToken  string
-	TelegramChatID string
+	TelegramToken     string
+	TelegramChatID    string
+	TelegramChannelID string // public broadcast channel
 
 	// Server
 	Port string
@@ -52,8 +53,9 @@ func Load() *Config {
 
 		SolanaRPC: getEnv("RPC_HTTP", "https://api.mainnet-beta.solana.com"),
 
-		TelegramToken:  getEnv("TELEGRAM_BOT_TOKEN", ""),
-		TelegramChatID: getEnv("TELEGRAM_CHAT_ID", ""),
+		TelegramToken:     getEnv("TELEGRAM_BOT_TOKEN", ""),
+		TelegramChatID:    getEnv("TELEGRAM_CHAT_ID", ""),
+		TelegramChannelID: getEnv("TELEGRAM_CHANNEL_ID", ""),
 
 		Port: getEnv("ORCHESTRATOR_PORT", "8002"),
 
