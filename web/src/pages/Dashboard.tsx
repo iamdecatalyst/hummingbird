@@ -11,7 +11,7 @@ import {
   Pulse, SignOut, Copy, Check, Wallet, Key,
   ArrowUp, ArrowDown, Lightning, Warning, Info,
   Eye, EyeSlash, X, Plus, QrCode, PaperPlaneTilt, CaretDown,
-  TelegramLogo, SlidersHorizontal, Spinner,
+  TelegramLogo, SlidersHorizontal, Spinner, SquaresFour, DownloadSimple,
 } from '@phosphor-icons/react'
 import type { UserConfig } from '../lib/api'
 import type { WalletEntry } from '../lib/api'
@@ -111,7 +111,7 @@ function PositionCard({ pos }: { pos: Position }) {
 
 const TABS = [
   { id: 'overview',  label: 'Overview',  icon: <ChartBar size={14} weight="duotone" /> },
-  { id: 'accounts',  label: 'Accounts',  icon: <ArrowsLeftRight size={14} weight="duotone" /> },
+  { id: 'accounts',  label: 'Accounts',  icon: <SquaresFour size={14} weight="duotone" /> },
   { id: 'logs',      label: 'Logs',      icon: <Terminal size={14} weight="duotone" /> },
 ]
 
@@ -1793,6 +1793,16 @@ function TabLogs() {
     return () => clearInterval(id)
   }, [])
 
+  const exportLogs = () => {
+    const blob = new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `hummingbird-logs-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
@@ -1800,10 +1810,21 @@ function TabLogs() {
           <h1 className="font-mono font-bold text-xl text-white">Logs</h1>
           <p className="font-mono text-xs text-[#555] mt-0.5">Live bot activity — last 200 events</p>
         </div>
-        <span className="flex items-center gap-1.5 font-mono text-xs text-[#4ADE80]">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#4ADE80] animate-pulse" />
-          live
-        </span>
+        <div className="flex items-center gap-3">
+          {logs.length > 0 && (
+            <button onClick={exportLogs}
+              className="flex items-center gap-1.5 font-mono text-xs px-3 py-1.5 rounded-lg transition-colors"
+              style={{ background: 'rgba(255,255,255,0.04)', color: '#555', border: '1px solid rgba(255,255,255,0.06)' }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#555')}>
+              <DownloadSimple size={13} /> Export JSON
+            </button>
+          )}
+          <span className="flex items-center gap-1.5 font-mono text-xs text-[#4ADE80]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#4ADE80] animate-pulse" />
+            live
+          </span>
+        </div>
       </div>
 
       <div className="neu-tile overflow-hidden">
