@@ -113,9 +113,10 @@ const TABS = [
   { id: 'overview', label: 'Overview', icon: <ChartBar size={14} weight="duotone" /> },
   { id: 'trades',   label: 'Trades',   icon: <ArrowsLeftRight size={14} weight="duotone" /> },
   { id: 'logs',     label: 'Logs',     icon: <Terminal size={14} weight="duotone" /> },
+  { id: 'wallets',  label: 'Wallets',  icon: <Wallet size={14} weight="duotone" /> },
 ]
 
-function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpenCredentials, onOpenWallets, onOpenTelegram, onOpenConfig, telegramConnected, userName, userUsername, userAvatar }: {
+function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpenCredentials, onOpenTelegram, onOpenConfig, telegramConnected, userName, userUsername, userAvatar }: {
   tab: string
   setTab: (t: string) => void
   paused: boolean
@@ -124,7 +125,6 @@ function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpe
   onResume: () => void
   onLogout?: () => void
   onOpenCredentials?: () => void
-  onOpenWallets?: () => void
   onOpenTelegram?: () => void
   onOpenConfig?: () => void
   telegramConnected?: boolean
@@ -188,12 +188,6 @@ function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpe
           <button onClick={onOpenConfig} title="Config"
             className="w-8 h-8 rounded-lg flex items-center justify-center text-[#555] hover:text-white hover:bg-white/5 transition-colors">
             <SlidersHorizontal size={15} />
-          </button>
-        )}
-        {onOpenWallets && (
-          <button onClick={onOpenWallets} title="Wallets"
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#555] hover:text-white hover:bg-white/5 transition-colors">
-            <Wallet size={15} />
           </button>
         )}
         {onOpenCredentials && (
@@ -491,6 +485,144 @@ function CredentialsModal({ signetKeyPrefix, hasSignet, telegramChatId, onClose,
         </div>
       </div>
     </Modal>
+  )
+}
+
+// ── Wallets tab ───────────────────────────────────────────────────────────────
+
+function TabWallets({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; onMainWalletSet?: () => void }) {
+  const [wallets,     setWallets]     = useState<WalletEntry[]>([])
+  const [loading,     setLoading]     = useState(true)
+  const [creating,    setCreating]    = useState(false)
+  const [createLabel, setCreateLabel] = useState('')
+  const [showCreate,  setShowCreate]  = useState(false)
+  const [activeWallet, setActiveWallet] = useState<string | null>(null)
+  const [dropOpen,    setDropOpen]    = useState(false)
+
+  const load = () => {
+    setLoading(true)
+    api.wallets().then(ws => {
+      setWallets(ws)
+      setActiveWallet(prev => prev ?? (ws.length > 0 ? (ws.find(w => w.id === mainWalletId)?.id ?? ws[0].id) : null))
+    }).catch(() => {}).finally(() => setLoading(false))
+  }
+  useEffect(() => { load() }, [])
+
+  const handleCreate = async () => {
+    if (creating) return
+    setCreating(true)
+    try {
+      await api.createWallet(createLabel.trim() || undefined)
+      setCreateLabel(''); setShowCreate(false); load()
+    } catch { /* ignore */ } finally { setCreating(false) }
+  }
+
+  const active = wallets.find(w => w.id === activeWallet)
+
+  return (
+    <div className="p-6 max-w-lg mx-auto">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="font-mono font-bold text-lg text-white">Wallets</h2>
+          <p className="font-mono text-xs text-[#555] mt-0.5">Powered by Signet KMS</p>
+        </div>
+        <button
+          onClick={() => setShowCreate(v => !v)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-xs transition-colors"
+          style={{ background: 'rgba(0,168,255,0.08)', color: '#00A8FF' }}
+        >
+          <Plus size={12} /><span>New</span>
+        </button>
+      </div>
+
+      {showCreate && (
+        <div className="neu-tile p-4 mb-4 flex items-center gap-2">
+          <input
+            autoFocus
+            type="text"
+            placeholder="Wallet label (optional)…"
+            value={createLabel}
+            onChange={e => setCreateLabel(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleCreate()}
+            className="flex-1 bg-transparent font-mono text-xs text-white placeholder-[#444] outline-none"
+          />
+          <button onClick={handleCreate} disabled={creating}
+            className="px-3 py-1.5 rounded-lg font-mono text-[10px] disabled:opacity-40 shrink-0"
+            style={{ background: 'rgba(0,168,255,0.12)', color: '#00A8FF' }}>
+            {creating ? '…' : 'Create'}
+          </button>
+          <button onClick={() => setShowCreate(false)} className="text-[#444] hover:text-white transition-colors"><X size={13} /></button>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="neu-tile p-10 text-center">
+          <Spinner size={18} className="text-[#333] animate-spin mx-auto" />
+        </div>
+      ) : wallets.length === 0 ? (
+        <div className="neu-tile p-10 text-center">
+          <p className="font-mono text-xs text-[#444]">No wallets yet — create one above.</p>
+        </div>
+      ) : (
+        <>
+          {/* Wallet selector */}
+          {wallets.length > 1 && (
+            <div className="relative mb-4">
+              <button
+                onClick={() => setDropOpen(v => !v)}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
+              >
+                <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(153,69,255,0.15)' }}>
+                  <SolanaIcon size={13} />
+                </div>
+                <div className="flex-1 text-left min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-mono text-xs text-white font-bold truncate">{active?.label || 'Wallet'}</p>
+                    {mainWalletId === activeWallet && (
+                      <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full shrink-0"
+                        style={{ background: 'rgba(74,222,128,0.12)', color: '#4ADE80' }}>main</span>
+                    )}
+                  </div>
+                  <p className="font-mono text-[10px] text-[#555]">{active?.balance_sol.toFixed(4)} SOL</p>
+                </div>
+                <CaretDown size={13} className="text-[#555] shrink-0" style={{ transform: dropOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+              </button>
+              {dropOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setDropOpen(false)} />
+                  <div className="absolute left-0 right-0 top-full mt-1.5 z-20 rounded-xl overflow-hidden"
+                    style={{ background: '#111', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 12px 40px rgba(0,0,0,0.7)' }}>
+                    {wallets.map(w => (
+                      <button key={w.id} onClick={() => { setActiveWallet(w.id); setDropOpen(false) }}
+                        className="w-full flex items-center gap-3 px-4 py-3 transition-colors hover:bg-white/4"
+                        style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(153,69,255,0.12)' }}>
+                          <SolanaIcon size={11} />
+                        </div>
+                        <div className="flex-1 text-left min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-mono text-xs text-white truncate">{w.label || 'Wallet'}</p>
+                            {mainWalletId === w.id && (
+                              <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full shrink-0"
+                                style={{ background: 'rgba(74,222,128,0.12)', color: '#4ADE80' }}>main</span>
+                            )}
+                          </div>
+                          <p className="font-mono text-[10px] text-[#555]">{w.balance_sol.toFixed(4)} SOL</p>
+                        </div>
+                        {activeWallet === w.id && <Check size={13} className="text-[#00A8FF] shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {active && <WalletDetail wal={active} onRefresh={load} mainWalletId={mainWalletId} onMainWalletSet={onMainWalletSet} />}
+        </>
+      )}
+    </div>
   )
 }
 
@@ -1734,7 +1866,6 @@ export default function Dashboard({ onLogout, walletId, userName, userUsername, 
         onResume={resume}
         onLogout={onLogout}
         onOpenCredentials={() => setShowCredentials(true)}
-        onOpenWallets={() => setShowWallets(true)}
         onOpenTelegram={() => setShowCredentials(true)}
         onOpenConfig={() => setShowConfig(true)}
         telegramConnected={!!telegramChatId}
@@ -1746,6 +1877,7 @@ export default function Dashboard({ onLogout, walletId, userName, userUsername, 
       {tab === 'overview' && <TabOverview stats={stats} positions={positions} closed={closed} online={online} error={error} />}
       {tab === 'trades'   && <TabTrades positions={positions} closed={closed} />}
       {tab === 'logs'     && <TabLogs />}
+      {tab === 'wallets'  && <TabWallets mainWalletId={mainWalletId} onMainWalletSet={onCredentialsSaved} />}
 
       {showConfig      && <ConfigModal onClose={() => setShowConfig(false)} />}
       {showCredentials && (
