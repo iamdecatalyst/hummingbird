@@ -1835,8 +1835,18 @@ function TabAccounts({ positions, closed, mainWalletId, onMainWalletSet }: {
                     <span className={`font-mono text-[10px] w-16 shrink-0 ${isDeposit ? 'text-[#4ADE80]' : 'text-[#888]'}`}>
                       {isDeposit ? '↓ IN' : '↑ OUT'}
                     </span>
-                    <span className="font-mono text-[10px] text-[#888] flex-1 truncate">{log.message}</span>
-                    <span className="font-mono text-[10px] text-[#333] shrink-0">
+                    <span className="font-mono text-[10px] text-[#aaa] flex-1 truncate">{log.message}</span>
+                    {log.tx_hash && (
+                      <a
+                        href={`https://solscan.io/tx/${log.tx_hash}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-mono text-[10px] text-[#00A8FF] hover:text-white transition-colors shrink-0"
+                      >
+                        {log.tx_hash.slice(0, 6)}…{log.tx_hash.slice(-6)}
+                      </a>
+                    )}
+                    <span className="font-mono text-[10px] text-[#888] shrink-0">
                       {new Date(log.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>

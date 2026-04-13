@@ -113,6 +113,7 @@ export interface LogEntry {
   pnl_sol?:    number
   pnl_pct?:    number
   reason?:     string
+  tx_hash?:    string
   message:     string
 }
 

@@ -16,6 +16,7 @@ type Event struct {
 	PnLSOL  float64   `json:"pnl_sol,omitempty"`
 	PnLPct  float64   `json:"pnl_pct,omitempty"`
 	Reason  string    `json:"reason,omitempty"`
+	TxHash  string    `json:"tx_hash,omitempty"`
 	Message string    `json:"message"`
 }
 
