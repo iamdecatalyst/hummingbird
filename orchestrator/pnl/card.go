@@ -19,14 +19,19 @@ import (
 //go:embed assets/logo.png
 var logoPNG []byte
 
+//go:embed assets/logo-bird.png
+var logoBirdPNG []byte
+
 //go:embed assets/solana.svg
 var solanaSVG []byte
 
 var logoDataURI string
+var logoBirdDataURI string
 var solanaDataURI string
 
 func init() {
 	logoDataURI = "data:image/png;base64," + base64.StdEncoding.EncodeToString(logoPNG)
+	logoBirdDataURI = "data:image/png;base64," + base64.StdEncoding.EncodeToString(logoBirdPNG)
 	solanaDataURI = "data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString(solanaSVG)
 }
 
@@ -148,21 +153,20 @@ body, html {
   background: %s;
   opacity: 0.5;
 }
-/* Bird logo — extreme right */
+/* Bird logo — far right */
 .mascot {
   position: absolute;
-  right: -80px;
-  top: -20px;
-  bottom: -20px;
-  width: 50%%;
-  overflow: visible;
-  opacity: 0.28;
+  right: 24px;
+  top: 0;
+  bottom: 0;
+  width: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  opacity: 0.30;
 }
 .mascot img {
-  position: absolute;
-  right: 0;
-  top: 0;
-  height: 100%%;
+  height: 88%%;
   width: auto;
 }
 /* Content */
@@ -279,7 +283,7 @@ body, html {
   <div class="top-glow"></div>
   <div class="left-bar"></div>
 
-  <!-- Bird logo as mascot (bottom-right, faint) -->
+  <!-- Bird mascot — far right -->
   <div class="mascot">
     <img src="%s" />
   </div>
@@ -345,8 +349,8 @@ body, html {
 		accent,
 		// pnl-pct color
 		accent,
-		// mascot logo
-		logoDataURI,
+		// mascot logo (tight-cropped bird, no whitespace)
+		logoBirdDataURI,
 		// platform
 		platform,
 		// token, exit label

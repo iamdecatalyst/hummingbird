@@ -1747,7 +1747,7 @@ function TabAccounts({ positions, closed, mainWalletId, onMainWalletSet }: {
 
   useEffect(() => {
     const fetchLogs = () => api.logs().then(all => {
-      setTxLogs(all.filter(l => l.type === 'INFO').reverse())
+      setTxLogs(all.filter(l => l.type === 'INFO'))
     }).catch(() => {})
     fetchLogs()
     const id = setInterval(fetchLogs, 8000)
