@@ -105,10 +105,13 @@ func main() {
 
 	addr := ":" + cfg.Port
 	log.Printf("[main] Hummingbird listening on %s", addr)
-	var handler http.Handler = withCORS(mux)
+	// CORS must wrap rate limit so 429 responses still carry Access-Control headers
+	// and browsers can read the error instead of getting a opaque network failure.
+	var handler http.Handler = mux
 	if cfg.MultiTenant {
 		handler = withRateLimit(handler, cfg.JWTSecret)
 	}
+	handler = withCORS(handler)
 	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatalf("[main] server error: %v", err)
 	}
@@ -1197,7 +1200,8 @@ func (b *rateBucket) allow(limit int) bool {
 	return true
 }
 
-// withRateLimit wraps the handler with per-user (60/min) and score-endpoint (100/min) rate limiting.
+// withRateLimit wraps the handler with per-user (300/min) and score-endpoint (200/min) rate limiting.
+// 300/min = 5/sec average — enough for dashboard polling 3 endpoints every 3s with room to spare.
 func withRateLimit(next http.Handler, jwtSecret string) http.Handler {
 	var userBuckets sync.Map
 	var scoreBuckets sync.Map
@@ -1215,7 +1219,7 @@ func withRateLimit(next http.Handler, jwtSecret string) http.Handler {
 				ip = ip[:idx]
 			}
 			v, _ := scoreBuckets.LoadOrStore(ip, &rateBucket{windowStart: time.Now()})
-			if !v.(*rateBucket).allow(100) {
+			if !v.(*rateBucket).allow(200) {
 				w.Header().Set("Retry-After", "60")
 				http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
 				log.Printf("[ratelimit] WARN score endpoint throttled for %s", ip)
@@ -1228,7 +1232,7 @@ func withRateLimit(next http.Handler, jwtSecret string) http.Handler {
 		if h := r.Header.Get("Authorization"); strings.HasPrefix(h, "Bearer ") {
 			if nexusID, err := auth.ParseToken(strings.TrimPrefix(h, "Bearer "), jwtSecret); err == nil {
 				v, _ := userBuckets.LoadOrStore(nexusID, &rateBucket{windowStart: time.Now()})
-				if !v.(*rateBucket).allow(60) {
+				if !v.(*rateBucket).allow(300) {
 					w.Header().Set("Retry-After", "60")
 					http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
 					log.Printf("[ratelimit] WARN user %s throttled", safeShort(nexusID))
