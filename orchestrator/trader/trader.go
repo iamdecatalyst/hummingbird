@@ -45,8 +45,9 @@ type Trader struct {
 
 	lastTradeMu   sync.Mutex
 	lastTradeAt   time.Time
-	walletAddress string // Solana public key — used for Helius balance lookups
-	rpcURL        string // Helius HTTP RPC URL
+	lastEntryAt   time.Time // tracks last entry ATTEMPT (including failures) for cooldown
+	walletAddress string    // Solana public key — used for Helius balance lookups
+	rpcURL        string    // Helius HTTP RPC URL
 }
 
 func New(
@@ -82,7 +83,9 @@ func New(
 	return t
 }
 
-// Execute is called when the Python scorer decides to enter a trade.
+const entryCooldown = 45 * time.Second // min gap between entry attempts
+
+// Execute is called when the scorer decides to enter a trade.
 // Handles both sniper ("small"/"medium"/"full") and scalper ("scalp") decisions.
 func (t *Trader) Execute(result *models.ScoreResult) {
 	if result.Decision == "skip" || result.PositionSOL <= 0 {
@@ -98,6 +101,18 @@ func (t *Trader) Execute(result *models.ScoreResult) {
 		log.Printf("[trader] skip %s — already open", result.Mint[:8])
 		return
 	}
+
+	// Cooldown guard — prevents piling into multiple tokens simultaneously.
+	// Lock and stamp first so concurrent calls all see the updated time.
+	t.lastTradeMu.Lock()
+	since := time.Since(t.lastEntryAt)
+	if since < entryCooldown && !t.lastEntryAt.IsZero() {
+		t.lastTradeMu.Unlock()
+		log.Printf("[trader] skip %s — cooldown (%s remaining)", result.Mint[:8], (entryCooldown - since).Round(time.Second))
+		return
+	}
+	t.lastEntryAt = time.Now()
+	t.lastTradeMu.Unlock()
 
 	go t.enter(result)
 }
