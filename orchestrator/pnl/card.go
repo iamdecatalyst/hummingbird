@@ -44,8 +44,8 @@ func GenerateCard(c *models.ClosedPosition) ([]byte, error) {
 	}
 
 	cmd := exec.Command("wkhtmltoimage",
-		"--width", "600",
-		"--height", "400",
+		"--width", "800",
+		"--height", "500",
 		"--format", "png",
 		"--quality", "95",
 		"--enable-local-file-access",
@@ -103,16 +103,16 @@ func renderCardHTML(c *models.ClosedPosition) string {
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body, html {
-  width: 600px;
-  height: 400px;
+  width: 800px;
+  height: 500px;
   background: #000000;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
   overflow: hidden;
 }
 .card {
   position: relative;
-  width: 600px;
-  height: 400px;
+  width: 800px;
+  height: 500px;
   background: #000000;
   border-radius: 16px;
   overflow: hidden;
@@ -172,41 +172,41 @@ body, html {
 .content {
   position: relative;
   z-index: 10;
-  padding: 28px;
+  padding: 44px 48px 36px;
   height: 100%%;
   display: flex;
   flex-direction: column;
 }
 /* Module row */
 .module-name {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 3px;
   color: %s;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 .platform-text {
   font-size: 13px;
   color: rgba(255,255,255,0.4);
-  margin-bottom: 20px;
+  margin-bottom: 32px;
 }
 /* Token + badge */
 .token-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 .token-name {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 900;
   color: #ffffff;
   letter-spacing: -0.5px;
+  margin-right: 12px;
 }
 .exit-badge {
-  padding: 3px 10px;
+  padding: 4px 12px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: #ffffff;
   background: %s;
@@ -214,32 +214,34 @@ body, html {
 }
 /* P&L */
 .pnl-label {
-  font-size: 13px;
+  font-size: 12px;
   color: rgba(255,255,255,0.4);
-  letter-spacing: 2px;
-  margin-bottom: 4px;
+  letter-spacing: 3px;
+  margin-bottom: 6px;
   text-transform: uppercase;
 }
 .pnl-sol {
-  font-size: 44px;
+  font-size: 56px;
   font-weight: 900;
   color: %s;
-  letter-spacing: -1px;
+  letter-spacing: -2px;
   line-height: 1;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
 .pnl-pct {
-  font-size: 20px;
+  font-size: 24px;
   font-weight: 700;
   color: %s;
   opacity: 0.75;
-  margin-bottom: 20px;
+  margin-bottom: 32px;
 }
 /* Entry/Exit row */
 .stats-row {
   display: flex;
-  gap: 40px;
   margin-bottom: auto;
+}
+.stat {
+  margin-right: 48px;
 }
 .stat-label {
   font-size: 11px;
@@ -247,7 +249,7 @@ body, html {
   letter-spacing: 2px;
   text-transform: uppercase;
   display: block;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 .stat-value {
   font-size: 18px;
@@ -303,21 +305,21 @@ body, html {
 
     <!-- Entry / Exit / Duration -->
     <div class="stats-row">
-      <div>
+      <div class="stat">
         <span class="stat-label">Entry</span>
         <span class="stat-value">%.4f SOL</span>
       </div>
-      <div>
+      <div class="stat">
         <span class="stat-label">Exit</span>
         <span class="stat-value">%.4f SOL</span>
       </div>
-      <div>
+      <div class="stat">
         <span class="stat-label">Duration</span>
         <span class="stat-value">%s</span>
       </div>
-      <div>
+      <div class="stat">
         <span class="stat-label">Score</span>
-        <span class="stat-value">%d</span>
+        <span class="stat-value">%d / 100</span>
       </div>
     </div>
 
