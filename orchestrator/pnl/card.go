@@ -188,7 +188,7 @@ body, html {
 }
 .platform-text {
   font-size: 13px;
-  color: rgba(255,255,255,0.4);
+  color: rgba(255,255,255,0.65);
   margin-bottom: 32px;
 }
 /* Token + badge */
@@ -216,7 +216,7 @@ body, html {
 /* P&L */
 .pnl-label {
   font-size: 12px;
-  color: rgba(255,255,255,0.4);
+  color: rgba(255,255,255,0.6);
   letter-spacing: 3px;
   margin-bottom: 6px;
   text-transform: uppercase;
@@ -246,7 +246,7 @@ body, html {
 }
 .stat-label {
   font-size: 11px;
-  color: rgba(255,255,255,0.4);
+  color: rgba(255,255,255,0.6);
   letter-spacing: 2px;
   text-transform: uppercase;
   display: block;
@@ -267,11 +267,11 @@ body, html {
 }
 .footer-date {
   font-size: 11px;
-  color: rgba(255,255,255,0.35);
+  color: rgba(255,255,255,0.55);
 }
 .footer-url {
   font-size: 11px;
-  color: rgba(255,255,255,0.35);
+  color: rgba(255,255,255,0.55);
   letter-spacing: 1px;
 }
 </style>
