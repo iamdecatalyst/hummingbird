@@ -18,6 +18,7 @@ import (
 // Executor is implemented by trader.Trader.
 type Executor interface {
 	ExitAll(reason models.ExitReason)
+	Close(mint string, reason models.ExitReason) // close a single position by mint
 }
 
 // linkEntry is a one-time deep-link token.
@@ -339,16 +340,47 @@ func (b *Bot) handleCallback(cq *tgbotapi.CallbackQuery) {
 		b.editConfig(cid, mid)
 	case "noop":
 		// display-only button in config keyboard — do nothing
-	default:
-		if strings.HasPrefix(cq.Data, "cfg:") {
-			b.handleCfgCallback(cid, mid, cq.Data)
-		}
 	case "refresh_main":
 		b.editMain(cid, mid)
 	case "refresh_stats":
 		b.editStats(cid, mid)
 	case "refresh_positions":
 		b.editPositions(cid, mid)
+	default:
+		switch {
+		case strings.HasPrefix(cq.Data, "cfg:"):
+			b.handleCfgCallback(cid, mid, cq.Data)
+		case strings.HasPrefix(cq.Data, "close_now:"):
+			mint := strings.TrimPrefix(cq.Data, "close_now:")
+			_, _, exec, ok := b.ctx(cid)
+			if ok && exec != nil {
+				exec.Close(mint, models.ExitManual)
+				b.editText(cid, mid, "⏹ Closing position <code>"+mint[:8]+"...</code>", nil)
+			}
+		case strings.HasPrefix(cq.Data, "view_pos:"):
+			mint := strings.TrimPrefix(cq.Data, "view_pos:")
+			_, port, _, ok := b.ctx(cid)
+			if !ok || port == nil {
+				b.send(cid, "No active bot.", nil)
+				return
+			}
+			pos := port.OpenPositions()
+			for _, p := range pos {
+				if p.Mint == mint {
+					held := time.Since(p.OpenedAt).Round(time.Second)
+					txt := fmt.Sprintf(
+						"📍 <b>POSITION</b>\n<code>%s</code>\nEntry: <b>%.4f SOL</b>\nScore: <b>%d</b>/100\nHeld: <b>%s</b>",
+						mint[:8]+"...", p.EntryAmountSOL, p.Score, held,
+					)
+					b.send(cid, txt, nil)
+					return
+				}
+			}
+			b.send(cid, "Position not found (may have already closed).", nil)
+		case strings.HasPrefix(cq.Data, "share:"):
+			// PnL card — coming soon; send dashboard link for now
+			b.send(cid, "📊 View your full trade history at <a href=\"https://hummingbird.vylth.com/dashboard\">hummingbird.vylth.com</a>", nil)
+		}
 	}
 }
 

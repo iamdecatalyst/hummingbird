@@ -26,6 +26,7 @@ type MantisScanResponse struct {
 			MetadataMutable         bool     `json:"metadata_mutable"`
 			Flags                   []Flag   `json:"flags"`
 			BondingCurveFillPct     *float64 `json:"bonding_curve_fill_pct"`
+			BondingCurveSolReserve  *float64 `json:"bonding_curve_sol_reserve"` // actual SOL held in curve
 			BondingCurveComplete    *bool    `json:"bonding_curve_complete"`
 			DevSupplyPct            *float64 `json:"dev_supply_pct"`
 			DeployerPriorLaunches   *int     `json:"deployer_prior_launches"`

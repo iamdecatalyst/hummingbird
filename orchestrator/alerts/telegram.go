@@ -47,25 +47,45 @@ func (t *Telegram) WithLog(l *eventlog.Log) *Telegram {
 	return t
 }
 
-func (t *Telegram) Entered(p *models.Position) {
-	msg := fmt.Sprintf(
-		"🐦 *ENTERED*\n`%s`\nScore: %d/100 | Position: %.3f SOL\nTime: %s",
-		p.Mint, p.Score, p.EntryAmountSOL,
-		p.OpenedAt.Format("15:04:05"),
-	)
-	t.send(msg)
+const div = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-	// Public channel — richer format
+func shortMint(mint string) string {
+	if len(mint) <= 12 {
+		return mint
+	}
+	return mint[:6] + "..." + mint[len(mint)-4:]
+}
+
+func (t *Telegram) Entered(p *models.Position) {
+	mode := "SNIPER"
+	if p.Score < 60 {
+		mode = "SCALPER"
+	}
+
+	msg := fmt.Sprintf(
+		"⚡ <b>ENTERED</b> · <code>%s</code>\n%s\nToken:    <code>%s</code>\nScore:    <b>%d</b>/100 · %s\nPosition: <b>%.3f SOL</b>\n\n🕐 %s UTC",
+		mode, div,
+		shortMint(p.Mint),
+		p.Score, p.Decision,
+		p.EntryAmountSOL,
+		p.OpenedAt.UTC().Format("15:04:05"),
+	)
+
+	kb := inlineKB([][]kbButton{
+		{
+			{Text: "📊 View Position", Data: "view_pos:" + p.Mint},
+			{Text: "❌ Close Now", Data: "close_now:" + p.Mint},
+		},
+	})
+	t.sendKB(t.chatID, msg, kb)
+
+	// Public channel — no inline buttons
 	if t.channelID != "" {
-		mode := "SCALPER"
-		if p.Score >= 75 {
-			mode = "SNIPER"
-		}
 		pub := fmt.Sprintf(
-			"🐦 *SNIPED*\n\n`%s`\nMode: %s | Score: %d/100\nEntry: %.3f SOL\n\n⚡ [hummingbird.vylth.com](https://hummingbird.vylth.com)",
-			p.Mint, mode, p.Score, p.EntryAmountSOL,
+			"⚡ <b>SNIPED</b> · <code>%s</code>\n%s\nToken: <code>%s</code>\nScore: <b>%d</b>/100 · %s\nEntry: <b>%.3f SOL</b>\n\n<a href=\"https://hummingbird.vylth.com\">hummingbird.vylth.com</a>",
+			mode, div, shortMint(p.Mint), p.Score, p.Decision, p.EntryAmountSOL,
 		)
-		t.sendTo(t.channelID, pub)
+		t.sendKB(t.channelID, pub, nil)
 	}
 
 	if t.log != nil {
@@ -83,38 +103,62 @@ func (t *Telegram) Entered(p *models.Position) {
 }
 
 func (t *Telegram) Exited(c *models.ClosedPosition) {
-	emoji := "✅"
+	held := c.ClosedAt.Sub(c.OpenedAt).Round(time.Second)
+	pnlSign := "+"
 	if c.PnLSOL < 0 {
-		emoji = "❌"
+		pnlSign = ""
 	}
-	msg := fmt.Sprintf(
-		"%s *EXITED* — %s\n`%s`\nEntry: %.4f SOL → Exit: %.4f SOL\nP&L: %+.4f SOL (%+.1f%%)\nReason: %s | Held: %s",
-		emoji,
-		reasonLabel(c.Reason),
-		c.Mint,
-		c.EntryAmountSOL, c.ExitAmountSOL,
-		c.PnLSOL, c.PnLPercent,
-		c.Reason,
-		time.Since(c.OpenedAt).Round(time.Second),
-	)
-	t.send(msg)
 
-	// Public channel — richer format
+	var header string
+	switch {
+	case c.PnLSOL > 0:
+		header = fmt.Sprintf("✅ <b>EXITED</b> · <code>%s</code> · <b>%s%.4f SOL</b>", reasonLabel(c.Reason), pnlSign, c.PnLSOL)
+	case c.Reason == models.ExitRugDetected:
+		header = fmt.Sprintf("🪦 <b>EXITED</b> · <code>RUG DETECTED</code> · <b>%.4f SOL</b>", c.PnLSOL)
+	default:
+		header = fmt.Sprintf("🔴 <b>EXITED</b> · <code>%s</code> · <b>%.4f SOL</b>", reasonLabel(c.Reason), c.PnLSOL)
+	}
+
+	msg := fmt.Sprintf(
+		"%s\n%s\nToken:    <code>%s</code>\nEntry:    <b>%.4f SOL</b>  →  Exit: <b>%.4f SOL</b>\nResult:   <b>%s%.4f SOL</b>  (<b>%s%.1f%%</b>)\nDuration: <b>%s</b>",
+		header, div,
+		shortMint(c.Mint),
+		c.EntryAmountSOL, c.ExitAmountSOL,
+		pnlSign, c.PnLSOL, pnlSign, c.PnLPercent,
+		held,
+	)
+
+	var kb [][]kbButton
+	if c.PnLSOL > 0 {
+		kb = [][]kbButton{
+			{
+				{Text: "📤 Share Trade", Data: "share:" + c.TxHash},
+				{Text: "📊 Dashboard", URL: "https://hummingbird.vylth.com/dashboard"},
+			},
+		}
+	} else {
+		kb = [][]kbButton{
+			{
+				{Text: "📊 Dashboard", URL: "https://hummingbird.vylth.com/dashboard"},
+			},
+		}
+	}
+	t.sendKB(t.chatID, msg, inlineKB(kb))
+
+	// Public channel
 	if t.channelID != "" {
 		winEmoji := "🟢"
 		if c.PnLSOL < 0 {
 			winEmoji = "🔴"
 		}
-		held := c.ClosedAt.Sub(c.OpenedAt).Round(time.Second)
 		pub := fmt.Sprintf(
-			"%s *CLOSED %+.0f%%*\n\n`%s`\nEntry: %.4f SOL → Exit: %.4f SOL\nP&L: *%+.4f SOL*\nReason: %s | Held: %s\n\n⚡ [hummingbird.vylth.com](https://hummingbird.vylth.com)",
-			winEmoji, c.PnLPercent,
-			c.Mint,
-			c.EntryAmountSOL, c.ExitAmountSOL,
-			c.PnLSOL,
-			reasonLabel(c.Reason), held,
+			"%s <b>CLOSED %s%.0f%%</b>\n%s\nToken: <code>%s</code>\nP&amp;L: <b>%s%.4f SOL</b>\nHeld: %s\n\n<a href=\"https://hummingbird.vylth.com\">hummingbird.vylth.com</a>",
+			winEmoji, pnlSign, c.PnLPercent, div,
+			shortMint(c.Mint),
+			pnlSign, c.PnLSOL,
+			held,
 		)
-		t.sendTo(t.channelID, pub)
+		t.sendKB(t.channelID, pub, nil)
 	}
 
 	if t.log != nil {
@@ -138,42 +182,71 @@ func (t *Telegram) DailyStats(wins, losses int, pnl float64, winRate float64) {
 	if pnl < 0 {
 		emoji = "📉"
 	}
+	sign := "+"
+	if pnl < 0 {
+		sign = ""
+	}
 	msg := fmt.Sprintf(
-		"%s *Daily Summary*\nP&L: %+.4f SOL\nTrades: %d (W:%d L:%d) | Win rate: %.0f%%",
-		emoji, pnl, wins+losses, wins, losses, winRate,
+		"%s <b>Daily Summary</b>\n%s\nP&amp;L:    <b>%s%.4f SOL</b>\nTrades:  <b>%d</b>  (W: %d  L: %d)\nWin rate: <b>%.0f%%</b>",
+		emoji, div, sign, pnl, wins+losses, wins, losses, winRate,
 	)
-	t.send(msg)
+	t.sendKB(t.chatID, msg, nil)
 }
 
 func (t *Telegram) Alert(text string) {
-	t.send("⚠️ " + text)
+	t.sendKB(t.chatID, "⚠️ "+text, nil)
 	if t.log != nil {
 		t.log.Emit(eventlog.Event{Type: "ALERT", Message: text})
 	}
 }
 
 func (t *Telegram) Notify(text string) {
-	t.send(text)
+	t.sendKB(t.chatID, text, nil)
 }
 
-func (t *Telegram) send(text string) {
-	if t.token == "" || t.chatID == "" {
+// ── Keyboard helpers ──────────────────────────────────────────────────────────
+
+type kbButton struct {
+	Text string
+	Data string // callback_data (mutually exclusive with URL)
+	URL  string // url button
+}
+
+func inlineKB(rows [][]kbButton) any {
+	var result [][]map[string]string
+	for _, row := range rows {
+		var r []map[string]string
+		for _, btn := range row {
+			b := map[string]string{"text": btn.Text}
+			if btn.URL != "" {
+				b["url"] = btn.URL
+			} else {
+				b["callback_data"] = btn.Data
+			}
+			r = append(r, b)
+		}
+		result = append(result, r)
+	}
+	return map[string]any{"inline_keyboard": result}
+}
+
+// ── Send helpers ──────────────────────────────────────────────────────────────
+
+func (t *Telegram) sendKB(chatID, text string, replyMarkup any) {
+	if t.token == "" || chatID == "" {
 		log.Printf("[telegram] %s", text)
 		return
 	}
-	t.sendTo(t.chatID, text)
-}
-
-func (t *Telegram) sendTo(chatID, text string) {
-	if t.token == "" || chatID == "" {
-		return
-	}
-	body, _ := json.Marshal(map[string]any{
+	payload := map[string]any{
 		"chat_id":                  chatID,
 		"text":                     text,
-		"parse_mode":               "Markdown",
+		"parse_mode":               "HTML",
 		"disable_web_page_preview": true,
-	})
+	}
+	if replyMarkup != nil {
+		payload["reply_markup"] = replyMarkup
+	}
+	body, _ := json.Marshal(payload)
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", t.token)
 	resp, err := t.client.Post(url, "application/json", bytes.NewReader(body))
 	if err != nil {
@@ -190,7 +263,7 @@ func reasonLabel(r models.ExitReason) string {
 	case models.ExitStopLoss:
 		return "Stop Loss"
 	case models.ExitRugDetected:
-		return "RUG DETECTED"
+		return "Rug Detected"
 	case models.ExitTimeout:
 		return "Timeout"
 	case models.ExitManual:

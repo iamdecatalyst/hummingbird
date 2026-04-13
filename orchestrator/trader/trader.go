@@ -355,6 +355,15 @@ func (t *Trader) ExitAll(reason models.ExitReason) {
 	}
 }
 
+// Close exits a single position by mint address (e.g. from Telegram "Close Now" button).
+func (t *Trader) Close(mint string, reason models.ExitReason) {
+	select {
+	case t.exitCh <- monitor.ExitSignal{Mint: mint, Reason: reason, Partial: 0}:
+	default:
+		log.Printf("[trader] Close: exit channel full for %s", mint[:8])
+	}
+}
+
 // Balance returns the wallet's current SOL balance via Signet.
 // Returns 0 on failure.
 func (t *Trader) markTrade() {

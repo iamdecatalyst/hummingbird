@@ -1129,6 +1129,19 @@ func scoreFromCricket(scan *cricket.MantisScanResponse, devWallet *cricket.Firef
 		return 0, "skip", 0
 	}
 
+	// Low liquidity hard skip — bonding curve has < 1 SOL, can't trade profitably or exit cleanly.
+	// Cricket sets this flag when the curve is active but holds less than 1 SOL.
+	// The EyDQ7Tyf rug would have been blocked by this.
+	for _, f := range s.Flags {
+		if f.Check == "low_liquidity" && (f.Severity == "high" || f.Severity == "critical") {
+			return 0, "skip", 0
+		}
+	}
+	// Belt + suspenders: also check raw reserve value if Cricket returns it
+	if s.BondingCurveSolReserve != nil && *s.BondingCurveSolReserve < 0.5 {
+		return 0, "skip", 0
+	}
+
 	// Start from Cricket's numeric score as the base
 	score = r.Score
 
