@@ -1137,9 +1137,31 @@ func scoreFromCricket(scan *cricket.MantisScanResponse, devWallet *cricket.Firef
 	}
 }
 
+// channelRateLimit throttles channel broadcasts to Telegram's ~20/min limit.
+var (
+	channelLastSent time.Time
+	channelMu       sync.Mutex
+)
+
+const channelMinInterval = 4 * time.Second // safe under Telegram's 20/min cap
+
+func channelAllowed() bool {
+	channelMu.Lock()
+	defer channelMu.Unlock()
+	if time.Since(channelLastSent) < channelMinInterval {
+		return false
+	}
+	channelLastSent = time.Now()
+	return true
+}
+
 // broadcastTradeResult posts a styled scan card to the channel from a Python scorer ScoreResult.
 // Used when the Rust listener → Python scorer → orchestrator path is active.
 func broadcastTradeResult(tgToken, channelID string, result *models.ScoreResult) {
+	// Always send entries; throttle skips to avoid Telegram rate limits (~20/min)
+	if result.Decision == "skip" && !channelAllowed() {
+		return
+	}
 	mintShort := result.Mint
 	if len(mintShort) > 12 {
 		mintShort = result.Mint[:8] + "…" + result.Mint[len(result.Mint)-4:]
@@ -1221,6 +1243,9 @@ func broadcastTradeResult(tgToken, channelID string, result *models.ScoreResult)
 // broadcastScan posts a styled scan summary to the public Telegram channel.
 // Called for every token — skipped ones show risk flags, entered ones celebrate the snipe.
 func broadcastScan(tgToken, channelID string, token cricket.TokenDetected, scan *cricket.MantisScanResponse, wallet *cricket.FireflyWalletResponse, score int, decision string, posSOL float64) {
+	if decision == "skip" && !channelAllowed() {
+		return
+	}
 	s := scan.Data.Scan
 	r := scan.Data.RiskScore
 
