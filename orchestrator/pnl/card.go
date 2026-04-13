@@ -148,24 +148,22 @@ body, html {
   background: %s;
   opacity: 0.5;
 }
-/* Bird logo — bottom right, like mascot slot */
+/* Bird logo — extreme right, like mascot slot */
 .mascot {
   position: absolute;
-  right: -20px;
+  right: -120px;
   bottom: 0;
-  width: 48%%;
-  height: 95%%;
-  display: flex;
-  align-items: flex-end;
-  justify-content: flex-end;
+  width: 55%%;
+  height: 100%%;
   overflow: hidden;
   opacity: 0.22;
 }
 .mascot img {
+  position: absolute;
+  right: 0;
+  bottom: 0;
   height: 100%%;
   width: auto;
-  object-fit: contain;
-  object-position: bottom right;
   mix-blend-mode: screen;
 }
 /* Content */
