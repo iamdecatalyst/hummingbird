@@ -1,9 +1,10 @@
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Semaphore};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{debug, error, info, warn};
 
@@ -17,6 +18,10 @@ use crate::types::{LogsNotification, TokenDetected};
 pub async fn run(config: Config) -> Result<()> {
     let forwarder = Forwarder::new(config.scorer_url.clone());
 
+    // Shared semaphore — limits total concurrent getTransaction RPC calls across ALL platforms.
+    // Helius free tier is ~10 RPS; 3 concurrent calls at ~300ms each ≈ 10 RPS max.
+    let rpc_sem = Arc::new(Semaphore::new(3));
+
     let mut handles = Vec::new();
 
     // One Solana listener per program (each gets its own subscription + reconnect loop)
@@ -24,8 +29,9 @@ pub async fn run(config: Config) -> Result<()> {
         let ws = config.solana_ws.clone();
         let http = config.solana_http.clone();
         let fwd = Forwarder::new(config.scorer_url.clone());
+        let sem = rpc_sem.clone();
         let h = tokio::spawn(async move {
-            run_solana_program(ws, http, program, fwd).await;
+            run_solana_program(ws, http, program, fwd, sem).await;
         });
         handles.push(h);
     }
@@ -59,13 +65,11 @@ async fn run_solana_program(
     http_url: String,
     program: SolanaProgram,
     forwarder: Forwarder,
+    rpc_sem: Arc<Semaphore>,
 ) {
     loop {
-        info!(
-            "[{}] connecting to Solana WebSocket",
-            program.platform
-        );
-        match solana_once(&ws_url, &http_url, &program, &forwarder).await {
+        info!("[{}] connecting to Solana WebSocket", program.platform);
+        match solana_once(&ws_url, &http_url, &program, &forwarder, rpc_sem.clone()).await {
             Ok(_) => warn!("[{}] WebSocket closed — reconnecting in 2s", program.platform),
             Err(e) => error!("[{}] error: {} — reconnecting in 2s", program.platform, e),
         }
@@ -78,6 +82,7 @@ async fn solana_once(
     http_url: &str,
     program: &SolanaProgram,
     forwarder: &Forwarder,
+    rpc_sem: Arc<Semaphore>,
 ) -> Result<()> {
     let (ws_stream, _) = connect_async(ws_url).await?;
     let (mut write, mut read) = ws_stream.split();
@@ -94,17 +99,19 @@ async fn solana_once(
     write.send(Message::Text(subscribe.to_string())).await?;
     info!("[{}] subscribed — program {}", program.platform, &program.program_id[..8]);
 
-    let (tx, mut rx) = mpsc::unbounded_channel::<(String, u64)>();
+    // Bounded channel — if the fetcher can't keep up, drop oldest events rather than
+    // queue forever. Stale tokens (>queue depth old) aren't worth entering anyway.
+    let (tx, mut rx) = mpsc::channel::<(String, u64)>(8);
 
-    // Fetch + forward worker
+    // Fetch + forward worker — acquires shared semaphore before each RPC call.
     let http = http_url.to_string();
     let fwd = Forwarder::new(forwarder.scorer_url());
     let platform = program.platform.clone();
     tokio::spawn(async move {
         let fetcher = TransactionFetcher::new(http);
         while let Some((signature, slot)) = rx.recv().await {
-            // Small delay to avoid hammering the public RPC rate limit
-            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+            // Acquire shared RPC slot — blocks if 3 calls already in flight across all platforms.
+            let _permit = rpc_sem.acquire().await.unwrap();
             let timestamp_ms = now_ms();
             match fetcher.fetch_accounts(&signature, &platform).await {
                 Ok(Some(accounts)) => {
@@ -129,6 +136,7 @@ async fn solana_once(
                 Ok(None) => debug!("[{}] skipped {} — parse failed", platform, &signature[..8]),
                 Err(e) => error!("[{}] fetch error {}: {}", platform, &signature[..8], e),
             }
+            // permit dropped here, freeing the RPC slot
         }
     });
 
@@ -147,7 +155,9 @@ async fn solana_once(
                         let logs_value = &params.result.value;
                         let slot = params.result.context.slot;
                         if is_new_token_launch(logs_value) {
-                            let _ = tx.send((logs_value.signature.clone(), slot));
+                            if tx.try_send((logs_value.signature.clone(), slot)).is_err() {
+                                debug!("[{}] fetch queue full — dropping {}", program.platform, &logs_value.signature[..8]);
+                            }
                         }
                     }
                 }
