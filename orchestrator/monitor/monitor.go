@@ -157,9 +157,10 @@ func (m *Monitor) Watch(ctx context.Context) {
 	}
 }
 
-// fetchPrice uses Jupiter Price API — simplest way to get SOL-denominated token price.
+// fetchPrice returns the SOL-denominated price of a token via DexScreener.
+// Jupiter's price.jup.ag was deprecated; DexScreener covers pump.fun + Raydium + all DEXes.
 func (m *Monitor) fetchPrice(mint string) (float64, error) {
-	url := fmt.Sprintf("https://price.jup.ag/v4/price?ids=%s&vsToken=SOL", mint)
+	url := fmt.Sprintf("https://api.dexscreener.com/latest/dex/tokens/%s", mint)
 	resp, err := m.httpClient.Get(url)
 	if err != nil {
 		return 0, err
@@ -168,18 +169,39 @@ func (m *Monitor) fetchPrice(mint string) (float64, error) {
 
 	body, _ := io.ReadAll(resp.Body)
 	var result struct {
-		Data map[string]struct {
-			Price float64 `json:"price"`
-		} `json:"data"`
+		Pairs []struct {
+			BaseToken struct {
+				Address string `json:"address"`
+			} `json:"baseToken"`
+			QuoteToken struct {
+				Symbol string `json:"symbol"`
+			} `json:"quoteToken"`
+			PriceNative string `json:"priceNative"`
+		} `json:"pairs"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
-		return 0, err
+		return 0, fmt.Errorf("dexscreener decode: %w", err)
 	}
 
-	if d, ok := result.Data[mint]; ok {
-		return d.Price, nil
+	// Find the SOL-quoted pair — most relevant for our P&L tracking.
+	for _, pair := range result.Pairs {
+		if pair.QuoteToken.Symbol == "SOL" {
+			var price float64
+			fmt.Sscanf(pair.PriceNative, "%f", &price)
+			if price > 0 {
+				return price, nil
+			}
+		}
 	}
-	return 0, fmt.Errorf("mint %s not found in Jupiter response", mint[:8])
+	// Fallback: use first pair if no SOL pair found.
+	if len(result.Pairs) > 0 {
+		var price float64
+		fmt.Sscanf(result.Pairs[0].PriceNative, "%f", &price)
+		if price > 0 {
+			return price, nil
+		}
+	}
+	return 0, fmt.Errorf("no price data for %s on DexScreener", mint[:8])
 }
 
 // isDevSelling checks Cricket Firefly for an exodus signal on our token.

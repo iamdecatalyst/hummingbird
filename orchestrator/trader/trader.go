@@ -262,9 +262,19 @@ func (t *Trader) handleExit(sig monitor.ExitSignal) {
 		DeadlineSeconds: 20,
 	})
 	if err != nil {
-		log.Printf("[trader] exit swap failed for %s: %v", sig.Mint[:8], err)
-		t.telegram.Alert(fmt.Sprintf("EXIT FAILED: %s\n%v", sig.Mint[:8], err))
-		return
+		var sigErr *signet.SignetError
+		isRoutable := errors.As(err, &sigErr) && sigErr.StatusCode != 502 &&
+			!strings.Contains(sigErr.Message, "token_not_routable")
+		if !isRoutable {
+			// Token not routable via Jupiter — try pumpportal sell
+			log.Printf("[trader] exit swap unroutable for %s, trying pumpportal sell", sig.Mint[:8])
+			tx, err = t.sellViaPumpPortal(sig.Mint, sig.Partial)
+		}
+		if err != nil {
+			log.Printf("[trader] exit failed for %s: %v", sig.Mint[:8], err)
+			t.telegram.Alert(fmt.Sprintf("EXIT FAILED: %s\n%v", sig.Mint[:8], err))
+			return
+		}
 	}
 
 	// Only fully close the position on full exits
@@ -472,6 +482,107 @@ func (t *Trader) pumpPortalBuy(mint string, amountSOL float64, pool string) (*si
 
 	log.Printf("[trader] pumpportal pool=%s success for %s | tx=%s", pool, mint[:8], tx.TxHash)
 	return tx, nil
+}
+
+// sellViaPumpPortal sells a token via pumpportal.fun + Signet /execute.
+// partial: 0 = sell all, 0.4 = sell 40%, etc.
+func (t *Trader) sellViaPumpPortal(mint string, partial float64) (*signet.TransactionResult, error) {
+	if t.walletAddress == "" {
+		return nil, fmt.Errorf("wallet address not set")
+	}
+
+	// Get actual token balance from Helius so pumpportal knows how many to sell.
+	tokenAmt, err := t.tokenBalance(mint)
+	if err != nil || tokenAmt == 0 {
+		return nil, fmt.Errorf("could not get token balance for %s: %w", mint[:8], err)
+	}
+	sellAmt := tokenAmt
+	if partial > 0 && partial < 1 {
+		sellAmt = uint64(float64(tokenAmt) * partial)
+	}
+
+	pools := []string{"pump", "pump-amm"}
+	var lastErr error
+	for _, pool := range pools {
+		reqBody, _ := json.Marshal(map[string]any{
+			"publicKey":        t.walletAddress,
+			"action":           "sell",
+			"mint":             mint,
+			"denominatedInSol": false,
+			"amount":           sellAmt,
+			"slippage":         10,
+			"priorityFee":      0.0005,
+			"pool":             pool,
+		})
+		ppResp, err := http.Post("https://pumpportal.fun/api/trade-local", "application/json", bytes.NewReader(reqBody))
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		txBytes, _ := io.ReadAll(ppResp.Body)
+		ppResp.Body.Close()
+		if ppResp.StatusCode != 200 {
+			log.Printf("[trader] pumpportal sell pool=%s failed for %s: %s", pool, mint[:8], ppResp.Status)
+			lastErr = fmt.Errorf("pumpportal sell %s", ppResp.Status)
+			continue
+		}
+		tx, err := t.signet.Wallets.Execute(t.walletID, base64.StdEncoding.EncodeToString(txBytes))
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		log.Printf("[trader] pumpportal sell pool=%s success for %s | tx=%s", pool, mint[:8], tx.TxHash)
+		return tx, nil
+	}
+	return nil, lastErr
+}
+
+// tokenBalance returns the raw token amount held by this wallet for a given mint.
+func (t *Trader) tokenBalance(mint string) (uint64, error) {
+	if t.rpcURL == "" || t.walletAddress == "" {
+		return 0, fmt.Errorf("RPC or wallet address not set")
+	}
+	body, _ := json.Marshal(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "getTokenAccountsByOwner",
+		"params": []any{
+			t.walletAddress,
+			map[string]string{"mint": mint},
+			map[string]string{"encoding": "jsonParsed"},
+		},
+	})
+	resp, err := http.Post(t.rpcURL, "application/json", bytes.NewReader(body))
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	var result struct {
+		Result struct {
+			Value []struct {
+				Account struct {
+					Data struct {
+						Parsed struct {
+							Info struct {
+								TokenAmount struct {
+									Amount string `json:"amount"`
+								} `json:"tokenAmount"`
+							} `json:"info"`
+						} `json:"parsed"`
+					} `json:"data"`
+				} `json:"account"`
+			} `json:"value"`
+		} `json:"result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return 0, err
+	}
+	if len(result.Result.Value) == 0 {
+		return 0, fmt.Errorf("no token account found for mint %s", mint[:8])
+	}
+	var amt uint64
+	fmt.Sscan(result.Result.Value[0].Account.Data.Parsed.Info.TokenAmount.Amount, &amt)
+	return amt, nil
 }
 
 // EnsureWallet creates the Solana trading wallet if it doesn't exist yet.
