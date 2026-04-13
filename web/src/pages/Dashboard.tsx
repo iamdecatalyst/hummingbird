@@ -11,7 +11,7 @@ import {
   Pulse, SignOut, Copy, Check, Wallet, Key,
   ArrowUp, ArrowDown, Lightning, Warning, Info,
   Eye, EyeSlash, X, Plus, QrCode, PaperPlaneTilt, CaretDown,
-  TelegramLogo, SlidersHorizontal, Spinner, SquaresFour, DownloadSimple,
+  TelegramLogo, SlidersHorizontal, Spinner, SquaresFour, DownloadSimple, ArrowsClockwise,
 } from '@phosphor-icons/react'
 import type { UserConfig } from '../lib/api'
 import type { WalletEntry } from '../lib/api'
@@ -1501,14 +1501,21 @@ function WalletCard({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; 
   const [settingMain,  setSettingMain]  = useState(false)
   const [addrCopied,   setAddrCopied]   = useState(false)
 
-  const load = () => {
-    setLoading(true)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const load = (silent = false) => {
+    if (!silent) setLoading(true)
+    else setRefreshing(true)
     api.wallets().then(ws => {
       setWallets(ws)
       setActiveWallet(prev => prev ?? (ws.find(w => w.id === mainWalletId)?.id ?? ws[0]?.id ?? null))
-    }).catch(() => {}).finally(() => setLoading(false))
+    }).catch(() => {}).finally(() => { setLoading(false); setRefreshing(false) })
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    const id = setInterval(() => load(true), 5 * 60 * 1000) // refresh every 5 min
+    return () => clearInterval(id)
+  }, [])
 
   const handleCreate = async () => {
     if (creating) return
@@ -1538,11 +1545,18 @@ function WalletCard({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; 
     <>
       <div className="neu-tile flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center gap-2.5 px-4 py-3 border-b border-white/[0.04] shrink-0">
-          <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(153,69,255,0.15)' }}>
-            <SolanaIcon size={11} />
+        <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.04] shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(153,69,255,0.15)' }}>
+              <SolanaIcon size={11} />
+            </div>
+            <span className="font-mono text-xs font-bold text-white">Solana Wallets</span>
           </div>
-          <span className="font-mono text-xs font-bold text-white">Solana Wallets</span>
+          <button onClick={() => load(true)} disabled={refreshing}
+            className="text-[#444] hover:text-white transition-colors disabled:opacity-40"
+            title="Refresh balance">
+            <ArrowsClockwise size={13} className={refreshing ? 'animate-spin' : ''} />
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
