@@ -202,7 +202,7 @@ func startSingleTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMu
 		fmt.Fprintf(w, `{"status":"queued","mint":"%s"}`, token.Mint)
 	})
 
-	// POST /trade — legacy internal endpoint kept for compatibility.
+	// POST /trade — receives score results from Python scorer.
 	mux.HandleFunc("POST /trade", func(w http.ResponseWriter, r *http.Request) {
 		if !configured {
 			http.Error(w, `{"error":"not configured"}`, http.StatusServiceUnavailable)
@@ -212,6 +212,9 @@ func startSingleTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMu
 		if err := json.NewDecoder(r.Body).Decode(&result); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
+		}
+		if cfg.TelegramChannelID != "" && cfg.TelegramToken != "" {
+			go broadcastTradeResult(cfg.TelegramToken, cfg.TelegramChannelID, &result)
 		}
 		tr.Execute(&result)
 		fmt.Fprint(w, `{"status":"queued"}`)
@@ -574,12 +577,15 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 		fmt.Fprintf(w, `{"status":"queued","mint":"%s"}`, token.Mint)
 	})
 
-	// POST /trade — legacy internal endpoint kept for compatibility.
+	// POST /trade — receives score results from Python scorer, fans out to traders.
 	mux.HandleFunc("POST /trade", func(w http.ResponseWriter, r *http.Request) {
 		var result models.ScoreResult
 		if err := json.NewDecoder(r.Body).Decode(&result); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
+		}
+		if cfg.TelegramChannelID != "" && cfg.TelegramToken != "" {
+			go broadcastTradeResult(cfg.TelegramToken, cfg.TelegramChannelID, &result)
 		}
 		instances := mgr.All()
 		for _, inst := range instances {
@@ -1129,6 +1135,87 @@ func scoreFromCricket(scan *cricket.MantisScanResponse, devWallet *cricket.Firef
 	default:
 		return score, "full", 0.20
 	}
+}
+
+// broadcastTradeResult posts a styled scan card to the channel from a Python scorer ScoreResult.
+// Used when the Rust listener → Python scorer → orchestrator path is active.
+func broadcastTradeResult(tgToken, channelID string, result *models.ScoreResult) {
+	mintShort := result.Mint
+	if len(mintShort) > 12 {
+		mintShort = result.Mint[:8] + "…" + result.Mint[len(result.Mint)-4:]
+	}
+
+	// Build check lines from the checks map
+	checkOrder := []string{"dev_wallet", "supply", "bonding", "contract", "social"}
+	checkEmoji := func(score, max int) string {
+		if max == 0 {
+			return "⚪"
+		}
+		pct := float64(score) / float64(max)
+		switch {
+		case pct >= 0.75:
+			return "🟢"
+		case pct >= 0.4:
+			return "🟡"
+		default:
+			return "🔴"
+		}
+	}
+	checkLabel := map[string]string{
+		"dev_wallet": "Dev Wallet",
+		"supply":     "Supply",
+		"bonding":    "Bonding",
+		"contract":   "Contract",
+		"social":     "Social",
+	}
+
+	var checkLines []string
+	for _, key := range checkOrder {
+		c, ok := result.Checks[key]
+		if !ok {
+			continue
+		}
+		em := checkEmoji(c.Score, c.MaxScore)
+		label := checkLabel[key]
+		if label == "" {
+			label = key
+		}
+		line := fmt.Sprintf("%s %s %d/%d", em, label, c.Score, c.MaxScore)
+		if c.Reason != "" {
+			line += "  " + c.Reason
+		}
+		checkLines = append(checkLines, line)
+	}
+
+	var header string
+	if result.Decision == "skip" {
+		header = fmt.Sprintf("⏭ *Scanned — Skip*   Score: %d/100\n%s", result.Total, mintShort)
+	} else {
+		label := strings.ToUpper(result.Decision)
+		header = fmt.Sprintf("🐦 *Sniped — %s*   Score: %d/100\n%.3f SOL  ·  %s", label, result.Total, result.PositionSOL, mintShort)
+	}
+
+	parts := []string{header}
+	if len(checkLines) > 0 {
+		parts = append(parts, strings.Join(checkLines, "\n"))
+	}
+	parts = append(parts, "\n⚡ [hummingbird.vylth.com](https://hummingbird.vylth.com)")
+
+	msg := strings.Join(parts, "\n")
+
+	body, _ := json.Marshal(map[string]any{
+		"chat_id":                  channelID,
+		"text":                     msg,
+		"parse_mode":               "Markdown",
+		"disable_web_page_preview": true,
+	})
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", tgToken)
+	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	if err != nil {
+		log.Printf("[scanner] channel broadcast failed: %v", err)
+		return
+	}
+	resp.Body.Close()
 }
 
 // broadcastScan posts a styled scan summary to the public Telegram channel.
