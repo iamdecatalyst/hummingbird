@@ -42,10 +42,10 @@ function CopyField({ label, value }: { label: string; value: string }) {
   }
   return (
     <div>
-      <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-1.5">{label}</p>
+      <p className="font-mono text-xs text-[#888] uppercase tracking-widest mb-1.5">{label}</p>
       <div className="flex items-center gap-2 neu-card-inset rounded-xl px-3 py-2.5">
         <span className="font-mono text-xs text-[#a0a0a0] truncate flex-1">{value}</span>
-        <button onClick={copy} className="text-[#444] hover:text-white transition-colors shrink-0">
+        <button onClick={copy} className="text-[#666] hover:text-white transition-colors shrink-0">
           {copied ? <Check size={13} className="text-[#4ADE80]" /> : <Copy size={13} />}
         </button>
       </div>
@@ -60,14 +60,14 @@ function StatCard({ label, value, sub, positive, accent }: {
 }) {
   return (
     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="neu-tile p-5">
-      <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-2">{label}</p>
+      <p className="font-mono text-xs text-[#888] uppercase tracking-widest mb-2">{label}</p>
       <p className={`font-mono text-2xl font-bold ${
         accent ? 'text-[#00A8FF]' :
         positive === true  ? 'text-[#4ADE80]' :
         positive === false ? 'text-[#EF4444]' :
         'text-white'
       }`}>{value}</p>
-      {sub && <p className="font-mono text-xs text-[#555] mt-1">{sub}</p>}
+      {sub && <p className="font-mono text-xs text-[#888] mt-1">{sub}</p>}
     </motion.div>
   )
 }
@@ -85,20 +85,20 @@ function PositionCard({ pos }: { pos: Position }) {
           <span className="font-mono text-sm text-white font-bold">{shortMint(pos.mint)}</span>
           <span className="ml-2 font-mono text-xs text-[#00A8FF]">{pos.score >= 75 ? 'SNIPER' : 'SCALPER'}</span>
         </div>
-        <span className="font-mono text-xs text-[#555]">{held(pos.opened_at)}</span>
+        <span className="font-mono text-xs text-[#888]">{held(pos.opened_at)}</span>
       </div>
       <div className="grid grid-cols-3 gap-3">
         <div>
-          <p className="font-mono text-[10px] text-[#444] mb-0.5">ENTRY</p>
+          <p className="font-mono text-[10px] text-[#666] mb-0.5">ENTRY</p>
           <p className="font-mono text-xs text-[#a0a0a0]">{pos.entry_amount_sol.toFixed(3)} SOL</p>
         </div>
         <div>
-          <p className="font-mono text-[10px] text-[#444] mb-0.5">SCORE</p>
+          <p className="font-mono text-[10px] text-[#666] mb-0.5">SCORE</p>
           <p className="font-mono text-xs text-[#00A8FF]">{pos.score}</p>
         </div>
         {pnlPct && (
           <div>
-            <p className="font-mono text-[10px] text-[#444] mb-0.5">PEAK</p>
+            <p className="font-mono text-[10px] text-[#666] mb-0.5">PEAK</p>
             <p className="font-mono text-xs text-[#4ADE80]">+{pnlPct}%</p>
           </div>
         )}
@@ -153,7 +153,7 @@ function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpe
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-xs transition-all duration-150 ${
               tab === t.id
                 ? 'bg-white/8 text-white'
-                : 'text-[#555] hover:text-[#a0a0a0] hover:bg-white/4'
+                : 'text-[#888] hover:text-[#a0a0a0] hover:bg-white/4'
             }`}
           >
             {t.icon}
@@ -185,13 +185,13 @@ function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpe
         {/* Icon buttons — Wallets + Credentials + Telegram */}
         {onOpenConfig && (
           <button onClick={onOpenConfig} title="Config"
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#555] hover:text-white hover:bg-white/5 transition-colors">
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#888] hover:text-white hover:bg-white/5 transition-colors">
             <SlidersHorizontal size={15} />
           </button>
         )}
         {onOpenCredentials && (
           <button onClick={onOpenCredentials} title="API Credentials"
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#555] hover:text-white hover:bg-white/5 transition-colors">
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#888] hover:text-white hover:bg-white/5 transition-colors">
             <Key size={15} />
           </button>
         )}
@@ -293,12 +293,12 @@ function ModalHeader({ icon, title, sub, onClose }: {
         </div>
         <div>
           <h2 className="font-mono text-xs font-bold text-white uppercase tracking-[3px]">{title}</h2>
-          {sub && <p className="font-mono text-[10px] text-[#555] mt-0.5">{sub}</p>}
+          {sub && <p className="font-mono text-[10px] text-[#888] mt-0.5">{sub}</p>}
         </div>
       </div>
       <button
         onClick={onClose}
-        className="w-8 h-8 neu-card-inset rounded-xl flex items-center justify-center text-[#555] hover:text-white transition-colors"
+        className="w-8 h-8 neu-card-inset rounded-xl flex items-center justify-center text-[#888] hover:text-white transition-colors"
       >
         <X size={14} />
       </button>
@@ -373,7 +373,7 @@ function CredentialsModal({ signetKeyPrefix, hasSignet, telegramChatId, onClose,
               <Check size={14} className="text-[#4ADE80]" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-0.5">Active Key</p>
+              <p className="font-mono text-[10px] text-[#888] uppercase tracking-widest mb-0.5">Active Key</p>
               <p className="font-mono text-xs text-[#a0a0a0]">{signetKeyPrefix || 'Key saved'}</p>
             </div>
             <button
@@ -388,13 +388,13 @@ function CredentialsModal({ signetKeyPrefix, hasSignet, telegramChatId, onClose,
           </div>
         )}
 
-        <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest">
+        <p className="font-mono text-[10px] text-[#888] uppercase tracking-widest">
           {(hasSignet || signetKeyPrefix) ? 'Replace with new credentials' : 'Enter Signet credentials'}
         </p>
 
         {/* API Key */}
         <div>
-          <label className="font-mono text-[10px] text-[#555] uppercase tracking-wider block mb-1.5">API Key</label>
+          <label className="font-mono text-[10px] text-[#888] uppercase tracking-wider block mb-1.5">API Key</label>
           <div className="flex items-center neu-card-inset rounded-xl overflow-hidden">
             <input
               type={showKey ? 'text' : 'password'}
@@ -405,7 +405,7 @@ function CredentialsModal({ signetKeyPrefix, hasSignet, telegramChatId, onClose,
             />
             <button
               onClick={() => setShowKey(v => !v)}
-              className="w-9 h-9 flex items-center justify-center text-[#444] hover:text-[#a0a0a0] transition-colors shrink-0"
+              className="w-9 h-9 flex items-center justify-center text-[#666] hover:text-[#a0a0a0] transition-colors shrink-0"
             >
               {showKey ? <EyeSlash size={13} /> : <Eye size={13} />}
             </button>
@@ -414,7 +414,7 @@ function CredentialsModal({ signetKeyPrefix, hasSignet, telegramChatId, onClose,
 
         {/* API Secret */}
         <div>
-          <label className="font-mono text-[10px] text-[#555] uppercase tracking-wider block mb-1.5">API Secret</label>
+          <label className="font-mono text-[10px] text-[#888] uppercase tracking-wider block mb-1.5">API Secret</label>
           <div className="flex items-center neu-card-inset rounded-xl overflow-hidden">
             <input
               type={showSecret ? 'text' : 'password'}
@@ -425,7 +425,7 @@ function CredentialsModal({ signetKeyPrefix, hasSignet, telegramChatId, onClose,
             />
             <button
               onClick={() => setShowSecret(v => !v)}
-              className="w-9 h-9 flex items-center justify-center text-[#444] hover:text-[#a0a0a0] transition-colors shrink-0"
+              className="w-9 h-9 flex items-center justify-center text-[#666] hover:text-[#a0a0a0] transition-colors shrink-0"
             >
               {showSecret ? <EyeSlash size={13} /> : <Eye size={13} />}
             </button>
@@ -453,7 +453,7 @@ function CredentialsModal({ signetKeyPrefix, hasSignet, telegramChatId, onClose,
 
         {/* Telegram connect */}
         <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
-          <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-3">Telegram Alerts</p>
+          <p className="font-mono text-[10px] text-[#888] uppercase tracking-widest mb-3">Telegram Alerts</p>
           {telegramChatId ? (
             <div style={{
               display: 'flex', alignItems: 'center', gap: 12,
@@ -466,7 +466,7 @@ function CredentialsModal({ signetKeyPrefix, hasSignet, telegramChatId, onClose,
                 <TelegramLogo size={15} className="text-[#4ADE80]" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-0.5">Connected</p>
+                <p className="font-mono text-[10px] text-[#888] uppercase tracking-widest mb-0.5">Connected</p>
                 <p className="font-mono text-xs text-[#a0a0a0]">Trade alerts active</p>
               </div>
             </div>
@@ -523,7 +523,7 @@ function TabWallets({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; 
       <div className="flex items-center justify-between mb-5">
         <div>
           <h2 className="font-mono font-bold text-lg text-white">Wallets</h2>
-          <p className="font-mono text-xs text-[#555] mt-0.5">Powered by Signet KMS</p>
+          <p className="font-mono text-xs text-[#888] mt-0.5">Powered by Signet KMS</p>
         </div>
         <button
           onClick={() => setShowCreate(v => !v)}
@@ -550,7 +550,7 @@ function TabWallets({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; 
             style={{ background: 'rgba(0,168,255,0.12)', color: '#00A8FF' }}>
             {creating ? '…' : 'Create'}
           </button>
-          <button onClick={() => setShowCreate(false)} className="text-[#444] hover:text-white transition-colors"><X size={13} /></button>
+          <button onClick={() => setShowCreate(false)} className="text-[#666] hover:text-white transition-colors"><X size={13} /></button>
         </div>
       )}
 
@@ -560,7 +560,7 @@ function TabWallets({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; 
         </div>
       ) : wallets.length === 0 ? (
         <div className="neu-tile p-10 text-center">
-          <p className="font-mono text-xs text-[#444]">No wallets yet — create one above.</p>
+          <p className="font-mono text-xs text-[#666]">No wallets yet — create one above.</p>
         </div>
       ) : (
         <>
@@ -583,9 +583,9 @@ function TabWallets({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; 
                         style={{ background: 'rgba(74,222,128,0.12)', color: '#4ADE80' }}>main</span>
                     )}
                   </div>
-                  <p className="font-mono text-[10px] text-[#555]">{active?.balance_sol.toFixed(4)} SOL</p>
+                  <p className="font-mono text-[10px] text-[#888]">{active?.balance_sol.toFixed(4)} SOL</p>
                 </div>
-                <CaretDown size={13} className="text-[#555] shrink-0" style={{ transform: dropOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+                <CaretDown size={13} className="text-[#888] shrink-0" style={{ transform: dropOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
               </button>
               {dropOpen && (
                 <>
@@ -607,7 +607,7 @@ function TabWallets({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; 
                                 style={{ background: 'rgba(74,222,128,0.12)', color: '#4ADE80' }}>main</span>
                             )}
                           </div>
-                          <p className="font-mono text-[10px] text-[#555]">{w.balance_sol.toFixed(4)} SOL</p>
+                          <p className="font-mono text-[10px] text-[#888]">{w.balance_sol.toFixed(4)} SOL</p>
                         </div>
                         {activeWallet === w.id && <Check size={13} className="text-[#00A8FF] shrink-0" />}
                       </button>
@@ -713,11 +713,11 @@ function WalletsModal({ onClose, mainWalletId, onMainWalletSet }: {
                         </span>
                       )}
                     </div>
-                    <p className="font-mono text-[10px] text-[#555]">
+                    <p className="font-mono text-[10px] text-[#888]">
                       {wallets.find(w => w.id === activeWallet)?.balance_sol.toFixed(4)} SOL
                     </p>
                   </div>
-                  <CaretDown size={13} className="text-[#555] shrink-0 transition-transform" style={{ transform: dropOpen ? 'rotate(180deg)' : 'none' }} />
+                  <CaretDown size={13} className="text-[#888] shrink-0 transition-transform" style={{ transform: dropOpen ? 'rotate(180deg)' : 'none' }} />
                 </button>
 
                 {/* Dropdown list */}
@@ -746,7 +746,7 @@ function WalletsModal({ onClose, mainWalletId, onMainWalletSet }: {
                                 </span>
                               )}
                             </div>
-                            <p className="font-mono text-[10px] text-[#555]">{w.balance_sol.toFixed(4)} SOL</p>
+                            <p className="font-mono text-[10px] text-[#888]">{w.balance_sol.toFixed(4)} SOL</p>
                           </div>
                           {activeWallet === w.id && <Check size={13} className="text-[#00A8FF] shrink-0" />}
                         </button>
@@ -772,7 +772,7 @@ function WalletsModal({ onClose, mainWalletId, onMainWalletSet }: {
                       ) : (
                         <button
                           onClick={() => setShowCreate(true)}
-                          className="w-full flex items-center gap-2 px-4 py-3 text-[#555] hover:text-white transition-colors"
+                          className="w-full flex items-center gap-2 px-4 py-3 text-[#888] hover:text-white transition-colors"
                         >
                           <Plus size={13} />
                           <span className="font-mono text-xs">New wallet</span>
@@ -786,7 +786,7 @@ function WalletsModal({ onClose, mainWalletId, onMainWalletSet }: {
 
             {wallets.length === 0 ? (
               <div className="text-center py-8">
-                <p className="font-mono text-xs text-[#444] mb-4">No wallets yet.</p>
+                <p className="font-mono text-xs text-[#666] mb-4">No wallets yet.</p>
                 {showCreate ? (
                   <div className="flex gap-2 justify-center">
                     <input autoFocus type="text" placeholder="Label (optional)"
@@ -801,7 +801,7 @@ function WalletsModal({ onClose, mainWalletId, onMainWalletSet }: {
                   </div>
                 ) : (
                   <button onClick={() => setShowCreate(true)}
-                    className="flex items-center gap-2 mx-auto px-4 py-2.5 rounded-xl font-mono text-xs text-[#555] hover:text-white transition-colors"
+                    className="flex items-center gap-2 mx-auto px-4 py-2.5 rounded-xl font-mono text-xs text-[#888] hover:text-white transition-colors"
                     style={{ background: 'rgba(255,255,255,0.04)' }}>
                     <Plus size={13} /> Create first wallet
                   </button>
@@ -912,18 +912,18 @@ function WalletDetail({ wal, onRefresh, mainWalletId, onMainWalletSet }: {
                 {settingMain ? '…' : 'Set as main'}
               </button>
             )}
-            <span className="font-mono text-[10px] text-[#444]">SOLANA MAINNET</span>
+            <span className="font-mono text-[10px] text-[#666]">SOLANA MAINNET</span>
           </div>
         </div>
         <div className="mb-1">
           <span className="font-mono text-3xl font-bold text-white">{wal.balance_sol.toFixed(4)}</span>
-          <span className="font-mono text-sm text-[#555] ml-2">SOL</span>
+          <span className="font-mono text-sm text-[#888] ml-2">SOL</span>
         </div>
         <div className="flex items-center gap-2 mt-3">
-          <span className="font-mono text-[10px] text-[#444] flex-1 truncate">
+          <span className="font-mono text-[10px] text-[#666] flex-1 truncate">
             {wal.address.slice(0, 12)}…{wal.address.slice(-8)}
           </span>
-          <button onClick={copyAddr} className="flex items-center gap-1 text-[#444] hover:text-white transition-colors shrink-0">
+          <button onClick={copyAddr} className="flex items-center gap-1 text-[#666] hover:text-white transition-colors shrink-0">
             {addrCopied ? <Check size={11} className="text-[#4ADE80]" /> : <Copy size={11} />}
           </button>
         </div>
@@ -955,10 +955,10 @@ function WalletDetail({ wal, onRefresh, mainWalletId, onMainWalletSet }: {
           background: '#0d0d0d',
           boxShadow: 'inset 2px 2px 6px #070707, inset -1px -1px 4px rgba(255,255,255,0.02)',
         }}>
-          <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-3">Wallet Address</p>
+          <p className="font-mono text-[10px] text-[#888] uppercase tracking-widest mb-3">Wallet Address</p>
           <div className="flex items-center gap-2">
             <span className="font-mono text-xs text-[#a0a0a0] flex-1 break-all leading-relaxed">{wal.address}</span>
-            <button onClick={copyAddr} className="text-[#444] hover:text-white transition-colors shrink-0 ml-1">
+            <button onClick={copyAddr} className="text-[#666] hover:text-white transition-colors shrink-0 ml-1">
               {addrCopied ? <Check size={13} className="text-[#4ADE80]" /> : <Copy size={13} />}
             </button>
           </div>
@@ -971,11 +971,11 @@ function WalletDetail({ wal, onRefresh, mainWalletId, onMainWalletSet }: {
           <div className="inline-flex p-4 rounded-2xl mb-4" style={{ background: '#fff' }}>
             <QRCodeSVG value={wal.address} size={180} bgColor="#ffffff" fgColor="#0a0a0a" level="M" />
           </div>
-          <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-1">Scan to deposit SOL</p>
+          <p className="font-mono text-[10px] text-[#888] uppercase tracking-widest mb-1">Scan to deposit SOL</p>
           <p className="font-mono text-[10px] text-[#333] mb-4">Solana network only</p>
           <div className="flex items-center gap-2 p-3 rounded-xl text-left" style={{ background: '#0d0d0d', boxShadow: 'inset 2px 2px 6px #070707' }}>
             <span className="font-mono text-[10px] text-[#666] flex-1 break-all leading-relaxed">{wal.address}</span>
-            <button onClick={copyAddr} className="text-[#444] hover:text-white transition-colors shrink-0">
+            <button onClick={copyAddr} className="text-[#666] hover:text-white transition-colors shrink-0">
               {addrCopied ? <Check size={13} className="text-[#4ADE80]" /> : <Copy size={13} />}
             </button>
           </div>
@@ -987,7 +987,7 @@ function WalletDetail({ wal, onRefresh, mainWalletId, onMainWalletSet }: {
         <div className="space-y-3">
           {/* Available */}
           <div className="flex items-center justify-between px-3 py-2.5 rounded-xl" style={{ background: '#0d0d0d', boxShadow: 'inset 2px 2px 6px #070707' }}>
-            <span className="font-mono text-xs text-[#555]">Available</span>
+            <span className="font-mono text-xs text-[#888]">Available</span>
             <div className="flex items-center gap-1.5">
               <SolanaIcon size={12} />
               <span className="font-mono text-xs font-bold text-white">{wal.balance_sol.toFixed(4)} SOL</span>
@@ -996,7 +996,7 @@ function WalletDetail({ wal, onRefresh, mainWalletId, onMainWalletSet }: {
 
           {/* Recipient */}
           <div>
-            <label className="font-mono text-[10px] text-[#555] uppercase tracking-wider block mb-1.5">Recipient Address</label>
+            <label className="font-mono text-[10px] text-[#888] uppercase tracking-wider block mb-1.5">Recipient Address</label>
             <input
               type="text"
               value={sendTo}
@@ -1008,7 +1008,7 @@ function WalletDetail({ wal, onRefresh, mainWalletId, onMainWalletSet }: {
 
           {/* Amount */}
           <div>
-            <label className="font-mono text-[10px] text-[#555] uppercase tracking-wider block mb-1.5">Amount (SOL)</label>
+            <label className="font-mono text-[10px] text-[#888] uppercase tracking-wider block mb-1.5">Amount (SOL)</label>
             <div className="flex items-center neu-card-inset rounded-xl overflow-hidden">
               <input
                 type="text"
@@ -1050,7 +1050,7 @@ function WalletDetail({ wal, onRefresh, mainWalletId, onMainWalletSet }: {
           {/* Warning */}
           <div className="flex items-start gap-2 p-3 rounded-xl" style={{ background: 'rgba(251,191,36,0.05)', border: '1px solid rgba(251,191,36,0.1)' }}>
             <Warning size={12} className="text-[#F59E0B] shrink-0 mt-0.5" weight="fill" />
-            <span className="font-mono text-[10px] text-[#555] leading-relaxed">
+            <span className="font-mono text-[10px] text-[#888] leading-relaxed">
               Double-check the address. Blockchain transactions are irreversible.
             </span>
           </div>
@@ -1131,7 +1131,7 @@ function TabOverview({ stats, positions, closed, online, error }: {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-mono font-bold text-xl text-white">Overview</h1>
-          <p className="font-mono text-xs text-[#555] mt-0.5">{time.toISOString().replace('T', ' ').slice(0, 19)} UTC</p>
+          <p className="font-mono text-xs text-[#888] mt-0.5">{time.toISOString().replace('T', ' ').slice(0, 19)} UTC</p>
         </div>
         {!online && error && (
           <div className="neu-card-inset px-4 py-2 rounded-xl">
@@ -1182,12 +1182,12 @@ function TabOverview({ stats, positions, closed, online, error }: {
             {/* Subtle glow blob */}
             <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full opacity-10 blur-2xl"
               style={{ background: card.color }} />
-            <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-3">{card.label}</p>
+            <p className="font-mono text-xs text-[#888] uppercase tracking-widest mb-3">{card.label}</p>
             <p className="font-mono font-bold leading-none" style={{ fontSize: 28, color: card.color }}>
               {card.value}
               <span className="text-base ml-1 opacity-60">{card.unit}</span>
             </p>
-            <p className="font-mono text-xs text-[#444] mt-2">{card.sub}</p>
+            <p className="font-mono text-xs text-[#666] mt-2">{card.sub}</p>
           </motion.div>
         ))}
       </div>
@@ -1201,7 +1201,7 @@ function TabOverview({ stats, positions, closed, online, error }: {
           className="lg:col-span-3 neu-tile p-5"
         >
           <div className="flex items-center justify-between mb-4">
-            <p className="font-mono text-xs text-[#555] uppercase tracking-widest">P&L Today — SOL</p>
+            <p className="font-mono text-xs text-[#888] uppercase tracking-widest">P&L Today — SOL</p>
             <span className={`font-mono text-xs px-2.5 py-1 rounded-full ${pnlPositive ? 'bg-[#4ADE80]/10 text-[#4ADE80]' : 'bg-[#EF4444]/10 text-[#EF4444]'}`}>
               {s.today_pnl >= 0 ? '+' : ''}{s.today_pnl.toFixed(4)} SOL
             </span>
@@ -1237,7 +1237,7 @@ function TabOverview({ stats, positions, closed, online, error }: {
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
           className="lg:col-span-2 neu-tile p-5"
         >
-          <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-4">7-Day Trades</p>
+          <p className="font-mono text-xs text-[#888] uppercase tracking-widest mb-4">7-Day Trades</p>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={barData} barGap={3} barCategoryGap="30%">
               <defs>
@@ -1268,7 +1268,7 @@ function TabOverview({ stats, positions, closed, online, error }: {
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
           className="lg:col-span-2 neu-tile p-5"
         >
-          <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-4">
+          <p className="font-mono text-xs text-[#888] uppercase tracking-widest mb-4">
             Open Positions <span className="text-white ml-1">{positions.length}</span>
           </p>
           <div className="space-y-3 max-h-[280px] overflow-y-auto pr-1">
@@ -1289,7 +1289,7 @@ function TabOverview({ stats, positions, closed, online, error }: {
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
           className="lg:col-span-3 neu-tile p-5"
         >
-          <p className="font-mono text-xs text-[#555] uppercase tracking-widest mb-4">Recent Trades</p>
+          <p className="font-mono text-xs text-[#888] uppercase tracking-widest mb-4">Recent Trades</p>
           {closed.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 gap-2">
               <p className="font-mono text-xs text-[#333]">No trades yet.</p>
@@ -1379,7 +1379,7 @@ function ClosedTradeCard({ t }: { t: ClosedPosition }) {
           onClick={handleShare}
           disabled={sharing}
           title="Download PnL card"
-          className="transition-opacity text-[#555] hover:text-white p-1.5 rounded border border-white/10 hover:border-white/30 disabled:opacity-40 flex items-center"
+          className="transition-opacity text-[#888] hover:text-white p-1.5 rounded border border-white/10 hover:border-white/30 disabled:opacity-40 flex items-center"
         >
           {sharing ? <Spinner size={12} className="animate-spin" /> : <ShareNetwork size={12} />}
         </button>
@@ -1429,11 +1429,11 @@ function DepositDialog({ wal, onClose }: { wal: WalletEntry; onClose: () => void
         <div className="inline-flex p-4 rounded-2xl mb-4" style={{ background: '#fff' }}>
           <QRCodeSVG value={wal.address} size={180} bgColor="#ffffff" fgColor="#0a0a0a" level="M" />
         </div>
-        <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-1">Scan to deposit SOL</p>
+        <p className="font-mono text-[10px] text-[#888] uppercase tracking-widest mb-1">Scan to deposit SOL</p>
         <p className="font-mono text-[10px] text-[#333] mb-4">Solana network only</p>
         <div className="flex items-center gap-2 p-3 rounded-xl text-left" style={{ background: '#0d0d0d', boxShadow: 'inset 2px 2px 6px #070707' }}>
           <span className="font-mono text-[10px] text-[#666] flex-1 break-all leading-relaxed">{wal.address}</span>
-          <button onClick={copy} className="text-[#444] hover:text-white transition-colors shrink-0">
+          <button onClick={copy} className="text-[#666] hover:text-white transition-colors shrink-0">
             {copied ? <Check size={13} className="text-[#4ADE80]" /> : <Copy size={13} />}
           </button>
         </div>
@@ -1466,20 +1466,20 @@ function WithdrawDialog({ wal, onClose, onDone }: { wal: WalletEntry; onClose: (
       <ModalHeader icon={<PaperPlaneTilt size={16} />} title="Send SOL" sub={`${wal.balance_sol.toFixed(4)} SOL available`} onClose={onClose} />
       <div className="p-5 space-y-3">
         <div className="flex items-center justify-between px-3 py-2.5 rounded-xl" style={{ background: '#0d0d0d', boxShadow: 'inset 2px 2px 6px #070707' }}>
-          <span className="font-mono text-xs text-[#555]">Available</span>
+          <span className="font-mono text-xs text-[#888]">Available</span>
           <div className="flex items-center gap-1.5">
             <SolanaIcon size={12} />
             <span className="font-mono text-xs font-bold text-white">{wal.balance_sol.toFixed(4)} SOL</span>
           </div>
         </div>
         <div>
-          <label className="font-mono text-[10px] text-[#555] uppercase tracking-wider block mb-1.5">Recipient Address</label>
+          <label className="font-mono text-[10px] text-[#888] uppercase tracking-wider block mb-1.5">Recipient Address</label>
           <input type="text" value={sendTo} onChange={e => setSendTo(e.target.value)}
             placeholder="Solana address (base58)"
             className="w-full neu-card-inset rounded-xl px-3 py-2.5 font-mono text-xs text-white placeholder-[#333] outline-none" />
         </div>
         <div>
-          <label className="font-mono text-[10px] text-[#555] uppercase tracking-wider block mb-1.5">Amount (SOL)</label>
+          <label className="font-mono text-[10px] text-[#888] uppercase tracking-wider block mb-1.5">Amount (SOL)</label>
           <div className="flex items-center neu-card-inset rounded-xl overflow-hidden">
             <input type="text" inputMode="decimal" value={sendAmt} onChange={e => setSendAmt(e.target.value)}
               placeholder="0.000"
@@ -1504,7 +1504,7 @@ function WithdrawDialog({ wal, onClose, onDone }: { wal: WalletEntry; onClose: (
         </button>
         <div className="flex items-start gap-2 p-3 rounded-xl" style={{ background: 'rgba(251,191,36,0.05)', border: '1px solid rgba(251,191,36,0.1)' }}>
           <Warning size={12} className="text-[#F59E0B] shrink-0 mt-0.5" weight="fill" />
-          <span className="font-mono text-[10px] text-[#555] leading-relaxed">Double-check the address. Blockchain transactions are irreversible.</span>
+          <span className="font-mono text-[10px] text-[#888] leading-relaxed">Double-check the address. Blockchain transactions are irreversible.</span>
         </div>
       </div>
     </Modal>
@@ -1576,7 +1576,7 @@ function WalletCard({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; 
             <span className="font-mono text-xs font-bold text-white">Solana Wallets</span>
           </div>
           <button onClick={() => load(true)} disabled={refreshing}
-            className="text-[#444] hover:text-white transition-colors disabled:opacity-40"
+            className="text-[#666] hover:text-white transition-colors disabled:opacity-40"
             title="Refresh balance">
             <ArrowsClockwise size={13} className={refreshing ? 'animate-spin' : ''} />
           </button>
@@ -1587,7 +1587,7 @@ function WalletCard({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; 
             <p className="font-mono text-xs text-[#333] text-center py-8">Loading…</p>
           ) : wallets.length === 0 ? (
             <div className="text-center py-8">
-              <p className="font-mono text-xs text-[#444] mb-4">No wallets yet.</p>
+              <p className="font-mono text-xs text-[#666] mb-4">No wallets yet.</p>
               {showCreate ? (
                 <div className="flex gap-2 justify-center">
                   <input autoFocus type="text" placeholder="Label (optional)"
@@ -1602,7 +1602,7 @@ function WalletCard({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; 
                 </div>
               ) : (
                 <button onClick={() => setShowCreate(true)}
-                  className="flex items-center gap-2 mx-auto px-4 py-2.5 rounded-xl font-mono text-xs text-[#555] hover:text-white transition-colors"
+                  className="flex items-center gap-2 mx-auto px-4 py-2.5 rounded-xl font-mono text-xs text-[#888] hover:text-white transition-colors"
                   style={{ background: 'rgba(255,255,255,0.04)' }}>
                   <Plus size={13} /> Create first wallet
                 </button>
@@ -1626,9 +1626,9 @@ function WalletCard({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; 
                           style={{ background: 'rgba(74,222,128,0.12)', color: '#4ADE80' }}>main</span>
                       )}
                     </div>
-                    <p className="font-mono text-[10px] text-[#555]">{active?.balance_sol.toFixed(4)} SOL</p>
+                    <p className="font-mono text-[10px] text-[#888]">{active?.balance_sol.toFixed(4)} SOL</p>
                   </div>
-                  <CaretDown size={13} className="text-[#555] shrink-0" style={{ transform: dropOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+                  <CaretDown size={13} className="text-[#888] shrink-0" style={{ transform: dropOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
                 </button>
 
                 {dropOpen && (
@@ -1651,7 +1651,7 @@ function WalletCard({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; 
                                   style={{ background: 'rgba(74,222,128,0.12)', color: '#4ADE80' }}>main</span>
                               )}
                             </div>
-                            <p className="font-mono text-[10px] text-[#555]">{w.balance_sol.toFixed(4)} SOL</p>
+                            <p className="font-mono text-[10px] text-[#888]">{w.balance_sol.toFixed(4)} SOL</p>
                           </div>
                           {activeWallet === w.id && <Check size={13} className="text-[#00A8FF] shrink-0" />}
                         </button>
@@ -1670,7 +1670,7 @@ function WalletCard({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; 
                         </div>
                       ) : (
                         <button onClick={() => setShowCreate(true)}
-                          className="w-full flex items-center gap-2 px-4 py-3 text-[#555] hover:text-white transition-colors">
+                          className="w-full flex items-center gap-2 px-4 py-3 text-[#888] hover:text-white transition-colors">
                           <Plus size={13} /><span className="font-mono text-xs">New wallet</span>
                         </button>
                       )}
@@ -1683,7 +1683,7 @@ function WalletCard({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; 
               {active && (
                 <div style={{ borderRadius: 14, background: 'linear-gradient(135deg, #0f1318 0%, #111827 100%)', border: '1px solid rgba(255,255,255,0.06)', padding: '16px 18px' }}>
                   <div className="flex items-center justify-between mb-3">
-                    <span className="font-mono text-[10px] text-[#555]">SOLANA MAINNET</span>
+                    <span className="font-mono text-[10px] text-[#888]">SOLANA MAINNET</span>
                     {isMain ? (
                       <span className="font-mono text-[9px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(0,168,255,0.12)', color: '#00A8FF' }}>Trading</span>
                     ) : (
@@ -1698,13 +1698,13 @@ function WalletCard({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; 
                   </div>
                   <div className="mb-3">
                     <span className="font-mono text-3xl font-bold text-white">{active.balance_sol.toFixed(4)}</span>
-                    <span className="font-mono text-sm text-[#555] ml-2">SOL</span>
+                    <span className="font-mono text-sm text-[#888] ml-2">SOL</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-[10px] text-[#444] flex-1 truncate">
+                    <span className="font-mono text-[10px] text-[#666] flex-1 truncate">
                       {active.address.slice(0, 12)}…{active.address.slice(-8)}
                     </span>
-                    <button onClick={() => copyAddr(active.address)} className="text-[#444] hover:text-white transition-colors shrink-0">
+                    <button onClick={() => copyAddr(active.address)} className="text-[#666] hover:text-white transition-colors shrink-0">
                       {addrCopied ? <Check size={11} className="text-[#4ADE80]" /> : <Copy size={11} />}
                     </button>
                   </div>
@@ -1795,7 +1795,7 @@ function TabAccounts({ positions, closed, mainWalletId, onMainWalletSet }: {
       <div className="neu-tile flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.04] shrink-0">
           <span className="font-mono text-xs font-bold text-white">Trade History</span>
-          <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-[#555]">{closed.length}</span>
+          <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-[#888]">{closed.length}</span>
         </div>
         <div className="flex-1 overflow-y-auto">
           {closed.length === 0 ? (
@@ -1815,7 +1815,7 @@ function TabAccounts({ positions, closed, mainWalletId, onMainWalletSet }: {
           <button
             onClick={exportTxJSON}
             title="Export as JSON"
-            className="flex items-center gap-1 text-[#555] hover:text-white px-2 py-0.5 rounded border border-white/10 hover:border-white/30 transition-colors"
+            className="flex items-center gap-1 text-[#888] hover:text-white px-2 py-0.5 rounded border border-white/10 hover:border-white/30 transition-colors"
           >
             <DownloadSimple size={12} />
             <span className="font-mono text-[10px]">Export</span>
@@ -1835,7 +1835,7 @@ function TabAccounts({ positions, closed, mainWalletId, onMainWalletSet }: {
                     <span className={`font-mono text-[10px] w-16 shrink-0 ${isDeposit ? 'text-[#4ADE80]' : 'text-[#888]'}`}>
                       {isDeposit ? '↓ IN' : '↑ OUT'}
                     </span>
-                    <span className="font-mono text-[10px] text-[#555] flex-1 truncate">{log.message}</span>
+                    <span className="font-mono text-[10px] text-[#888] flex-1 truncate">{log.message}</span>
                     <span className="font-mono text-[10px] text-[#333] shrink-0">
                       {new Date(log.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
@@ -1877,7 +1877,7 @@ function TabLogs() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-mono font-bold text-xl text-white">Logs</h1>
-          <p className="font-mono text-xs text-[#555] mt-0.5">Live bot activity — last 200 events</p>
+          <p className="font-mono text-xs text-[#888] mt-0.5">Live bot activity — last 200 events</p>
         </div>
         <div className="flex items-center gap-3">
           {logs.length > 0 && (
@@ -1953,7 +1953,7 @@ function ConfigRow({ label, sub, value, onDec, onInc, display }: {
     <div className="flex items-center justify-between py-3 border-b border-white/[0.04] last:border-0">
       <div>
         <p className="font-mono text-xs text-white">{label}</p>
-        {sub && <p className="font-mono text-[10px] text-[#444] mt-0.5">{sub}</p>}
+        {sub && <p className="font-mono text-[10px] text-[#666] mt-0.5">{sub}</p>}
       </div>
       {onDec && onInc ? (
         <div className="flex items-center gap-2">
@@ -1981,7 +1981,7 @@ function ToggleRow({ label, sub, value, onToggle }: {
     <div className="flex items-center justify-between py-3 border-b border-white/[0.04] last:border-0">
       <div>
         <p className="font-mono text-xs text-white">{label}</p>
-        {sub && <p className="font-mono text-[10px] text-[#444] mt-0.5">{sub}</p>}
+        {sub && <p className="font-mono text-[10px] text-[#666] mt-0.5">{sub}</p>}
       </div>
       <button
         onClick={onToggle}
@@ -2053,14 +2053,14 @@ function ConfigModal({ onClose }: { onClose: () => void }) {
 
           {/* Modes */}
           <div className="neu-tile p-4">
-            <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-3">Trading Modes</p>
+            <p className="font-mono text-[10px] text-[#888] uppercase tracking-widest mb-3">Trading Modes</p>
             <ToggleRow label="Sniper" sub="High-score tokens (≥75) — larger position" value={cfg.sniper_enabled} onToggle={() => update({ sniper_enabled: !cfg.sniper_enabled })} />
             <ToggleRow label="Scalper" sub="Lower-score tokens — smaller position, quick exits" value={cfg.scalper_enabled} onToggle={() => update({ scalper_enabled: !cfg.scalper_enabled })} />
           </div>
 
           {/* Position sizing */}
           <div className="neu-tile p-4">
-            <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-3">Position Sizing</p>
+            <p className="font-mono text-[10px] text-[#888] uppercase tracking-widest mb-3">Position Sizing</p>
             <ConfigRow label="Max position size" sub="SOL per trade"
               value={cfg.max_position_sol} display={`${cfg.max_position_sol.toFixed(2)} SOL`}
               onDec={() => step('max_position_sol', -0.05, 0.01, 5.0, 2)}
@@ -2077,7 +2077,7 @@ function ConfigModal({ onClose }: { onClose: () => void }) {
 
           {/* Risk */}
           <div className="neu-tile p-4">
-            <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-3">Risk Controls</p>
+            <p className="font-mono text-[10px] text-[#888] uppercase tracking-widest mb-3">Risk Controls</p>
             <ConfigRow label="Stop loss" sub="Exit immediately below this"
               value={cfg.stop_loss_pct} display={`−${(cfg.stop_loss_pct * 100).toFixed(0)}%`}
               onDec={() => step('stop_loss_pct', -0.05, 0.05, 0.90, 2)}
@@ -2094,7 +2094,7 @@ function ConfigModal({ onClose }: { onClose: () => void }) {
 
           {/* Take profit */}
           <div className="neu-tile p-4">
-            <p className="font-mono text-[10px] text-[#555] uppercase tracking-widest mb-3">Take Profit — Staged Exits</p>
+            <p className="font-mono text-[10px] text-[#888] uppercase tracking-widest mb-3">Take Profit — Staged Exits</p>
             <ConfigRow label="TP1 — sell 40%" sub="First partial exit at this price multiple"
               value={cfg.take_profit_1x} display={`${cfg.take_profit_1x.toFixed(1)}x`}
               onDec={() => step('take_profit_1x', -0.5, 1.2, 10.0, 1)}
@@ -2155,7 +2155,7 @@ function _TabConfigRemoved({ userName, userUsername, userAvatar, botActive }: {
     <div className="p-6">
       <div className="mb-6">
         <h1 className="font-mono font-bold text-xl text-white">Config</h1>
-        <p className="font-mono text-xs text-[#555] mt-0.5">Account & bot configuration</p>
+        <p className="font-mono text-xs text-[#888] mt-0.5">Account & bot configuration</p>
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
@@ -2170,12 +2170,12 @@ function _TabConfigRemoved({ userName, userUsername, userAvatar, botActive }: {
             }
             <div>
               <p className="font-mono text-sm text-white font-bold">{userName || 'User'}</p>
-              {userUsername && <p className="font-mono text-xs text-[#555]">@{userUsername}</p>}
+              {userUsername && <p className="font-mono text-xs text-[#888]">@{userUsername}</p>}
             </div>
           </div>
 
           {/* Bot status */}
-          <p className="font-mono text-xs text-[#555] uppercase tracking-widest">Bot Status</p>
+          <p className="font-mono text-xs text-[#888] uppercase tracking-widest">Bot Status</p>
           <div className="space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="font-mono text-xs text-[#666]">Status</span>
@@ -2193,8 +2193,8 @@ function _TabConfigRemoved({ userName, userUsername, userAvatar, botActive }: {
             </div>
           </div>
           <div className="flex items-center gap-2 pt-3 border-t border-white/5">
-            <Key size={14} className="text-[#555] shrink-0" />
-            <p className="font-mono text-xs text-[#555]">Signet credentials encrypted at rest</p>
+            <Key size={14} className="text-[#888] shrink-0" />
+            <p className="font-mono text-xs text-[#888]">Signet credentials encrypted at rest</p>
           </div>
         </div>
 
@@ -2202,8 +2202,8 @@ function _TabConfigRemoved({ userName, userUsername, userAvatar, botActive }: {
         <div className="neu-tile p-6 space-y-4">
           <div className="flex items-center justify-between pb-4 border-b border-white/5">
             <div className="flex items-center gap-2">
-              <Wallet size={14} className="text-[#555] shrink-0" />
-              <p className="font-mono text-xs text-[#555] uppercase tracking-widest">Signet Wallets</p>
+              <Wallet size={14} className="text-[#888] shrink-0" />
+              <p className="font-mono text-xs text-[#888] uppercase tracking-widest">Signet Wallets</p>
             </div>
             <button
               onClick={() => setShowCreate(v => !v)}
@@ -2236,7 +2236,7 @@ function _TabConfigRemoved({ userName, userUsername, userAvatar, botActive }: {
           {walletsLoading ? (
             <p className="font-mono text-xs text-[#333] text-center py-6">Loading wallets...</p>
           ) : wallets.length === 0 ? (
-            <p className="font-mono text-xs text-[#444] text-center py-6">No wallets yet.</p>
+            <p className="font-mono text-xs text-[#666] text-center py-6">No wallets yet.</p>
           ) : (
             <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
               {wallets.map(wal => (
@@ -2246,7 +2246,7 @@ function _TabConfigRemoved({ userName, userUsername, userAvatar, botActive }: {
                       {wal.label || 'Unnamed'}
                     </span>
                     <span className="font-mono text-sm font-bold text-[#4ADE80]">
-                      {wal.balance_sol.toFixed(3)} <span className="text-xs font-normal text-[#555]">SOL</span>
+                      {wal.balance_sol.toFixed(3)} <span className="text-xs font-normal text-[#888]">SOL</span>
                     </span>
                   </div>
                   <CopyField label="Address" value={wal.address} />
@@ -2288,7 +2288,7 @@ export default function Dashboard({ onLogout, walletId, userName, userUsername, 
         <div className="text-center">
           <img src="/logo.png" alt="Hummingbird" className="w-16 h-16 object-contain mx-auto mb-4 animate-pulse"
             style={{ filter: 'drop-shadow(0 0 16px rgba(0,168,255,0.5))' }} />
-          <p className="font-mono text-[#555] text-sm animate-pulse">Connecting to orchestrator...</p>
+          <p className="font-mono text-[#888] text-sm animate-pulse">Connecting to orchestrator...</p>
         </div>
       </div>
     )
