@@ -33,6 +33,8 @@ type Position struct {
 	Decision       string    `json:"decision"`
 	OpenedAt       time.Time `json:"opened_at"`
 
+	Platform string `json:"platform"` // pump_fun | moonshot | raydium_launchlab | boop | etc.
+
 	// Exit tracking
 	PeakPriceSOL    float64 `json:"peak_price_sol"`
 	TakeProfitLevel int     `json:"take_profit_level"`

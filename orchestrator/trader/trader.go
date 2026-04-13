@@ -203,6 +203,7 @@ func (t *Trader) enter(result *models.ScoreResult) {
 		Mint:           result.Mint,
 		DevWallet:      result.DevWallet,
 		WalletID:       t.walletID,
+		Platform:       result.Platform,
 		EntryPriceSOL:  result.PositionSOL, // refined by monitor on first price tick
 		EntryAmountSOL: result.PositionSOL,
 		Score:          result.Total,

@@ -1,10 +1,12 @@
 package bot
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"log"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -12,6 +14,7 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
 	"github.com/iamdecatalyst/hummingbird/orchestrator/models"
+	"github.com/iamdecatalyst/hummingbird/orchestrator/pnl"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/portfolio"
 )
 
@@ -378,8 +381,18 @@ func (b *Bot) handleCallback(cq *tgbotapi.CallbackQuery) {
 			}
 			b.send(cid, "Position not found (may have already closed).", nil)
 		case strings.HasPrefix(cq.Data, "share:"):
-			// PnL card — coming soon; send dashboard link for now
-			b.send(cid, "📊 View your full trade history at <a href=\"https://hummingbird.vylth.com/dashboard\">hummingbird.vylth.com</a>", nil)
+			mint := strings.TrimPrefix(cq.Data, "share:")
+			_, port, _, ok := b.ctx(cid)
+			if !ok || port == nil {
+				b.send(cid, "No active bot.", nil)
+				return
+			}
+			closed, found := port.GetClosedByMint(mint)
+			if !found {
+				b.send(cid, "Trade not found — it may have been too long ago.", nil)
+				return
+			}
+			go b.sendShareCard(cid, closed)
 		}
 	}
 }
@@ -724,6 +737,47 @@ func (b *Bot) Alert(text string) {
 
 func (b *Bot) Notify(text string) {
 	b.send(b.chatID, text, nil)
+}
+
+// sendShareCard generates a PnL card PNG and sends it to the chat with a tweet link.
+// Runs in a goroutine — card generation may take 1-3 seconds.
+func (b *Bot) sendShareCard(chatID int64, c *models.ClosedPosition) {
+	pngBytes, err := pnl.GenerateCard(c)
+	if err != nil {
+		log.Printf("[bot] card generation failed: %v", err)
+		b.send(chatID, "⚠️ Card generation failed — wkhtmltoimage may not be installed on the server.", nil)
+		return
+	}
+
+	held := c.ClosedAt.Sub(c.OpenedAt).Round(time.Second)
+	pnlSign := "+"
+	if c.PnLSOL < 0 {
+		pnlSign = ""
+	}
+	shortMint := c.Mint
+	if len(shortMint) > 8 {
+		shortMint = shortMint[:8]
+	}
+
+	tweetText := fmt.Sprintf("Just caught %s%.0f%% on $%s with @hummingbird_vylth 🐦\n\nTrade autonomously on Solana. No code. No babysitting.\nhummingbird.vylth.com",
+		pnlSign, c.PnLPercent, shortMint)
+	tweetURL := "https://twitter.com/intent/tweet?text=" + url.QueryEscape(tweetText)
+
+	caption := fmt.Sprintf("🐦 <b>%s%.0f%%</b> on <code>%s</code>\n%s%.4f SOL · held %s\n\n<a href=\"%s\">Post to X →</a>",
+		pnlSign, c.PnLPercent, shortMint,
+		pnlSign, c.PnLSOL, held,
+		tweetURL,
+	)
+
+	photo := tgbotapi.NewPhoto(chatID, tgbotapi.FileReader{
+		Name:   "hb-trade.png",
+		Reader: bytes.NewReader(pngBytes),
+	})
+	photo.Caption = caption
+	photo.ParseMode = "HTML"
+	if _, err := b.api.Send(photo); err != nil {
+		log.Printf("[bot] sendPhoto: %v", err)
+	}
 }
 
 // ── unused import guard ───────────────────────────────────────────────────────

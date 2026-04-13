@@ -1345,8 +1345,21 @@ const LOG_META: Record<string, { color: string; bg: string; icon: React.ReactNod
 function ClosedTradeCard({ t }: { t: ClosedPosition }) {
   const isWin = t.pnl_sol >= 0
   const isGreenReason = t.reason.startsWith('take') || t.reason === 'scalp'
+  const [sharing, setSharing] = useState(false)
+
+  const handleShare = async () => {
+    setSharing(true)
+    try {
+      await api.downloadCard(t.mint)
+    } catch {
+      // fallback: wkhtmltoimage may not be installed yet
+    } finally {
+      setSharing(false)
+    }
+  }
+
   return (
-    <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.04] last:border-0 hover:bg-white/[0.015] transition-colors">
+    <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.04] last:border-0 hover:bg-white/[0.015] transition-colors group">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
           <span className="font-mono text-xs text-white truncate">{shortMint(t.mint)}</span>
@@ -1361,13 +1374,25 @@ function ClosedTradeCard({ t }: { t: ClosedPosition }) {
           <span className="font-mono text-[10px] text-[#333]">{new Date(t.closed_at).toLocaleTimeString()}</span>
         </div>
       </div>
-      <div className="text-right shrink-0">
-        <p className={`font-mono text-sm font-bold ${isWin ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
-          {isWin ? '+' : ''}{t.pnl_sol.toFixed(3)}
-        </p>
-        <p className={`font-mono text-[10px] ${isWin ? 'text-[#4ADE80]' : 'text-[#EF4444]'} opacity-70`}>
-          {t.pnl_percent >= 0 ? '+' : ''}{t.pnl_percent.toFixed(1)}%
-        </p>
+      <div className="flex items-center gap-3 shrink-0">
+        {isWin && (
+          <button
+            onClick={handleShare}
+            disabled={sharing}
+            title="Download PnL card"
+            className="opacity-0 group-hover:opacity-100 transition-opacity font-mono text-[10px] text-[#00A8FF] hover:text-white px-2 py-1 rounded border border-[#00A8FF]/20 hover:border-[#00A8FF]/50 disabled:opacity-40"
+          >
+            {sharing ? '...' : '📤'}
+          </button>
+        )}
+        <div className="text-right">
+          <p className={`font-mono text-sm font-bold ${isWin ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
+            {isWin ? '+' : ''}{t.pnl_sol.toFixed(3)}
+          </p>
+          <p className={`font-mono text-[10px] ${isWin ? 'text-[#4ADE80]' : 'text-[#EF4444]'} opacity-70`}>
+            {t.pnl_percent >= 0 ? '+' : ''}{t.pnl_percent.toFixed(1)}%
+          </p>
+        </div>
       </div>
     </div>
   )

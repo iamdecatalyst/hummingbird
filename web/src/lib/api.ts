@@ -174,4 +174,17 @@ export const api = {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     }).then(r => { if (!r.ok) throw new Error('delete failed') })
   },
+
+  // PnL card — downloads PNG for a closed position by mint
+  async downloadCard(mint: string): Promise<void> {
+    const res = await fetch(`${BASE}/card/${mint}`, { headers: authHeaders() })
+    if (!res.ok) throw new Error(`card → ${res.status}`)
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `hb-trade-${mint.slice(0, 8)}.png`
+    a.click()
+    URL.revokeObjectURL(url)
+  },
 }

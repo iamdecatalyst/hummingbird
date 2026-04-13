@@ -185,6 +185,18 @@ func (p *Portfolio) Resume() {
 	p.pauseReason = ""
 }
 
+// GetClosedByMint returns the most recent closed position for a mint address.
+func (p *Portfolio) GetClosedByMint(mint string) (*models.ClosedPosition, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for i := len(p.closed) - 1; i >= 0; i-- {
+		if p.closed[i].Mint == mint {
+			return p.closed[i], true
+		}
+	}
+	return nil, false
+}
+
 // RecentClosed returns the last n closed positions (most recent first).
 func (p *Portfolio) RecentClosed(n int) []*models.ClosedPosition {
 	p.mu.Lock()

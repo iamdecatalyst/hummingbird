@@ -24,6 +24,7 @@ import (
 	"github.com/iamdecatalyst/hummingbird/orchestrator/eventlog"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/models"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/monitor"
+	"github.com/iamdecatalyst/hummingbird/orchestrator/pnl"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/portfolio"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/scalper"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/trader"
@@ -650,6 +651,54 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 			closed = []*models.ClosedPosition{}
 		}
 		json.NewEncoder(w).Encode(closed)
+	})
+
+	// GET /card/{mint} — generate a PnL share card PNG for a closed position.
+	// Returns image/png. Requires auth. Only works for profitable trades.
+	mux.HandleFunc("GET /card/{mint}", func(w http.ResponseWriter, r *http.Request) {
+		nexusID, err := requireAuth(r)
+		if err != nil {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		mint := r.PathValue("mint")
+		if mint == "" {
+			http.Error(w, "missing mint", http.StatusBadRequest)
+			return
+		}
+		// Look up from DB (most reliable, covers past sessions)
+		closed, dbErr := database.ClosedPositionsByUser(nexusID, 50)
+		if dbErr != nil {
+			http.Error(w, "db error", http.StatusInternalServerError)
+			return
+		}
+		var target *models.ClosedPosition
+		for _, c := range closed {
+			if c.Mint == mint {
+				target = c
+				break
+			}
+		}
+		// Fallback to in-memory portfolio
+		if target == nil {
+			inst := mgr.Get(nexusID)
+			if inst != nil {
+				target, _ = inst.Port.GetClosedByMint(mint)
+			}
+		}
+		if target == nil {
+			http.Error(w, "position not found", http.StatusNotFound)
+			return
+		}
+		pngBytes, err := pnl.GenerateCard(target)
+		if err != nil {
+			log.Printf("[card] generate failed for %s: %v", mint[:8], err)
+			http.Error(w, "card generation failed — wkhtmltoimage may not be installed", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "image/png")
+		w.Header().Set("Content-Disposition", `attachment; filename="hb-trade.png"`)
+		w.Write(pngBytes)
 	})
 
 	mux.HandleFunc("GET /logs", func(w http.ResponseWriter, r *http.Request) {

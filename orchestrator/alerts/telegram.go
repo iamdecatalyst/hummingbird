@@ -132,7 +132,7 @@ func (t *Telegram) Exited(c *models.ClosedPosition) {
 	if c.PnLSOL > 0 {
 		kb = [][]kbButton{
 			{
-				{Text: "📤 Share Trade", Data: "share:" + c.TxHash},
+				{Text: "📤 Share Trade", Data: "share:" + c.Mint}, // mint ≤ 44 chars → fits 64-byte TG limit
 				{Text: "📊 Dashboard", URL: "https://hummingbird.vylth.com/dashboard"},
 			},
 		}
