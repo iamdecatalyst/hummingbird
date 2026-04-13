@@ -29,8 +29,10 @@ type MantisScanResponse struct {
 			BondingCurveComplete    *bool    `json:"bonding_curve_complete"`
 			DevSupplyPct            *float64 `json:"dev_supply_pct"`
 			DeployerPriorLaunches   *int     `json:"deployer_prior_launches"`
+			DeployerAgeKnown        bool     `json:"deployer_age_known"`
 		} `json:"scan"`
-		RiskScore RiskScore `json:"risk_score"`
+		RiskScore  RiskScore `json:"risk_score"`
+		Confidence string    `json:"confidence"` // "high" = live RPC data, "none" = mock fallback
 	} `json:"data"`
 }
 

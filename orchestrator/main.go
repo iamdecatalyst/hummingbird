@@ -1093,44 +1093,54 @@ func scoreAndTrade(cc *cricket.Client, dispatch func(*models.ScoreResult), tgTok
 //   smart_contract_deployer with >75% win rate → seasoned rugger, reduce score
 //   very low firefly score (<20)               → bad actor, reduce score
 func scoreFromCricket(scan *cricket.MantisScanResponse, devWallet *cricket.FireflyWalletResponse) (score int, decision string, posSOL float64) {
-	switch scan.Data.RiskScore.Rating {
-	case "critical", "high":
+	r := scan.Data.RiskScore
+	s := scan.Data.Scan
+
+	// Skip if Cricket hit mock data (public RPC rate-limited) — score is meaningless
+	if scan.Data.Confidence != "high" {
 		return 0, "skip", 0
-	case "moderate":
-		score = 55 // moderate alone doesn't clear the 60-point entry threshold — needs clean signals to pass
-	case "low":
-		score = 85
-	default:
-		return 0, "skip", 0 // unknown rating — skip to be safe
 	}
 
-	// Bonding curve: if already graduated, token is on Raydium — different dynamics
-	s := scan.Data.Scan
-	if s.BondingCurveComplete != nil && *s.BondingCurveComplete {
-		score -= 10 // graduated tokens have less pump.fun edge
+	// Hard skips — rating alone overrides everything
+	if r.Rating == "critical" || r.Rating == "high" {
+		return 0, "skip", 0
 	}
-	// Dev supply concentration already factored into Cricket's rating,
-	// but >50% is an extra hard signal we penalise additionally here
+	// Unknown rating — skip to be safe
+	if r.Rating != "moderate" && r.Rating != "low" {
+		return 0, "skip", 0
+	}
+
+	// Hard skip: mint authority not revoked = dev can print unlimited tokens
+	if !s.MintAuthorityRevoked {
+		return 0, "skip", 0
+	}
+
+	// Use Cricket's own numeric score (0-100) as our base
+	score = r.Score
+
+	// Dev supply concentration: >50% is an extra hard signal
 	if s.DevSupplyPct != nil && *s.DevSupplyPct > 50 {
 		score -= 20
 	}
 
+	// Dev wallet signals from Firefly
 	if devWallet != nil && devWallet.Success {
 		dw := devWallet.Data
 		if dw.Style == "smart_contract_deployer" && dw.WinRate > 75 {
-			score -= 25 // experienced deployer with high win rate = likely professional rugger
+			score -= 25 // professional deployer with high win rate = likely serial rugger
 		}
 		if dw.Score < 20 {
 			score -= 15 // very low smart-money score = flagged bad actor
 		}
 	}
 
+	// Entry thresholds
 	switch {
-	case score < 60:
+	case score < 55:
 		return score, "skip", 0
-	case score < 75:
+	case score < 70:
 		return score, "small", 0.05
-	case score < 90:
+	case score < 85:
 		return score, "medium", 0.10
 	default:
 		return score, "full", 0.20
