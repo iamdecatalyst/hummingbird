@@ -124,19 +124,22 @@ func (t *Trader) enter(result *models.ScoreResult) {
 		DeadlineSeconds: 30,
 	}
 
+	// Wait briefly before first swap — new pump.fun tokens take ~10s to appear on Jupiter
+	time.Sleep(10 * time.Second)
+
 	var tx *signet.TransactionResult
 	var err error
-	const maxRetries = 4
+	const maxRetries = 5
 	for attempt := range maxRetries {
 		tx, err = t.signet.Wallets.Swap(t.walletID, params)
 		if err == nil {
 			break
 		}
 		var sigErr *signet.SignetError
-		if errors.As(err, &sigErr) && sigErr.StatusCode == 502 && strings.Contains(sigErr.Message, "Unknown Solana token") {
+		if errors.As(err, &sigErr) && sigErr.StatusCode == 502 {
 			if attempt < maxRetries-1 {
-				log.Printf("[trader] token %s not yet indexed by signet, retry %d/%d in 4s", result.Mint[:8], attempt+1, maxRetries)
-				time.Sleep(4 * time.Second)
+				log.Printf("[trader] token %s not yet indexed (attempt %d/%d), retrying in 8s", result.Mint[:8], attempt+1, maxRetries)
+				time.Sleep(8 * time.Second)
 				continue
 			}
 		}

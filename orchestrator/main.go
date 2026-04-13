@@ -1097,9 +1097,9 @@ func scoreFromCricket(scan *cricket.MantisScanResponse, devWallet *cricket.Firef
 	case "critical", "high":
 		return 0, "skip", 0
 	case "moderate":
-		score = 70
+		score = 55 // moderate alone doesn't clear the 60-point entry threshold — needs clean signals to pass
 	case "low":
-		score = 90
+		score = 85
 	default:
 		return 0, "skip", 0 // unknown rating — skip to be safe
 	}
