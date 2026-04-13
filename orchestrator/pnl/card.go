@@ -1,5 +1,5 @@
 // Package pnl generates shareable PnL card images for closed positions.
-// Uses wkhtmltoimage (subprocess) to render an HTML template → PNG.
+// Uses wkhtmltoimage to render an HTML template → PNG.
 // Install on server: sudo apt-get install -y wkhtmltopdf
 package pnl
 
@@ -30,8 +30,7 @@ func init() {
 	solanaDataURI = "data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString(solanaSVG)
 }
 
-// GenerateCard renders a PnL share card as a PNG (1200×630px).
-// Returns the PNG bytes or an error if wkhtmltoimage isn't available.
+// GenerateCard renders a PnL share card as a PNG (600×400px, Chimera-style layout).
 func GenerateCard(c *models.ClosedPosition) ([]byte, error) {
 	html := renderCardHTML(c)
 
@@ -45,8 +44,8 @@ func GenerateCard(c *models.ClosedPosition) ([]byte, error) {
 	}
 
 	cmd := exec.Command("wkhtmltoimage",
-		"--width", "1200",
-		"--height", "630",
+		"--width", "600",
+		"--height", "400",
 		"--format", "png",
 		"--quality", "95",
 		"--enable-local-file-access",
@@ -67,11 +66,10 @@ func renderCardHTML(c *models.ClosedPosition) string {
 		pnlSign = ""
 	}
 
-	pnlColor := "#00ff88"
-	glowColor := "rgba(0,255,136,0.15)"
+	// Accent = profit/loss color — matches Chimera's mascot color role
+	accent := "#00D26A"
 	if c.PnLSOL < 0 {
-		pnlColor = "#ff4444"
-		glowColor = "rgba(255,68,68,0.15)"
+		accent = "#FF3B3B"
 	}
 
 	shortMint := c.Mint
@@ -91,11 +89,12 @@ func renderCardHTML(c *models.ClosedPosition) string {
 		platform = "boop.fun"
 	}
 
-	exitReason := strings.ReplaceAll(strings.ToUpper(string(c.Reason)), "_", " ")
+	exitLabel := strings.ReplaceAll(strings.ToUpper(string(c.Reason)), "_", " ")
+	if exitLabel == "" {
+		exitLabel = "CLOSED"
+	}
 
-	heldStr := held.String()
-	// Clean up duration: "6m30s" stays, "1h2m3s" stays
-	_ = heldStr
+	closedDate := c.ClosedAt.UTC().Format("Jan 2, 15:04 UTC")
 
 	return fmt.Sprintf(`<!DOCTYPE html>
 <html>
@@ -103,284 +102,265 @@ func renderCardHTML(c *models.ClosedPosition) string {
 <meta charset="UTF-8">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
-
 body, html {
-  width: 1200px;
-  height: 630px;
-  background: #080808;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  color: #ffffff;
+  width: 600px;
+  height: 400px;
+  background: #000000;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
   overflow: hidden;
 }
-
 .card {
-  width: 1200px;
-  height: 630px;
-  background: #080808;
   position: relative;
-  display: flex;
-  flex-direction: column;
-  padding: 48px 56px 40px;
+  width: 600px;
+  height: 400px;
+  background: #000000;
+  border-radius: 16px;
   overflow: hidden;
 }
-
-/* Subtle grid */
-.card::before {
-  content: '';
+/* Grid pattern */
+.grid-bg {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
-  background-size: 40px 40px;
-  pointer-events: none;
+    linear-gradient(%s18 1px, transparent 1px),
+    linear-gradient(90deg, %s18 1px, transparent 1px);
+  background-size: 32px 32px;
 }
-
-/* Glow blob behind PnL number */
-.glow {
+/* Top accent bar */
+.top-bar {
   position: absolute;
-  top: 50%%;
-  left: 50%%;
-  transform: translate(-50%%, -50%%);
-  width: 700px;
-  height: 400px;
-  background: radial-gradient(ellipse at center, %s 0%%, transparent 70%%);
-  pointer-events: none;
-  z-index: 0;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: %s;
 }
-
-/* Header */
-.header {
+/* Top gradient glow */
+.top-glow {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 96px;
+  background: linear-gradient(to bottom, %s26, transparent);
+}
+/* Left accent bar */
+.left-bar {
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  width: 3px;
+  background: %s;
+  opacity: 0.5;
+}
+/* Bird logo — bottom right, like mascot slot */
+.mascot {
+  position: absolute;
+  right: 0;
+  bottom: 24px;
+  width: 45%%;
+  height: 90%%;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  align-items: flex-end;
+  justify-content: flex-end;
+  overflow: hidden;
+  opacity: 0.12;
+}
+.mascot img {
+  height: 100%%;
+  width: auto;
+  object-fit: contain;
+  object-position: bottom right;
+}
+/* Content */
+.content {
   position: relative;
-  z-index: 1;
-}
-
-.logo-group {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.logo-img {
-  width: 36px;
-  height: 36px;
-  object-fit: contain;
-}
-
-.logo-text {
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 4px;
-  color: #ffffff;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  opacity: 0.45;
-}
-
-.solana-img {
-  width: 20px;
-  height: 20px;
-  object-fit: contain;
-}
-
-.solana-text {
-  font-size: 13px;
-  font-weight: 600;
-  color: #aaa;
-  letter-spacing: 2px;
-}
-
-/* Center content */
-.center {
-  flex: 1;
+  z-index: 10;
+  padding: 28px;
+  height: 100%%;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  z-index: 1;
-  gap: 0;
 }
-
+/* Module row */
+.module-name {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: %s;
+  margin-bottom: 2px;
+}
+.platform-text {
+  font-size: 13px;
+  color: rgba(255,255,255,0.4);
+  margin-bottom: 20px;
+}
+/* Token + badge */
 .token-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: 10px;
+  margin-bottom: 16px;
 }
-
 .token-name {
-  font-size: 28px;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: 1px;
+  font-size: 24px;
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: -0.5px;
 }
-
-.platform-badge {
-  font-size: 11px;
-  font-weight: 600;
-  color: #555;
+.exit-badge {
   padding: 3px 10px;
-  border: 1px solid #222;
-  border-radius: 20px;
-  letter-spacing: 1px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff;
+  background: %s;
+  letter-spacing: 0.5px;
+}
+/* P&L */
+.pnl-label {
+  font-size: 13px;
+  color: rgba(255,255,255,0.4);
+  letter-spacing: 2px;
+  margin-bottom: 4px;
   text-transform: uppercase;
 }
-
-.reason-badge {
-  font-size: 11px;
-  font-weight: 600;
-  color: %s;
-  padding: 3px 10px;
-  border: 1px solid currentColor;
-  border-radius: 20px;
-  letter-spacing: 1px;
-  opacity: 0.7;
-}
-
 .pnl-sol {
-  font-size: 108px;
+  font-size: 44px;
   font-weight: 900;
   color: %s;
+  letter-spacing: -1px;
   line-height: 1;
-  letter-spacing: -4px;
-  margin: 4px 0;
+  margin-bottom: 4px;
 }
-
 .pnl-pct {
-  font-size: 44px;
+  font-size: 20px;
   font-weight: 700;
   color: %s;
   opacity: 0.75;
-  letter-spacing: -1px;
+  margin-bottom: 20px;
 }
-
-/* Stats row */
+/* Entry/Exit row */
 .stats-row {
   display: flex;
-  justify-content: center;
-  gap: 48px;
-  position: relative;
-  z-index: 1;
-  padding-top: 24px;
-  border-top: 1px solid #141414;
+  gap: 40px;
+  margin-bottom: auto;
 }
-
-.stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
 .stat-label {
-  font-size: 10px;
-  font-weight: 600;
-  color: #333;
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
   letter-spacing: 2px;
   text-transform: uppercase;
+  display: block;
+  margin-bottom: 2px;
 }
-
 .stat-value {
-  font-size: 16px;
-  font-weight: 600;
-  color: #888;
+  font-size: 18px;
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+  color: #ffffff;
 }
-
 /* Footer */
 .footer {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-top: 20px;
-  position: relative;
-  z-index: 1;
+  justify-content: space-between;
+  padding-top: 12px;
 }
-
-.footer-text {
+.footer-date {
   font-size: 11px;
-  color: #222;
-  letter-spacing: 0.5px;
+  color: rgba(255,255,255,0.35);
 }
-
 .footer-url {
   font-size: 11px;
-  color: #222;
+  color: rgba(255,255,255,0.35);
   letter-spacing: 1px;
 }
 </style>
 </head>
 <body>
 <div class="card">
-  <div class="glow"></div>
+  <div class="grid-bg"></div>
+  <div class="top-bar"></div>
+  <div class="top-glow"></div>
+  <div class="left-bar"></div>
 
-  <div class="header">
-    <div class="logo-group">
-      <img class="logo-img" src="%s" />
-      <span class="logo-text">HUMMINGBIRD</span>
-    </div>
-    <div class="header-right">
-      <img class="solana-img" src="%s" />
-      <span class="solana-text">SOLANA</span>
-    </div>
+  <!-- Bird logo as mascot (bottom-right, faint) -->
+  <div class="mascot">
+    <img src="%s" />
   </div>
 
-  <div class="center">
+  <div class="content">
+    <!-- Module = HUMMINGBIRD, platform below -->
+    <div class="module-name">HUMMINGBIRD</div>
+    <div class="platform-text">%s · Solana</div>
+
+    <!-- Token + exit reason badge -->
     <div class="token-row">
       <span class="token-name">%s</span>
-      <span class="platform-badge">%s</span>
-      <span class="reason-badge">%s</span>
+      <span class="exit-badge">%s</span>
     </div>
+
+    <!-- P&L -->
+    <div class="pnl-label">P &amp; L</div>
     <div class="pnl-sol">%s%.4f SOL</div>
     <div class="pnl-pct">%s%.1f%%</div>
-  </div>
 
-  <div class="stats-row">
-    <div class="stat">
-      <span class="stat-label">Entry</span>
-      <span class="stat-value">%.4f SOL</span>
+    <!-- Entry / Exit / Duration -->
+    <div class="stats-row">
+      <div>
+        <span class="stat-label">Entry</span>
+        <span class="stat-value">%.4f SOL</span>
+      </div>
+      <div>
+        <span class="stat-label">Exit</span>
+        <span class="stat-value">%.4f SOL</span>
+      </div>
+      <div>
+        <span class="stat-label">Duration</span>
+        <span class="stat-value">%s</span>
+      </div>
+      <div>
+        <span class="stat-label">Score</span>
+        <span class="stat-value">%d</span>
+      </div>
     </div>
-    <div class="stat">
-      <span class="stat-label">Exit</span>
-      <span class="stat-value">%.4f SOL</span>
-    </div>
-    <div class="stat">
-      <span class="stat-label">Duration</span>
-      <span class="stat-value">%s</span>
-    </div>
-    <div class="stat">
-      <span class="stat-label">Score</span>
-      <span class="stat-value">%d / 100</span>
-    </div>
-  </div>
 
-  <div class="footer">
-    <span class="footer-text">Traded autonomously by Hummingbird</span>
-    <span class="footer-url">hummingbird.vylth.com</span>
+    <!-- Footer -->
+    <div class="footer">
+      <span class="footer-date">%s</span>
+      <span class="footer-url">hummingbird.vylth.com</span>
+    </div>
   </div>
 </div>
 </body>
 </html>`,
-		glowColor,
-		pnlColor,
-		pnlColor, pnlColor,
+		// grid colors (accent used twice for both axes)
+		accent, accent,
+		// top-bar
+		accent,
+		// top-glow
+		accent,
+		// left-bar
+		accent,
+		// module-name color (accent = green/red)
+		accent,
+		// exit-badge background
+		accent,
+		// pnl-sol color
+		accent,
+		// pnl-pct color
+		accent,
+		// mascot logo
 		logoDataURI,
-		solanaDataURI,
-		shortMint, platform, exitReason,
+		// platform
+		platform,
+		// token, exit label
+		shortMint, exitLabel,
+		// pnl sol
 		pnlSign, c.PnLSOL,
+		// pnl pct
 		pnlSign, c.PnLPercent,
+		// stats
 		c.EntryAmountSOL,
 		c.ExitAmountSOL,
 		held.String(),
 		c.Score,
+		// footer date
+		closedDate,
 	)
 }
