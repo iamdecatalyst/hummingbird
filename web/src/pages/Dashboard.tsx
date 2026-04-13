@@ -1379,7 +1379,7 @@ function ClosedTradeCard({ t }: { t: ClosedPosition }) {
           onClick={handleShare}
           disabled={sharing}
           title="Download PnL card"
-          className="opacity-0 group-hover:opacity-100 transition-opacity font-mono text-[10px] text-[#555] hover:text-white px-2 py-1 rounded border border-white/10 hover:border-white/30 disabled:opacity-40"
+          className="transition-opacity font-mono text-[10px] text-[#555] hover:text-white px-2 py-1 rounded border border-white/10 hover:border-white/30 disabled:opacity-40"
         >
           {sharing ? '...' : '📤'}
         </button>
