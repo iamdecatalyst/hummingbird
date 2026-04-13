@@ -1023,7 +1023,17 @@ func scoreAndTrade(cc *cricket.Client, dispatch func(*models.ScoreResult), tgTok
 	cricketSem <- struct{}{}
 	defer func() { <-cricketSem }()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// Wait for the launch tx to confirm and propagate to Helius before scanning.
+	// Scanning immediately (~ms after detection) causes "account not found" on Cricket's end.
+	time.Sleep(3 * time.Second)
+
+	// Basic sanity check: pump.fun mints are 44 chars; shorter = likely wrong account extracted
+	if len(token.Mint) < 32 {
+		log.Printf("[scorer] skipping %s — mint address too short, likely wrong account", safeShort(token.Mint))
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
 	// Run mantis scan + firefly wallet check concurrently
