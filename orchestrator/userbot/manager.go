@@ -3,9 +3,11 @@
 package userbot
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	signet "github.com/VYLTH/signet-sdk-go/signet"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/alerts"
@@ -26,6 +28,7 @@ type Instance struct {
 	Port     *portfolio.Portfolio
 	Trader   *trader.Trader
 	Log      *eventlog.Log
+	cancel   context.CancelFunc
 }
 
 // Manager owns all active instances, keyed by user ID.
@@ -145,13 +148,18 @@ func (m *Manager) startInstance(userID, apiKey, apiSecret, walletID, telegramCha
 		}
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	inst := &Instance{
 		UserID:   userID,
 		WalletID: walletID,
 		Port:     port,
 		Trader:   tr,
 		Log:      userLog,
+		cancel:   cancel,
 	}
+
+	// Balance watcher — detects external deposits/withdrawals.
+	go watchBalance(ctx, tr, n, userLog)
 
 	m.mu.Lock()
 	m.instances[userID] = inst
@@ -214,9 +222,48 @@ func (m *Manager) Stop(userID string) {
 	}
 	m.mu.Unlock()
 	if ok {
+		inst.cancel()
 		inst.Trader.ExitAll(models.ExitManual)
 		log.Printf("[userbot] stopped instance for user %s", short(userID))
 		inst.Log.Emit(eventlog.Event{Type: "STOP", Message: "Bot stopped manually"})
+	}
+}
+
+const (
+	balancePollInterval  = 60 * time.Second
+	balanceTradeCooldown = 2 * time.Minute
+	balanceMinDiff       = 0.005 // SOL — ignore dust
+)
+
+// watchBalance polls the wallet balance and notifies on external deposits/withdrawals.
+// It suppresses alerts for 2 minutes after any trade to avoid false positives from swaps.
+func watchBalance(ctx context.Context, tr *trader.Trader, n alerts.Notifier, userLog *eventlog.Log) {
+	last := tr.Balance()
+	ticker := time.NewTicker(balancePollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			// Skip if a trade happened recently — balance change is from a swap.
+			if time.Since(tr.LastTradeAt()) < balanceTradeCooldown {
+				continue
+			}
+			current := tr.Balance()
+			diff := current - last
+			if diff > balanceMinDiff {
+				msg := fmt.Sprintf("💰 Deposit detected: +%.4f SOL (balance: %.4f SOL)", diff, current)
+				n.Alert(msg)
+				userLog.Emit(eventlog.Event{Type: "INFO", Message: msg})
+				last = current
+			} else if diff < -balanceMinDiff {
+				msg := fmt.Sprintf("📤 Withdrawal detected: %.4f SOL (balance: %.4f SOL)", diff, current)
+				n.Alert(msg)
+				userLog.Emit(eventlog.Event{Type: "INFO", Message: msg})
+				last = current
+			}
+		}
 	}
 }
 

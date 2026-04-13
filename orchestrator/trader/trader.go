@@ -40,6 +40,9 @@ type Trader struct {
 
 	exitCh    chan monitor.ExitSignal
 	cancelFns sync.Map // mint → context.CancelFunc
+
+	lastTradeMu sync.Mutex
+	lastTradeAt time.Time
 }
 
 func New(
@@ -150,6 +153,7 @@ func (t *Trader) enter(result *models.ScoreResult) {
 		PeakPriceSOL:   result.PositionSOL,
 	}
 
+	t.markTrade()
 	t.portfolio.Open(pos)
 	t.telegram.Entered(pos)
 
@@ -227,6 +231,7 @@ func (t *Trader) handleExit(sig monitor.ExitSignal) {
 			TxHash:        tx.TxHash,
 		}
 
+		t.markTrade()
 		t.portfolio.Close(closed)
 		t.telegram.Exited(closed)
 
@@ -261,6 +266,18 @@ func (t *Trader) ExitAll(reason models.ExitReason) {
 
 // Balance returns the wallet's current SOL balance via Signet.
 // Returns 0 on failure.
+func (t *Trader) markTrade() {
+	t.lastTradeMu.Lock()
+	t.lastTradeAt = time.Now()
+	t.lastTradeMu.Unlock()
+}
+
+func (t *Trader) LastTradeAt() time.Time {
+	t.lastTradeMu.Lock()
+	defer t.lastTradeMu.Unlock()
+	return t.lastTradeAt
+}
+
 func (t *Trader) Balance() float64 {
 	if t.walletID == "" {
 		return 0
