@@ -1118,51 +1118,137 @@ func scoreFromCricket(scan *cricket.MantisScanResponse, devWallet *cricket.Firef
 	r := scan.Data.RiskScore
 	s := scan.Data.Scan
 
-	// Skip if Cricket hit mock data (public RPC rate-limited) — score is meaningless
+	// Skip if Cricket hit mock data — score is meaningless
 	if scan.Data.Confidence != "high" {
 		return 0, "skip", 0
 	}
 
-	// Hard skips — rating alone overrides everything
-	if r.Rating == "critical" || r.Rating == "high" {
-		return 0, "skip", 0
-	}
-	// Unknown rating — skip to be safe
-	if r.Rating != "moderate" && r.Rating != "low" {
+	// Hard skips — these are unrecoverable regardless of other signals
+	if r.Rating == "critical" {
 		return 0, "skip", 0
 	}
 
-	// Hard skip: mint authority not revoked = dev can print unlimited tokens
-	if !s.MintAuthorityRevoked {
-		return 0, "skip", 0
-	}
-
-	// Use Cricket's own numeric score (0-100) as our base
+	// Start from Cricket's numeric score as the base
 	score = r.Score
 
-	// Dev supply concentration: >50% is an extra hard signal
-	if s.DevSupplyPct != nil && *s.DevSupplyPct > 50 {
-		score -= 20
+	// ── Security flags ────────────────────────────────────────────────────────
+	if !s.MintAuthorityRevoked {
+		score -= 20 // dev can print unlimited tokens — serious but not auto-skip on pump.fun
+	}
+	if !s.FreezeAuthorityRevoked {
+		score -= 10 // dev can freeze wallets
+	}
+	if s.MetadataMutable {
+		score -= 5 // name/image can be changed post-launch
 	}
 
-	// Dev wallet signals from Firefly
+	// ── Liquidity ─────────────────────────────────────────────────────────────
+	if s.LPLocked {
+		score += 10
+		if s.LPLockDurationDays != nil && *s.LPLockDurationDays >= 30 {
+			score += 5 // meaningful lock duration
+		}
+	} else {
+		score -= 10 // liquidity can be pulled anytime
+	}
+
+	// ── Bonding curve timing (pump.fun sweet spot) ────────────────────────────
+	if s.BondingCurveFillPct != nil {
+		pct := *s.BondingCurveFillPct
+		switch {
+		case pct >= 5 && pct <= 25:
+			score += 10 // sweet spot — enough interest, not too late
+		case pct > 25 && pct <= 60:
+			score += 5 // still reasonable
+		case pct > 80:
+			score -= 10 // near graduation — pump already happened
+		}
+	}
+	if s.BondingCurveComplete != nil && *s.BondingCurveComplete {
+		score -= 15 // graduated to Raydium — different dynamics, less pump.fun edge
+	}
+
+	// ── Holder distribution ───────────────────────────────────────────────────
+	if s.Top10HolderPct > 80 {
+		score -= 20 // extreme whale concentration
+	} else if s.Top10HolderPct > 60 {
+		score -= 10
+	} else if s.Top10HolderPct > 0 && s.Top10HolderPct < 30 {
+		score += 5 // well distributed
+	}
+
+	if s.DevSupplyPct != nil {
+		devPct := *s.DevSupplyPct
+		switch {
+		case devPct > 50:
+			score -= 25
+		case devPct > 30:
+			score -= 15
+		case devPct > 15:
+			score -= 5
+		case devPct < 5 && devPct > 0:
+			score += 5 // fair distribution
+		}
+	}
+
+	// ── Deployer history ──────────────────────────────────────────────────────
+	if s.DeployerAgeKnown {
+		switch {
+		case s.DeployerWalletAgeDays == 0:
+			score -= 15 // brand new wallet = high risk
+		case s.DeployerWalletAgeDays < 7:
+			score -= 8
+		case s.DeployerWalletAgeDays > 90:
+			score += 8 // seasoned wallet — more accountability
+		case s.DeployerWalletAgeDays > 30:
+			score += 4
+		}
+	}
+	if s.DeployerPriorLaunches != nil {
+		launches := *s.DeployerPriorLaunches
+		if launches > 10 {
+			score -= 10 // serial launcher — likely farming
+		} else if launches > 3 {
+			score -= 5
+		}
+	}
+
+	// ── Firefly smart-money signals ───────────────────────────────────────────
 	if devWallet != nil && devWallet.Success {
 		dw := devWallet.Data
+		switch {
+		case dw.Score >= 70:
+			score += 8 // high smart-money score = good actor
+		case dw.Score >= 50:
+			score += 3
+		case dw.Score < 10:
+			score -= 25 // flagged bad actor
+		case dw.Score < 20:
+			score -= 15
+		}
 		if dw.Style == "smart_contract_deployer" && dw.WinRate > 75 {
-			score -= 25 // professional deployer with high win rate = likely serial rugger
+			score -= 20 // professional serial deployer with high win rate = likely rugger
 		}
-		if dw.Score < 20 {
-			score -= 15 // very low smart-money score = flagged bad actor
+		if dw.AvgReturnPct > 100 && dw.TotalTrades > 5 {
+			score += 5 // genuinely profitable deployer history
 		}
+	}
+
+	// Clamp to 0-100
+	if score > 100 {
+		score = 100
+	}
+	if score < 0 {
+		score = 0
 	}
 
 	// Entry thresholds
 	switch {
-	case score < 55:
+	case score < 52:
 		return score, "skip", 0
-	case score < 70:
+	case score < 67:
 		return score, "small", 0.05
-	case score < 85:
+	case score < 82:
 		return score, "medium", 0.10
 	default:
 		return score, "full", 0.20
