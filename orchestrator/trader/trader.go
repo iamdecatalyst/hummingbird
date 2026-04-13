@@ -154,18 +154,23 @@ func (t *Trader) enter(result *models.ScoreResult) {
 		}
 		var sigErr *signet.SignetError
 		if errors.As(err, &sigErr) {
-			// 422 token_not_routable — Jupiter can't route this token (e.g. pump.fun bonding curve).
-			// Fall back to building the tx via pumpportal and executing via Signet /execute.
+			// 422 token_not_routable — Signet new API (explicit signal)
 			if sigErr.StatusCode == 422 && strings.Contains(sigErr.Message, "token_not_routable") {
-				log.Printf("[trader] %s not routable via Jupiter — trying pumpportal fallback", result.Mint[:8])
+				log.Printf("[trader] %s not routable via Jupiter — pumpportal fallback", result.Mint[:8])
 				tx, err = t.buyViaPumpPortal(result)
 				break
 			}
-			// 502 — Jupiter gateway error, token may not be indexed yet
-			if sigErr.StatusCode == 502 && attempt < maxRetries-1 {
-				log.Printf("[trader] %s not yet indexed (attempt %d/%d), retrying in 8s", result.Mint[:8], attempt+1, maxRetries)
-				time.Sleep(8 * time.Second)
-				continue
+			// 502 from Jupiter — retry a few times for indexing delay, then fall back to pumpportal.
+			// Signet currently returns 502 for both "not indexed yet" and "not routable" —
+			// after exhausting retries we try pumpportal as a last resort.
+			if sigErr.StatusCode == 502 {
+				if attempt < maxRetries-1 {
+					log.Printf("[trader] %s not yet indexed (attempt %d/%d), retrying in 8s", result.Mint[:8], attempt+1, maxRetries)
+					time.Sleep(8 * time.Second)
+					continue
+				}
+				log.Printf("[trader] %s still 502 after %d attempts — pumpportal fallback", result.Mint[:8], maxRetries)
+				tx, err = t.buyViaPumpPortal(result)
 			}
 		}
 		break
