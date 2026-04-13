@@ -1743,14 +1743,6 @@ function TabAccounts({ positions, closed, mainWalletId, onMainWalletSet }: {
   mainWalletId?: string
   onMainWalletSet?: () => void
 }) {
-  const [logs, setLogs] = useState<LogEntry[]>([])
-
-  useEffect(() => {
-    const fetchLogs = () => api.logs().then(setLogs).catch(() => {})
-    fetchLogs()
-    const id = setInterval(fetchLogs, 4000)
-    return () => clearInterval(id)
-  }, [])
 
   return (
     <div className="grid grid-cols-2 grid-rows-2 gap-3 p-3 overflow-hidden" style={{ height: 'calc(100vh - 3.5rem)' }}>
@@ -1795,22 +1787,48 @@ function TabAccounts({ positions, closed, mainWalletId, onMainWalletSet }: {
         </div>
       </div>
 
-      {/* Bottom-right — Activity Feed */}
+      {/* Bottom-right — Transaction History */}
       <div className="neu-tile flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.04] shrink-0">
-          <span className="font-mono text-xs font-bold text-white">Activity</span>
-          <span className="flex items-center gap-1 font-mono text-[10px] text-[#4ADE80]">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#4ADE80] animate-pulse" />
-            live
-          </span>
+          <span className="font-mono text-xs font-bold text-white">Transaction History</span>
+          <button
+            onClick={() => {
+              const data = JSON.stringify(closed, null, 2)
+              const blob = new Blob([data], { type: 'application/json' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `hummingbird-trades-${new Date().toISOString().slice(0,10)}.json`
+              a.click()
+              URL.revokeObjectURL(url)
+            }}
+            className="font-mono text-[10px] text-[#555] hover:text-white px-2 py-0.5 rounded border border-white/10 hover:border-white/30 transition-colors"
+          >
+            Export JSON
+          </button>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {logs.length === 0 ? (
+          {closed.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-1.5">
-              <p className="font-mono text-[11px] text-[#333]">No activity yet.</p>
+              <p className="font-mono text-[11px] text-[#333]">No transactions yet.</p>
             </div>
           ) : (
-            <div>{[...logs].reverse().map((log, i) => <ActivityItem key={i} log={log} />)}</div>
+            <div>
+              {closed.map((t, i) => (
+                <div key={i} className="flex items-center gap-3 px-4 py-2.5 border-b border-white/[0.04] last:border-0 hover:bg-white/[0.015] transition-colors">
+                  <span className={`font-mono text-[10px] w-16 shrink-0 ${t.pnl_sol >= 0 ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
+                    {t.reason.replace('_', ' ').toUpperCase().slice(0, 8)}
+                  </span>
+                  <span className="font-mono text-[10px] text-[#666] flex-1 truncate">{t.mint.slice(0, 8)}…</span>
+                  <span className={`font-mono text-[10px] font-bold shrink-0 ${t.pnl_sol >= 0 ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
+                    {t.pnl_sol >= 0 ? '+' : ''}{t.pnl_sol.toFixed(4)} SOL
+                  </span>
+                  <span className={`font-mono text-[10px] w-14 text-right shrink-0 ${t.pnl_sol >= 0 ? 'text-[#4ADE80]' : 'text-[#EF4444]'} opacity-70`}>
+                    {t.pnl_percent >= 0 ? '+' : ''}{t.pnl_percent.toFixed(1)}%
+                  </span>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
