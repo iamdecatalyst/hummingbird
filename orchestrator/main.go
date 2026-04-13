@@ -1168,6 +1168,14 @@ func broadcastTradeResult(tgToken, channelID string, result *models.ScoreResult)
 	}
 
 	// Build check lines from the checks map
+	// cleanReason strips raw error messages from check reasons (e.g. Helius 429 errors)
+	cleanReason := func(r string) string {
+		if strings.Contains(r, "RPC error") || strings.Contains(r, "Too Many Requests") || strings.Contains(r, "http") {
+			return "RPC unavailable"
+		}
+		return r
+	}
+
 	checkOrder := []string{"dev_wallet", "supply", "bonding", "contract", "social"}
 	checkEmoji := func(score, max int) string {
 		if max == 0 {
@@ -1203,8 +1211,8 @@ func broadcastTradeResult(tgToken, channelID string, result *models.ScoreResult)
 			label = key
 		}
 		line := fmt.Sprintf("%s %s %d/%d", em, label, c.Score, c.MaxScore)
-		if c.Reason != "" {
-			line += "  " + c.Reason
+		if r := cleanReason(c.Reason); r != "" {
+			line += "  " + r
 		}
 		checkLines = append(checkLines, line)
 	}
