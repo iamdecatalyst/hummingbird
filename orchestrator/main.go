@@ -1012,10 +1012,17 @@ func fetchSOLBalance(rpcURL, address string) float64 {
 
 // ── Cricket scoring ───────────────────────────────────────────────────────────
 
+// cricketSem limits concurrent Cricket API calls to avoid hammering the endpoint.
+// pump.fun fires ~10-20 tokens/min; each scan = 2 Cricket calls. Cap at 3 concurrent scans = 6 max in-flight.
+var cricketSem = make(chan struct{}, 3)
+
 // scoreAndTrade runs a Cricket risk analysis on a freshly-detected token and,
 // if the score passes, calls dispatch to send it to the active trader(s).
 // Runs in a goroutine — the listener is never blocked.
 func scoreAndTrade(cc *cricket.Client, dispatch func(*models.ScoreResult), tgToken, channelID string, token cricket.TokenDetected) {
+	cricketSem <- struct{}{}
+	defer func() { <-cricketSem }()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
