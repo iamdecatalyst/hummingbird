@@ -176,8 +176,18 @@ func (t *Trader) enter(result *models.ScoreResult) {
 		break
 	}
 	if err != nil {
+		// Routing failures (no pool, not indexed, unroutable) are expected for many new tokens.
+		// Log them but don't spam the user — only alert on truly unexpected errors.
+		msg := err.Error()
+		isRoutingFailure := strings.Contains(msg, "502") ||
+			strings.Contains(msg, "token_not_routable") ||
+			strings.Contains(msg, "Pool account not found") ||
+			strings.Contains(msg, "pumpportal") ||
+			strings.Contains(msg, "not found")
 		log.Printf("[trader] entry failed for %s: %v", result.Mint[:8], err)
-		t.telegram.Alert(fmt.Sprintf("entry failed: %s\n%v", result.Mint[:8], err))
+		if !isRoutingFailure {
+			t.telegram.Alert(fmt.Sprintf("entry failed: %s\n%v", result.Mint[:8], err))
+		}
 		return
 	}
 
