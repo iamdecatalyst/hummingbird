@@ -399,29 +399,38 @@ func (t *Trader) LatestTxHash() string {
 
 // buyViaPumpPortal builds a pump.fun buy transaction via pumpportal.fun and executes it
 // through Signet's /execute endpoint. Called when /swap returns token_not_routable.
+// Tries "pump" (bonding curve) first, then "pump-amm" (migrated tokens) on 400.
 func (t *Trader) buyViaPumpPortal(result *models.ScoreResult) (*signet.TransactionResult, error) {
 	if t.walletAddress == "" {
 		return nil, fmt.Errorf("wallet address not set — cannot build pump.fun tx")
 	}
 
-	// Map platform to pumpportal pool name.
-	pool := "pump" // default: pump.fun bonding curve
-	if result.Platform == "pumpswap" {
-		pool = "pumpswap"
-	}
+	// Try bonding curve first, then migrated AMM pool on failure.
+	pools := []string{"pump", "pump-amm"}
 
-	// Step 1: ask pumpportal.fun to build the unsigned transaction.
+	var lastErr error
+	for _, pool := range pools {
+		tx, err := t.pumpPortalBuy(result.Mint, result.PositionSOL, pool)
+		if err == nil {
+			return tx, nil
+		}
+		log.Printf("[trader] pumpportal pool=%s failed for %s: %v", pool, result.Mint[:8], err)
+		lastErr = err
+	}
+	return nil, lastErr
+}
+
+func (t *Trader) pumpPortalBuy(mint string, amountSOL float64, pool string) (*signet.TransactionResult, error) {
 	reqBody, _ := json.Marshal(map[string]any{
 		"publicKey":        t.walletAddress,
 		"action":           "buy",
-		"mint":             result.Mint,
-		"denominatedInSol": true, // boolean, not string
-		"amount":           result.PositionSOL,
+		"mint":             mint,
+		"denominatedInSol": true,
+		"amount":           amountSOL,
 		"slippage":         10, // 10% — wide for new tokens
 		"priorityFee":      0.0005,
 		"pool":             pool,
 	})
-	log.Printf("[trader] pumpportal request: %s", string(reqBody))
 
 	ppResp, err := http.Post(
 		"https://pumpportal.fun/api/trade-local",
@@ -438,17 +447,17 @@ func (t *Trader) buyViaPumpPortal(result *models.ScoreResult) (*signet.Transacti
 		return nil, fmt.Errorf("pumpportal read failed: %w", err)
 	}
 	if ppResp.StatusCode != 200 {
-		return nil, fmt.Errorf("pumpportal %d: %s", ppResp.StatusCode, string(txBytes))
+		// Error detail is in the HTTP status line (not body) — use resp.Status
+		return nil, fmt.Errorf("pumpportal %s", ppResp.Status)
 	}
 
-	// Step 2: hand the unsigned transaction to Signet to sign + broadcast.
 	txBase64 := base64.StdEncoding.EncodeToString(txBytes)
 	tx, err := t.signet.Wallets.Execute(t.walletID, txBase64)
 	if err != nil {
-		return nil, fmt.Errorf("signet execute failed: %w", err)
+		return nil, fmt.Errorf("signet execute: %w", err)
 	}
 
-	log.Printf("[trader] pumpportal+execute success for %s | tx=%s", result.Mint[:8], tx.TxHash)
+	log.Printf("[trader] pumpportal pool=%s success for %s | tx=%s", pool, mint[:8], tx.TxHash)
 	return tx, nil
 }
 
