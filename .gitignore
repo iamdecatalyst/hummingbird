@@ -11,3 +11,4 @@ web/.vite/
 # npm distribution — binaries are built by scripts/build-npm.sh, not committed
 npm/@decatalyst/hummingbird-*/bin/hummingbird
 npm/@decatalyst/hummingbird-*/bin/hummingbird.exe
+.playwright-mcp/
