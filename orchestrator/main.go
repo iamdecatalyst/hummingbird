@@ -198,7 +198,7 @@ func startSingleTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMu
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		go scoreAndTrade(cc, tr.Execute, token)
+		go scoreAndTrade(cc, tr.Execute, cfg.TelegramToken, cfg.TelegramChannelID, token)
 		fmt.Fprintf(w, `{"status":"queued","mint":"%s"}`, token.Mint)
 	})
 
@@ -570,7 +570,7 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 			for _, inst := range mgr.All() {
 				inst.Trader.Execute(result)
 			}
-		}, token)
+		}, cfg.TelegramToken, cfg.TelegramChannelID, token)
 		fmt.Fprintf(w, `{"status":"queued","mint":"%s"}`, token.Mint)
 	})
 
@@ -1009,7 +1009,7 @@ func fetchSOLBalance(rpcURL, address string) float64 {
 // scoreAndTrade runs a Cricket risk analysis on a freshly-detected token and,
 // if the score passes, calls dispatch to send it to the active trader(s).
 // Runs in a goroutine — the listener is never blocked.
-func scoreAndTrade(cc *cricket.Client, dispatch func(*models.ScoreResult), token cricket.TokenDetected) {
+func scoreAndTrade(cc *cricket.Client, dispatch func(*models.ScoreResult), tgToken, channelID string, token cricket.TokenDetected) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -1049,6 +1049,11 @@ func scoreAndTrade(cc *cricket.Client, dispatch func(*models.ScoreResult), token
 	sym := map[bool]string{true: "✅", false: "⏭ "}[entered]
 	log.Printf("[scorer] %s %s…  score=%d  decision=%s  pos=%.2f SOL  (rating=%s)",
 		sym, safeShort(token.Mint), score, decision, posSOL, sr.data.Data.RiskScore.Rating)
+
+	// Broadcast to public channel for every scanned token
+	if channelID != "" && tgToken != "" {
+		go broadcastScan(tgToken, channelID, token, sr.data, wr.data, score, decision, posSOL)
+	}
 
 	if !entered {
 		return
@@ -1124,6 +1129,116 @@ func scoreFromCricket(scan *cricket.MantisScanResponse, devWallet *cricket.Firef
 	default:
 		return score, "full", 0.20
 	}
+}
+
+// broadcastScan posts a styled scan summary to the public Telegram channel.
+// Called for every token — skipped ones show risk flags, entered ones celebrate the snipe.
+func broadcastScan(tgToken, channelID string, token cricket.TokenDetected, scan *cricket.MantisScanResponse, wallet *cricket.FireflyWalletResponse, score int, decision string, posSOL float64) {
+	s := scan.Data.Scan
+	r := scan.Data.RiskScore
+
+	// Risk rating emoji
+	ratingEmoji := map[string]string{
+		"low":      "🟢",
+		"moderate": "🟡",
+		"high":     "🔴",
+		"critical": "🔴",
+	}
+	rEmoji := ratingEmoji[r.Rating]
+	if rEmoji == "" {
+		rEmoji = "⚪"
+	}
+
+	// Mint display: first 8 + last 4
+	mintShort := token.Mint
+	if len(mintShort) > 12 {
+		mintShort = token.Mint[:8] + "…" + token.Mint[len(token.Mint)-4:]
+	}
+
+	// Platform label
+	platform := strings.ToUpper(strings.ReplaceAll(token.Platform, "_", "."))
+
+	var header string
+	if decision == "skip" {
+		header = fmt.Sprintf("⏭ *Scanned — Skip*   %s %s (%d/100)\n%s  ·  %s", rEmoji, strings.ToUpper(r.Rating), r.Score, platform, mintShort)
+	} else {
+		posLabel := strings.ToUpper(decision)
+		header = fmt.Sprintf("🐦 *Sniped — %s*   %s %s (%d/100)\n%s  ·  %.3f SOL  ·  %s", posLabel, rEmoji, strings.ToUpper(r.Rating), r.Score, platform, posSOL, mintShort)
+	}
+
+	// Security line
+	mintOk := "✅ Mint revoked"
+	if !s.MintAuthorityRevoked {
+		mintOk = "⚠️ Mint active"
+	}
+	freezeOk := "✅ Freeze revoked"
+	if !s.FreezeAuthorityRevoked {
+		freezeOk = "⚠️ Freeze active"
+	}
+	security := mintOk + "   " + freezeOk
+
+	// Supply line
+	var supplyParts []string
+	if s.DevSupplyPct != nil {
+		supplyParts = append(supplyParts, fmt.Sprintf("Dev: %.1f%%", *s.DevSupplyPct))
+	}
+	if s.Top10HolderPct > 0 {
+		supplyParts = append(supplyParts, fmt.Sprintf("Top 10: %.1f%%", s.Top10HolderPct))
+	}
+	if s.BondingCurveFillPct != nil {
+		supplyParts = append(supplyParts, fmt.Sprintf("Bonding: %.1f%%", *s.BondingCurveFillPct))
+	}
+	supply := "📊 " + strings.Join(supplyParts, "   ")
+	if len(supplyParts) == 0 {
+		supply = ""
+	}
+
+	// Dev wallet line
+	devLine := fmt.Sprintf("👤 Dev: %dd old", s.DeployerWalletAgeDays)
+	if s.DeployerPriorLaunches != nil && *s.DeployerPriorLaunches > 0 {
+		devLine += fmt.Sprintf("   %d prior launches", *s.DeployerPriorLaunches)
+	}
+	if wallet != nil && wallet.Success {
+		dw := wallet.Data
+		devLine += fmt.Sprintf("   Firefly: %d/100", dw.Score)
+		if dw.TotalTrades > 0 {
+			devLine += fmt.Sprintf(" (%.0f%% win)", dw.WinRate)
+		}
+	}
+
+	// Flags
+	var flagLines []string
+	for _, f := range s.Flags {
+		if f.Severity == "high" || f.Severity == "critical" {
+			flagLines = append(flagLines, "🚩 "+f.Detail)
+		}
+	}
+
+	parts := []string{header, security}
+	if supply != "" {
+		parts = append(parts, supply)
+	}
+	parts = append(parts, devLine)
+	if len(flagLines) > 0 {
+		parts = append(parts, strings.Join(flagLines, "\n"))
+	}
+	parts = append(parts, fmt.Sprintf("\n⚡ [hummingbird.vylth.com](https://hummingbird.vylth.com)"))
+
+	msg := strings.Join(parts, "\n")
+
+	body, _ := json.Marshal(map[string]any{
+		"chat_id":                  channelID,
+		"text":                     msg,
+		"parse_mode":               "Markdown",
+		"disable_web_page_preview": true,
+	})
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", tgToken)
+	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	if err != nil {
+		log.Printf("[scanner] channel broadcast failed: %v", err)
+		return
+	}
+	resp.Body.Close()
 }
 
 // ── Config conversion helpers ─────────────────────────────────────────────────

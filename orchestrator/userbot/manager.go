@@ -255,9 +255,9 @@ func watchBalance(ctx context.Context, tr *trader.Trader, n alerts.Notifier, use
 				txHash := tr.LatestTxHash()
 				txLine := ""
 				if txHash != "" {
-					txLine = fmt.Sprintf("\nTx: `%s...%s`", txHash[:8], txHash[len(txHash)-8:])
+					txLine = fmt.Sprintf("\n🔗 `%s…%s`", txHash[:8], txHash[len(txHash)-8:])
 				}
-				msg := fmt.Sprintf("```\n[ DEPOSIT RECEIVED    ]\n+%.4f SOL\nBalance: %.4f SOL%s\n```", diff, current, txLine)
+				msg := fmt.Sprintf("💰 *Deposit Received*\n+%.4f SOL  ·  Balance: %.4f SOL%s", diff, current, txLine)
 				n.Notify(msg)
 				userLog.Emit(eventlog.Event{Type: "INFO", Message: fmt.Sprintf("Deposit received: +%.4f SOL", diff)})
 				last = current
@@ -265,9 +265,9 @@ func watchBalance(ctx context.Context, tr *trader.Trader, n alerts.Notifier, use
 				txHash := tr.LatestTxHash()
 				txLine := ""
 				if txHash != "" {
-					txLine = fmt.Sprintf("\nTx: `%s...%s`", txHash[:8], txHash[len(txHash)-8:])
+					txLine = fmt.Sprintf("\n🔗 `%s…%s`", txHash[:8], txHash[len(txHash)-8:])
 				}
-				msg := fmt.Sprintf("```\n[ WITHDRAWAL SENT     ]\n%.4f SOL\nBalance: %.4f SOL%s\n```", diff, current, txLine)
+				msg := fmt.Sprintf("📤 *Withdrawal Sent*\n%.4f SOL  ·  Balance: %.4f SOL%s", diff, current, txLine)
 				n.Notify(msg)
 				userLog.Emit(eventlog.Event{Type: "INFO", Message: fmt.Sprintf("Withdrawal sent: %.4f SOL", diff)})
 				last = current
