@@ -140,9 +140,13 @@ func (m *Manager) startInstance(userID, apiKey, apiSecret, walletID, telegramCha
 
 	// Restore closed position stats so P&L / win-rate survive restarts.
 	if m.db != nil {
-		if closed, err := m.db.ClosedPositionsByUser(userID, 1000); err == nil && len(closed) > 0 {
+		if closed, err := m.db.ClosedPositionsByUser(userID, 1000); err != nil {
+			log.Printf("[userbot] ClosedPositionsByUser error for user %s: %v", short(userID), err)
+		} else if len(closed) > 0 {
 			port.RestoreStats(closed)
 			log.Printf("[userbot] restored stats from %d closed position(s) for user %s", len(closed), short(userID))
+		} else {
+			log.Printf("[userbot] no closed positions found for user %s", short(userID))
 		}
 	}
 

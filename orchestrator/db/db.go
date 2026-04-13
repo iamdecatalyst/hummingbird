@@ -246,12 +246,14 @@ func (d *DB) ClosedPositionsByUser(nexusUserID string, limit int) ([]*models.Clo
 		var closedAt sql.NullTime
 		var exitPrice, exitSOL, pnlSOL, pnlPct sql.NullFloat64
 		var exitReason sql.NullString
-		if err := rows.Scan(
+		if scanErr := rows.Scan(
 			&c.ID, &c.Mint, &c.DevWallet, &c.WalletID,
 			&c.EntryPriceSOL, &c.EntryAmountSOL, &c.TokenBalance,
 			&c.Score, &c.Decision, &c.OpenedAt, &c.PeakPriceSOL,
 			&closedAt, &exitPrice, &exitSOL, &exitReason, &pnlSOL, &pnlPct,
-		); err == nil {
+		); scanErr != nil {
+			log.Printf("[db] ClosedPositionsByUser scan error: %v", scanErr)
+		} else {
 			if closedAt.Valid {
 				c.ClosedAt = closedAt.Time
 			}
