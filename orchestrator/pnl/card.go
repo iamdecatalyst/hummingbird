@@ -30,7 +30,7 @@ func init() {
 	solanaDataURI = "data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString(solanaSVG)
 }
 
-// GenerateCard renders a PnL share card as a PNG (800×420px).
+// GenerateCard renders a PnL share card as a PNG (1200×630px).
 // Returns the PNG bytes or an error if wkhtmltoimage isn't available.
 func GenerateCard(c *models.ClosedPosition) ([]byte, error) {
 	html := renderCardHTML(c)
@@ -45,8 +45,8 @@ func GenerateCard(c *models.ClosedPosition) ([]byte, error) {
 	}
 
 	cmd := exec.Command("wkhtmltoimage",
-		"--width", "800",
-		"--height", "420",
+		"--width", "1200",
+		"--height", "630",
 		"--format", "png",
 		"--quality", "95",
 		"--enable-local-file-access",
@@ -68,13 +68,15 @@ func renderCardHTML(c *models.ClosedPosition) string {
 	}
 
 	pnlColor := "#00ff88"
+	glowColor := "rgba(0,255,136,0.15)"
 	if c.PnLSOL < 0 {
 		pnlColor = "#ff4444"
+		glowColor = "rgba(255,68,68,0.15)"
 	}
 
 	shortMint := c.Mint
-	if len(shortMint) > 8 {
-		shortMint = shortMint[:8]
+	if len(shortMint) > 10 {
+		shortMint = shortMint[:10]
 	}
 
 	platform := c.Platform
@@ -89,10 +91,11 @@ func renderCardHTML(c *models.ClosedPosition) string {
 		platform = "boop.fun"
 	}
 
-	mode := strings.ToUpper(c.Decision)
-	if mode == "" {
-		mode = "SNIPER"
-	}
+	exitReason := strings.ReplaceAll(strings.ToUpper(string(c.Reason)), "_", " ")
+
+	heldStr := held.String()
+	// Clean up duration: "6m30s" stays, "1h2m3s" stays
+	_ = heldStr
 
 	return fmt.Sprintf(`<!DOCTYPE html>
 <html>
@@ -101,41 +104,58 @@ func renderCardHTML(c *models.ClosedPosition) string {
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
+
 body, html {
-  width: 800px;
-  height: 420px;
-  background: #0a0a0a;
-  font-family: 'Courier New', 'Lucida Console', monospace;
+  width: 1200px;
+  height: 630px;
+  background: #080808;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   color: #ffffff;
   overflow: hidden;
 }
 
 .card {
-  width: 800px;
-  height: 420px;
-  background: #0a0a0a;
+  width: 1200px;
+  height: 630px;
+  background: #080808;
+  position: relative;
   display: flex;
   flex-direction: column;
-  padding: 32px 36px 28px 36px;
-  position: relative;
+  padding: 48px 56px 40px;
+  overflow: hidden;
 }
 
+/* Subtle grid */
 .card::before {
   content: '';
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
-  background-size: 32px 32px;
+    linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 40px 40px;
   pointer-events: none;
 }
 
+/* Glow blob behind PnL number */
+.glow {
+  position: absolute;
+  top: 50%%;
+  left: 50%%;
+  transform: translate(-50%%, -50%%);
+  width: 700px;
+  height: 400px;
+  background: radial-gradient(ellipse at center, %s 0%%, transparent 70%%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Header */
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
   position: relative;
   z-index: 1;
 }
@@ -143,202 +163,219 @@ body, html {
 .logo-group {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .logo-img {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   object-fit: contain;
-  filter: drop-shadow(0 0 8px rgba(0,212,255,0.4));
 }
 
 .logo-text {
-  font-size: 15px;
-  font-weight: bold;
-  letter-spacing: 3px;
-  color: #00d4ff;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  color: #ffffff;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 12px;
-}
-
-.solana-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  opacity: 0.4;
+  gap: 10px;
+  opacity: 0.45;
 }
 
 .solana-img {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   object-fit: contain;
 }
 
 .solana-text {
-  font-size: 11px;
-  color: #888;
+  font-size: 13px;
+  font-weight: 600;
+  color: #aaa;
   letter-spacing: 2px;
 }
 
-.brand {
-  font-size: 12px;
-  color: #222;
-  font-weight: bold;
-  letter-spacing: 4px;
-}
-
-.divider {
-  height: 1px;
-  background: linear-gradient(to right, transparent, #1e1e1e 20%%, #1e1e1e 80%%, transparent);
-  margin: 0 0 24px 0;
-  position: relative;
-  z-index: 1;
-}
-
-.body {
-  flex: 1;
-  display: flex;
-  gap: 0;
-  position: relative;
-  z-index: 1;
-}
-
-.left {
+/* Center content */
+.center {
   flex: 1;
   display: flex;
   flex-direction: column;
+  align-items: center;
   justify-content: center;
+  position: relative;
+  z-index: 1;
+  gap: 0;
 }
 
-.token-label {
-  font-size: 10px;
-  color: #2a2a2a;
-  letter-spacing: 3px;
-  text-transform: uppercase;
-  margin-bottom: 6px;
+.token-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
 }
 
-.token {
-  font-size: 30px;
-  font-weight: bold;
+.token-name {
+  font-size: 28px;
+  font-weight: 700;
   color: #fff;
-  letter-spacing: 2px;
-  margin-bottom: 4px;
+  letter-spacing: 1px;
 }
 
-.platform {
+.platform-badge {
   font-size: 11px;
-  color: #3a3a3a;
+  font-weight: 600;
+  color: #555;
+  padding: 3px 10px;
+  border: 1px solid #222;
+  border-radius: 20px;
   letter-spacing: 1px;
-  margin-bottom: 28px;
+  text-transform: uppercase;
+}
+
+.reason-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: %s;
+  padding: 3px 10px;
+  border: 1px solid currentColor;
+  border-radius: 20px;
+  letter-spacing: 1px;
+  opacity: 0.7;
 }
 
 .pnl-sol {
-  font-size: 54px;
-  font-weight: bold;
+  font-size: 108px;
+  font-weight: 900;
   color: %s;
   line-height: 1;
-  margin-bottom: 5px;
-  letter-spacing: -1px;
+  letter-spacing: -4px;
+  margin: 4px 0;
 }
 
 .pnl-pct {
-  font-size: 28px;
-  font-weight: bold;
+  font-size: 44px;
+  font-weight: 700;
   color: %s;
-  opacity: 0.8;
+  opacity: 0.75;
+  letter-spacing: -1px;
 }
 
-.right {
+/* Stats row */
+.stats-row {
+  display: flex;
+  justify-content: center;
+  gap: 48px;
+  position: relative;
+  z-index: 1;
+  padding-top: 24px;
+  border-top: 1px solid #141414;
+}
+
+.stat {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 18px;
-  min-width: 200px;
-  padding-left: 36px;
-  border-left: 1px solid #111;
+  align-items: center;
+  gap: 4px;
 }
 
-.stat { display: flex; flex-direction: column; gap: 3px; }
-.stat-label { font-size: 10px; color: #2a2a2a; letter-spacing: 2px; text-transform: uppercase; }
-.stat-value { font-size: 14px; color: #777; }
+.stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #333;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
 
+.stat-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #888;
+}
+
+/* Footer */
 .footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid #0f0f0f;
   position: relative;
   z-index: 1;
 }
 
-.footer-text { font-size: 10px; color: #222; letter-spacing: 1px; }
-.footer-url  { font-size: 10px; color: #222; letter-spacing: 1px; }
+.footer-text {
+  font-size: 11px;
+  color: #222;
+  letter-spacing: 0.5px;
+}
+
+.footer-url {
+  font-size: 11px;
+  color: #222;
+  letter-spacing: 1px;
+}
 </style>
 </head>
 <body>
 <div class="card">
+  <div class="glow"></div>
+
   <div class="header">
     <div class="logo-group">
       <img class="logo-img" src="%s" />
       <span class="logo-text">HUMMINGBIRD</span>
     </div>
     <div class="header-right">
-      <div class="solana-group">
-        <img class="solana-img" src="%s" />
-        <span class="solana-text">SOLANA</span>
-      </div>
-      <span class="brand">VYLTH</span>
+      <img class="solana-img" src="%s" />
+      <span class="solana-text">SOLANA</span>
     </div>
   </div>
-  <div class="divider"></div>
-  <div class="body">
-    <div class="left">
-      <div class="token-label">Token · %s</div>
-      <div class="token">%s</div>
-      <div class="platform">%s</div>
-      <div class="pnl-sol">%s%.4f SOL</div>
-      <div class="pnl-pct">%s%.1f%%</div>
+
+  <div class="center">
+    <div class="token-row">
+      <span class="token-name">%s</span>
+      <span class="platform-badge">%s</span>
+      <span class="reason-badge">%s</span>
     </div>
-    <div class="right">
-      <div class="stat">
-        <div class="stat-label">Entry</div>
-        <div class="stat-value">%.4f SOL</div>
-      </div>
-      <div class="stat">
-        <div class="stat-label">Exit</div>
-        <div class="stat-value">%.4f SOL</div>
-      </div>
-      <div class="stat">
-        <div class="stat-label">Duration</div>
-        <div class="stat-value">%s</div>
-      </div>
-      <div class="stat">
-        <div class="stat-label">Score</div>
-        <div class="stat-value">%d / 100</div>
-      </div>
+    <div class="pnl-sol">%s%.4f SOL</div>
+    <div class="pnl-pct">%s%.1f%%</div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat">
+      <span class="stat-label">Entry</span>
+      <span class="stat-value">%.4f SOL</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Exit</span>
+      <span class="stat-value">%.4f SOL</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Duration</span>
+      <span class="stat-value">%s</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Score</span>
+      <span class="stat-value">%d / 100</span>
     </div>
   </div>
+
   <div class="footer">
-    <div class="footer-text">Traded autonomously by Hummingbird</div>
-    <div class="footer-url">hummingbird.vylth.com</div>
+    <span class="footer-text">Traded autonomously by Hummingbird</span>
+    <span class="footer-url">hummingbird.vylth.com</span>
   </div>
 </div>
 </body>
 </html>`,
+		glowColor,
+		pnlColor,
 		pnlColor, pnlColor,
 		logoDataURI,
 		solanaDataURI,
-		mode,
-		shortMint,
-		platform,
+		shortMint, platform, exitReason,
 		pnlSign, c.PnLSOL,
 		pnlSign, c.PnLPercent,
 		c.EntryAmountSOL,

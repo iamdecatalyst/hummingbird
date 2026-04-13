@@ -1743,6 +1743,27 @@ function TabAccounts({ positions, closed, mainWalletId, onMainWalletSet }: {
   mainWalletId?: string
   onMainWalletSet?: () => void
 }) {
+  const [txLogs, setTxLogs] = useState<LogEntry[]>([])
+
+  useEffect(() => {
+    const fetchLogs = () => api.logs().then(all => {
+      setTxLogs(all.filter(l => l.type === 'INFO'))
+    }).catch(() => {})
+    fetchLogs()
+    const id = setInterval(fetchLogs, 8000)
+    return () => clearInterval(id)
+  }, [])
+
+  const exportTxJSON = () => {
+    const data = JSON.stringify(txLogs, null, 2)
+    const blob = new Blob([data], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `hummingbird-transactions-${new Date().toISOString().slice(0,10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="grid grid-cols-2 grid-rows-2 gap-3 p-3 overflow-hidden" style={{ height: 'calc(100vh - 3.5rem)' }}>
@@ -1787,47 +1808,40 @@ function TabAccounts({ positions, closed, mainWalletId, onMainWalletSet }: {
         </div>
       </div>
 
-      {/* Bottom-right — Transaction History */}
+      {/* Bottom-right — Transaction History (deposits/withdrawals) */}
       <div className="neu-tile flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.04] shrink-0">
           <span className="font-mono text-xs font-bold text-white">Transaction History</span>
           <button
-            onClick={() => {
-              const data = JSON.stringify(closed, null, 2)
-              const blob = new Blob([data], { type: 'application/json' })
-              const url = URL.createObjectURL(blob)
-              const a = document.createElement('a')
-              a.href = url
-              a.download = `hummingbird-trades-${new Date().toISOString().slice(0,10)}.json`
-              a.click()
-              URL.revokeObjectURL(url)
-            }}
-            className="font-mono text-[10px] text-[#555] hover:text-white px-2 py-0.5 rounded border border-white/10 hover:border-white/30 transition-colors"
+            onClick={exportTxJSON}
+            title="Export as JSON"
+            className="flex items-center gap-1 text-[#555] hover:text-white px-2 py-0.5 rounded border border-white/10 hover:border-white/30 transition-colors"
           >
-            Export JSON
+            <DownloadSimple size={12} />
+            <span className="font-mono text-[10px]">Export</span>
           </button>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {closed.length === 0 ? (
+          {txLogs.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-1.5">
-              <p className="font-mono text-[11px] text-[#333]">No transactions yet.</p>
+              <p className="font-mono text-[11px] text-[#333]">No deposits or withdrawals yet.</p>
             </div>
           ) : (
             <div>
-              {closed.map((t, i) => (
-                <div key={i} className="flex items-center gap-3 px-4 py-2.5 border-b border-white/[0.04] last:border-0 hover:bg-white/[0.015] transition-colors">
-                  <span className={`font-mono text-[10px] w-16 shrink-0 ${t.pnl_sol >= 0 ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
-                    {t.reason.replace('_', ' ').toUpperCase().slice(0, 8)}
-                  </span>
-                  <span className="font-mono text-[10px] text-[#666] flex-1 truncate">{t.mint.slice(0, 8)}…</span>
-                  <span className={`font-mono text-[10px] font-bold shrink-0 ${t.pnl_sol >= 0 ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
-                    {t.pnl_sol >= 0 ? '+' : ''}{t.pnl_sol.toFixed(4)} SOL
-                  </span>
-                  <span className={`font-mono text-[10px] w-14 text-right shrink-0 ${t.pnl_sol >= 0 ? 'text-[#4ADE80]' : 'text-[#EF4444]'} opacity-70`}>
-                    {t.pnl_percent >= 0 ? '+' : ''}{t.pnl_percent.toFixed(1)}%
-                  </span>
-                </div>
-              ))}
+              {[...txLogs].reverse().map((log, i) => {
+                const isDeposit = log.message.toLowerCase().includes('deposit')
+                return (
+                  <div key={i} className="flex items-center gap-3 px-4 py-2.5 border-b border-white/[0.04] last:border-0 hover:bg-white/[0.015] transition-colors">
+                    <span className={`font-mono text-[10px] w-16 shrink-0 ${isDeposit ? 'text-[#4ADE80]' : 'text-[#888]'}`}>
+                      {isDeposit ? '↓ IN' : '↑ OUT'}
+                    </span>
+                    <span className="font-mono text-[10px] text-[#555] flex-1 truncate">{log.message}</span>
+                    <span className="font-mono text-[10px] text-[#333] shrink-0">
+                      {new Date(log.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
