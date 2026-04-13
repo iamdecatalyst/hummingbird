@@ -690,5 +690,9 @@ func (b *Bot) Alert(text string) {
 	b.send(b.chatID, "⚠️  "+text, nil)
 }
 
+func (b *Bot) Notify(text string) {
+	b.send(b.chatID, text, nil)
+}
+
 // ── unused import guard ───────────────────────────────────────────────────────
 var _ = fmt.Sprintf

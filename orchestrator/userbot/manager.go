@@ -238,7 +238,7 @@ const (
 // watchBalance polls the wallet balance and notifies on external deposits/withdrawals.
 // It suppresses alerts for 2 minutes after any trade to avoid false positives from swaps.
 func watchBalance(ctx context.Context, tr *trader.Trader, n alerts.Notifier, userLog *eventlog.Log) {
-	last := tr.Balance()
+	last := tr.BalanceViaRPC()
 	ticker := time.NewTicker(balancePollInterval)
 	defer ticker.Stop()
 	for {
@@ -246,21 +246,30 @@ func watchBalance(ctx context.Context, tr *trader.Trader, n alerts.Notifier, use
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// Skip if a trade happened recently — balance change is from a swap.
 			if time.Since(tr.LastTradeAt()) < balanceTradeCooldown {
 				continue
 			}
 			current := tr.BalanceViaRPC()
 			diff := current - last
 			if diff > balanceMinDiff {
-				msg := fmt.Sprintf("💰 Deposit detected: +%.4f SOL (balance: %.4f SOL)", diff, current)
-				n.Alert(msg)
-				userLog.Emit(eventlog.Event{Type: "INFO", Message: msg})
+				txHash := tr.LatestTxHash()
+				txLine := ""
+				if txHash != "" {
+					txLine = fmt.Sprintf("\nTx: `%s...%s`", txHash[:8], txHash[len(txHash)-8:])
+				}
+				msg := fmt.Sprintf("```\n[ DEPOSIT RECEIVED    ]\n+%.4f SOL\nBalance: %.4f SOL%s\n```", diff, current, txLine)
+				n.Notify(msg)
+				userLog.Emit(eventlog.Event{Type: "INFO", Message: fmt.Sprintf("Deposit received: +%.4f SOL", diff)})
 				last = current
 			} else if diff < -balanceMinDiff {
-				msg := fmt.Sprintf("📤 Withdrawal detected: %.4f SOL (balance: %.4f SOL)", diff, current)
-				n.Alert(msg)
-				userLog.Emit(eventlog.Event{Type: "INFO", Message: msg})
+				txHash := tr.LatestTxHash()
+				txLine := ""
+				if txHash != "" {
+					txLine = fmt.Sprintf("\nTx: `%s...%s`", txHash[:8], txHash[len(txHash)-8:])
+				}
+				msg := fmt.Sprintf("```\n[ WITHDRAWAL SENT     ]\n%.4f SOL\nBalance: %.4f SOL%s\n```", diff, current, txLine)
+				n.Notify(msg)
+				userLog.Emit(eventlog.Event{Type: "INFO", Message: fmt.Sprintf("Withdrawal sent: %.4f SOL", diff)})
 				last = current
 			}
 		}
@@ -296,4 +305,7 @@ func (n noopNotifier) Exited(c *models.ClosedPosition) {
 func (n noopNotifier) Alert(text string) {
 	log.Printf("[user:%s] %s", short(n.userID), text)
 	n.log.Emit(eventlog.Event{Type: "ALERT", Message: text})
+}
+func (n noopNotifier) Notify(text string) {
+	log.Printf("[user:%s] %s", short(n.userID), text)
 }

@@ -17,6 +17,7 @@ type Notifier interface {
 	Entered(p *models.Position)
 	Exited(c *models.ClosedPosition)
 	Alert(text string)
+	Notify(text string) // like Alert but without the ⚠️ prefix
 }
 
 type Telegram struct {
@@ -149,6 +150,10 @@ func (t *Telegram) Alert(text string) {
 	if t.log != nil {
 		t.log.Emit(eventlog.Event{Type: "ALERT", Message: text})
 	}
+}
+
+func (t *Telegram) Notify(text string) {
+	t.send(text)
 }
 
 func (t *Telegram) send(text string) {

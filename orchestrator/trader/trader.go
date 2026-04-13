@@ -332,6 +332,34 @@ func (t *Trader) BalanceViaRPC() float64 {
 	return float64(result.Result.Value) / 1e9
 }
 
+// LatestTxHash returns the most recent transaction signature for this wallet via Helius.
+func (t *Trader) LatestTxHash() string {
+	if t.rpcURL == "" || t.walletAddress == "" {
+		return ""
+	}
+	body, _ := json.Marshal(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "getSignaturesForAddress",
+		"params":  []any{t.walletAddress, map[string]any{"limit": 1}},
+	})
+	resp, err := http.Post(t.rpcURL, "application/json", bytes.NewReader(body))
+	if err != nil || resp.StatusCode != 200 {
+		return ""
+	}
+	defer resp.Body.Close()
+	var result struct {
+		Result []struct {
+			Signature string `json:"signature"`
+		} `json:"result"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	if len(result.Result) > 0 {
+		return result.Result[0].Signature
+	}
+	return ""
+}
+
 // EnsureWallet creates the Solana trading wallet if it doesn't exist yet.
 func EnsureWallet(client *signet.Client, label string) (string, error) {
 	wallets, err := client.Wallets.List()

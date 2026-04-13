@@ -1268,4 +1268,5 @@ func (noopNotifier) Entered(p *models.Position) {
 func (noopNotifier) Exited(c *models.ClosedPosition) {
 	log.Printf("[notify] exited %s | P&L %+.4f SOL", safeShort(c.Mint), c.PnLSOL)
 }
-func (noopNotifier) Alert(text string) { log.Printf("[notify] %s", text) }
+func (noopNotifier) Alert(text string)  { log.Printf("[notify] %s", text) }
+func (noopNotifier) Notify(text string) { log.Printf("[notify] %s", text) }
