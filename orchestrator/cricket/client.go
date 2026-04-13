@@ -17,6 +17,10 @@ import (
 // ErrNoCricketKey is returned when a Cricket API call is attempted without a key.
 var ErrNoCricketKey = errors.New("CRICKET_API_KEY not set — sign up at https://cricket.vylth.com")
 
+// ErrTokenNotFound is returned by Mantis when the mint address doesn't exist on-chain
+// (failed launch, unconfirmed tx, or wrong account type). Callers should skip the token.
+var ErrTokenNotFound = errors.New("token not found or not a valid mint")
+
 // Client is an HTTP client for the Cricket Protocol API.
 type Client struct {
 	baseURL string
@@ -95,6 +99,11 @@ func doGet[T any](ctx context.Context, c *Client, url string) (*T, error) {
 		return nil, err
 	}
 
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == 422 {
+		// 404 TOKEN_NOT_FOUND or 422 NOT_A_TOKEN_MINT — address doesn't exist or isn't a mint.
+		// Clean skip — not an error worth logging loudly.
+		return nil, ErrTokenNotFound
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("cricket API %d: %s", resp.StatusCode, string(body))
 	}

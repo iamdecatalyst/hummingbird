@@ -1062,7 +1062,11 @@ func scoreAndTrade(cc *cricket.Client, dispatch func(*models.ScoreResult), tgTok
 	wr := <-walletCh
 
 	if sr.err != nil {
-		log.Printf("[scorer] mantis scan failed for %s: %v — need Cricket API key? https://cricket.vylth.com", safeShort(token.Mint), sr.err)
+		if errors.Is(sr.err, cricket.ErrTokenNotFound) {
+			log.Printf("[scorer] skip %s — not on-chain yet or wrong address", safeShort(token.Mint))
+		} else {
+			log.Printf("[scorer] mantis scan failed for %s: %v", safeShort(token.Mint), sr.err)
+		}
 		return
 	}
 
