@@ -1253,11 +1253,11 @@ func scoreFromCricket(scan *cricket.MantisScanResponse, devWallet *cricket.Firef
 	// Entry thresholds — calibrated for pump.fun token score distribution (typically 20-65).
 	// Pre-graduation tokens can't lock LP so scores are structurally lower than post-launch.
 	switch {
-	case score < 30:
+	case score < 40:
 		return score, "skip", 0
-	case score < 45:
+	case score < 55:
 		return score, "small", 0.05
-	case score < 60:
+	case score < 70:
 		return score, "medium", 0.10
 	default:
 		return score, "full", 0.20

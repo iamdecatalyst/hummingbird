@@ -272,7 +272,30 @@ func (t *Trader) handleExit(sig monitor.ExitSignal) {
 		}
 		if err != nil {
 			log.Printf("[trader] exit failed for %s: %v", sig.Mint[:8], err)
-			t.telegram.Alert(fmt.Sprintf("EXIT FAILED: %s\n%v", sig.Mint[:8], err))
+			isStuck := strings.Contains(err.Error(), "Pool account not found") ||
+				strings.Contains(err.Error(), "not found")
+			if isStuck && sig.Partial == 0 {
+				// No pool exists — token is dead/rugged. Write off the position as a total loss
+				// so the monitor stops retrying and the slot is freed.
+				log.Printf("[trader] %s has no pool — writing off as total loss", sig.Mint[:8])
+				t.telegram.Alert(fmt.Sprintf("🪦 *Position Written Off*\n`%s`\nNo pool found — token likely rugged. Position closed at total loss.", sig.Mint))
+				closed := &models.ClosedPosition{
+					Position:      *pos,
+					ExitPriceSOL:  0,
+					ExitAmountSOL: 0,
+					PnLSOL:        -pos.EntryAmountSOL,
+					PnLPercent:    -100,
+					Reason:        models.ExitRugDetected,
+					ClosedAt:      time.Now(),
+					TxHash:        "writeoff",
+				}
+				t.portfolio.Close(closed)
+				if t.scalper != nil {
+					go t.scalper.OnPositionClosed(closed.Mint)
+				}
+			} else {
+				t.telegram.Alert(fmt.Sprintf("EXIT FAILED: %s\n%v", sig.Mint[:8], err))
+			}
 			return
 		}
 	}
