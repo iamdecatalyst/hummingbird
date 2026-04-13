@@ -183,7 +183,10 @@ func (t *Trader) enter(result *models.ScoreResult) {
 			strings.Contains(msg, "token_not_routable") ||
 			strings.Contains(msg, "Pool account not found") ||
 			strings.Contains(msg, "pumpportal") ||
-			strings.Contains(msg, "not found")
+			strings.Contains(msg, "not found") ||
+			strings.Contains(msg, "context deadline exceeded") ||
+			strings.Contains(msg, "timeout") ||
+			strings.Contains(msg, "connection reset")
 		log.Printf("[trader] entry failed for %s: %v", result.Mint[:8], err)
 		if !isRoutingFailure {
 			t.telegram.Alert(fmt.Sprintf("entry failed: %s\n%v", result.Mint[:8], err))
