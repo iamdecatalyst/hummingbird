@@ -415,12 +415,13 @@ func (t *Trader) buyViaPumpPortal(result *models.ScoreResult) (*signet.Transacti
 		"publicKey":        t.walletAddress,
 		"action":           "buy",
 		"mint":             result.Mint,
-		"denominatedInSol": "true",
+		"denominatedInSol": true, // boolean, not string
 		"amount":           result.PositionSOL,
 		"slippage":         10, // 10% — wide for new tokens
 		"priorityFee":      0.0005,
 		"pool":             pool,
 	})
+	log.Printf("[trader] pumpportal request: %s", string(reqBody))
 
 	ppResp, err := http.Post(
 		"https://pumpportal.fun/api/trade-local",
