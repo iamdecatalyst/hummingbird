@@ -46,6 +46,27 @@ func New(startingSOL float64, maxConcurrent int, maxDailyLoss float64) *Portfoli
 	}
 }
 
+// RestoreStats re-hydrates cumulative counters from historical closed positions
+// loaded from DB after a restart. Must be called before trading begins.
+func (p *Portfolio) RestoreStats(closed []*models.ClosedPosition) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	today := time.Now().UTC().Format("2006-01-02")
+	for _, c := range closed {
+		p.totalPnL += c.PnLSOL
+		if c.ClosedAt.UTC().Format("2006-01-02") == today {
+			p.todayPnL += c.PnLSOL
+		}
+		if c.PnLSOL >= 0 {
+			p.wins++
+		} else {
+			p.losses++
+		}
+		// Keep closed slice populated so GetClosedByMint works across restarts
+		p.closed = append(p.closed, c)
+	}
+}
+
 // SetPersistHooks registers callbacks invoked on Open and Close for DB persistence.
 // Must be called before the portfolio is used. Either hook may be nil.
 func (p *Portfolio) SetPersistHooks(onOpen func(*models.Position), onClose func(*models.ClosedPosition)) {

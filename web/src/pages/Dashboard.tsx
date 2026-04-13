@@ -1375,16 +1375,14 @@ function ClosedTradeCard({ t }: { t: ClosedPosition }) {
         </div>
       </div>
       <div className="flex items-center gap-3 shrink-0">
-        {isWin && (
-          <button
-            onClick={handleShare}
-            disabled={sharing}
-            title="Download PnL card"
-            className="opacity-0 group-hover:opacity-100 transition-opacity font-mono text-[10px] text-[#00A8FF] hover:text-white px-2 py-1 rounded border border-[#00A8FF]/20 hover:border-[#00A8FF]/50 disabled:opacity-40"
-          >
-            {sharing ? '...' : '📤'}
-          </button>
-        )}
+        <button
+          onClick={handleShare}
+          disabled={sharing}
+          title="Download PnL card"
+          className="opacity-0 group-hover:opacity-100 transition-opacity font-mono text-[10px] text-[#555] hover:text-white px-2 py-1 rounded border border-white/10 hover:border-white/30 disabled:opacity-40"
+        >
+          {sharing ? '...' : '📤'}
+        </button>
         <div className="text-right">
           <p className={`font-mono text-sm font-bold ${isWin ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
             {isWin ? '+' : ''}{t.pnl_sol.toFixed(3)}

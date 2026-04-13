@@ -138,6 +138,14 @@ func (m *Manager) startInstance(userID, apiKey, apiSecret, walletID, telegramCha
 
 	tr := trader.New(client, walletID, port, n, m.cricket, m.scalper, monCfg, userCfg.MinBalanceSOL, m.cfg.SolanaRPC)
 
+	// Restore closed position stats so P&L / win-rate survive restarts.
+	if m.db != nil {
+		if closed, err := m.db.ClosedPositionsByUser(userID, 1000); err == nil && len(closed) > 0 {
+			port.RestoreStats(closed)
+			log.Printf("[userbot] restored stats from %d closed position(s) for user %s", len(closed), short(userID))
+		}
+	}
+
 	// Restore open positions from DB so monitors resume after a restart.
 	if m.db != nil {
 		if openPositions, err := m.db.OpenPositionsByUser(userID); err == nil && len(openPositions) > 0 {

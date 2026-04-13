@@ -129,19 +129,11 @@ func (t *Telegram) Exited(c *models.ClosedPosition) {
 	)
 
 	var kb [][]kbButton
-	if c.PnLSOL > 0 {
-		kb = [][]kbButton{
-			{
-				{Text: "📤 Share Trade", Data: "share:" + c.Mint}, // mint ≤ 44 chars → fits 64-byte TG limit
-				{Text: "📊 Dashboard", URL: "https://hummingbird.vylth.com/dashboard"},
-			},
-		}
-	} else {
-		kb = [][]kbButton{
-			{
-				{Text: "📊 Dashboard", URL: "https://hummingbird.vylth.com/dashboard"},
-			},
-		}
+	kb = [][]kbButton{
+		{
+			{Text: "📤 Export Card", Data: "share:" + c.Mint}, // mint ≤ 44 chars → fits 64-byte TG limit
+			{Text: "📊 Dashboard", URL: "https://hummingbird.vylth.com/dashboard"},
+		},
 	}
 	t.sendKB(t.chatID, msg, inlineKB(kb))
 
