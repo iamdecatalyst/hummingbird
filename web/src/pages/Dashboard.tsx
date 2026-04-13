@@ -11,7 +11,7 @@ import {
   Pulse, SignOut, Copy, Check, Wallet, Key,
   ArrowUp, ArrowDown, Lightning, Warning, Info,
   Eye, EyeSlash, X, Plus, QrCode, PaperPlaneTilt, CaretDown,
-  TelegramLogo, SlidersHorizontal, Spinner, SquaresFour, DownloadSimple, ArrowsClockwise,
+  TelegramLogo, SlidersHorizontal, Spinner, SquaresFour, DownloadSimple, ArrowsClockwise, ShareNetwork,
 } from '@phosphor-icons/react'
 import type { UserConfig } from '../lib/api'
 import type { WalletEntry } from '../lib/api'
@@ -1379,9 +1379,9 @@ function ClosedTradeCard({ t }: { t: ClosedPosition }) {
           onClick={handleShare}
           disabled={sharing}
           title="Download PnL card"
-          className="transition-opacity font-mono text-[10px] text-[#555] hover:text-white px-2 py-1 rounded border border-white/10 hover:border-white/30 disabled:opacity-40"
+          className="transition-opacity text-[#555] hover:text-white p-1.5 rounded border border-white/10 hover:border-white/30 disabled:opacity-40 flex items-center"
         >
-          {sharing ? '...' : '📤'}
+          {sharing ? <Spinner size={12} className="animate-spin" /> : <ShareNetwork size={12} />}
         </button>
         <div className="text-right">
           <p className={`font-mono text-sm font-bold ${isWin ? 'text-[#4ADE80]' : 'text-[#EF4444]'}`}>
@@ -1747,7 +1747,7 @@ function TabAccounts({ positions, closed, mainWalletId, onMainWalletSet }: {
 
   useEffect(() => {
     const fetchLogs = () => api.logs().then(all => {
-      setTxLogs(all.filter(l => l.type === 'INFO'))
+      setTxLogs(all.filter(l => l.type === 'INFO').reverse())
     }).catch(() => {})
     fetchLogs()
     const id = setInterval(fetchLogs, 8000)
@@ -1828,7 +1828,7 @@ function TabAccounts({ positions, closed, mainWalletId, onMainWalletSet }: {
             </div>
           ) : (
             <div>
-              {[...txLogs].reverse().map((log, i) => {
+              {txLogs.map((log, i) => {
                 const isDeposit = log.message.toLowerCase().includes('deposit')
                 return (
                   <div key={i} className="flex items-center gap-3 px-4 py-2.5 border-b border-white/[0.04] last:border-0 hover:bg-white/[0.015] transition-colors">
