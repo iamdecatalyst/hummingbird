@@ -136,7 +136,7 @@ func (m *Manager) startInstance(userID, apiKey, apiSecret, walletID, telegramCha
 		TimeoutMinutes:  userCfg.TimeoutMinutes,
 	}
 
-	tr := trader.New(client, walletID, port, n, m.cricket, m.scalper, monCfg, userCfg.MinBalanceSOL)
+	tr := trader.New(client, walletID, port, n, m.cricket, m.scalper, monCfg, userCfg.MinBalanceSOL, m.cfg.SolanaRPC)
 
 	// Restore open positions from DB so monitors resume after a restart.
 	if m.db != nil {
@@ -250,7 +250,7 @@ func watchBalance(ctx context.Context, tr *trader.Trader, n alerts.Notifier, use
 			if time.Since(tr.LastTradeAt()) < balanceTradeCooldown {
 				continue
 			}
-			current := tr.Balance()
+			current := tr.BalanceViaRPC()
 			diff := current - last
 			if diff > balanceMinDiff {
 				msg := fmt.Sprintf("💰 Deposit detected: +%.4f SOL (balance: %.4f SOL)", diff, current)

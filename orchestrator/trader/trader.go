@@ -1,10 +1,13 @@
 package trader
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -41,8 +44,10 @@ type Trader struct {
 	exitCh    chan monitor.ExitSignal
 	cancelFns sync.Map // mint → context.CancelFunc
 
-	lastTradeMu sync.Mutex
-	lastTradeAt time.Time
+	lastTradeMu   sync.Mutex
+	lastTradeAt   time.Time
+	walletAddress string // Solana public key — used for Helius balance lookups
+	rpcURL        string // Helius HTTP RPC URL
 }
 
 func New(
@@ -54,6 +59,7 @@ func New(
 	sc ScalperCloser,
 	monitorCfg monitor.MonitorConfig,
 	minBalanceSOL float64,
+	rpcURL string,
 ) *Trader {
 	t := &Trader{
 		signet:        signetClient,
@@ -64,7 +70,13 @@ func New(
 		scalper:       sc,
 		monitorCfg:    monitorCfg,
 		minBalanceSOL: minBalanceSOL,
+		rpcURL:        rpcURL,
 		exitCh:        make(chan monitor.ExitSignal, 32),
+	}
+
+	// Fetch and cache the wallet's Solana public address for RPC balance lookups.
+	if w, err := signetClient.Wallets.Get(walletID); err == nil {
+		t.walletAddress = w.Address
 	}
 
 	go t.processExits()
@@ -278,6 +290,7 @@ func (t *Trader) LastTradeAt() time.Time {
 	return t.lastTradeAt
 }
 
+// Balance fetches SOL balance via Signet — used for trade-critical checks.
 func (t *Trader) Balance() float64 {
 	if t.walletID == "" {
 		return 0
@@ -291,6 +304,32 @@ func (t *Trader) Balance() float64 {
 		return 0
 	}
 	return v
+}
+
+// BalanceViaRPC fetches SOL balance directly from Helius RPC.
+// Used for polling/display so we don't waste Signet requests.
+func (t *Trader) BalanceViaRPC() float64 {
+	if t.rpcURL == "" || t.walletAddress == "" {
+		return t.Balance() // fallback to Signet
+	}
+	body, _ := json.Marshal(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "getBalance",
+		"params":  []any{t.walletAddress, map[string]string{"commitment": "confirmed"}},
+	})
+	resp, err := http.Post(t.rpcURL, "application/json", bytes.NewReader(body))
+	if err != nil || resp.StatusCode != 200 {
+		return 0
+	}
+	defer resp.Body.Close()
+	var result struct {
+		Result struct {
+			Value int64 `json:"value"`
+		} `json:"result"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return float64(result.Result.Value) / 1e9
 }
 
 // EnsureWallet creates the Solana trading wallet if it doesn't exist yet.

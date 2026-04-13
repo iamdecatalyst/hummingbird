@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -157,7 +158,7 @@ func startSingleTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMu
 			tr.Execute(r)
 		}
 	})
-	tr = trader.New(signetClient, walletID, port, notifier, cc, sc, monitor.DefaultMonitorConfig(), 0)
+	tr = trader.New(signetClient, walletID, port, notifier, cc, sc, monitor.DefaultMonitorConfig(), 0, cfg.SolanaRPC)
 
 	go sc.Run(context.Background())
 
@@ -895,7 +896,7 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 			if wal.Label != nil {
 				label = *wal.Label
 			}
-			bal := fetchSOLBalance(cfg.SignetBaseURL, apiKey, apiSecret, wal.ID)
+			bal := fetchSOLBalance(cfg.SolanaRPC, wal.Address)
 			result = append(result, walletWithBalance{
 				ID:      wal.ID,
 				Address: wal.Address,
@@ -974,28 +975,30 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 	})
 }
 
-// fetchSOLBalance calls Signet balance API directly (not in SDK yet).
-func fetchSOLBalance(baseURL, apiKey, apiSecret, walletID string) float64 {
-	if baseURL == "" {
-		baseURL = "https://api.signet.vylth.com/v1"
-	}
-	url := strings.TrimRight(baseURL, "/") + "/wallets/" + walletID + "/balance"
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
+// fetchSOLBalance fetches a wallet's SOL balance directly from Helius RPC.
+// Uses getBalance with the wallet's Solana public address — no Signet request needed.
+func fetchSOLBalance(rpcURL, address string) float64 {
+	if rpcURL == "" || address == "" {
 		return 0
 	}
-	req.Header.Set("X-API-Key", apiKey)
-	req.Header.Set("X-API-Secret", apiSecret)
-	resp, err := http.DefaultClient.Do(req)
+	body, _ := json.Marshal(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "getBalance",
+		"params":  []any{address, map[string]string{"commitment": "confirmed"}},
+	})
+	resp, err := http.Post(rpcURL, "application/json", bytes.NewReader(body))
 	if err != nil || resp.StatusCode != http.StatusOK {
 		return 0
 	}
 	defer resp.Body.Close()
 	var result struct {
-		SOL float64 `json:"sol"`
+		Result struct {
+			Value int64 `json:"value"` // lamports
+		} `json:"result"`
 	}
 	json.NewDecoder(resp.Body).Decode(&result)
-	return result.SOL
+	return float64(result.Result.Value) / 1e9 // lamports → SOL
 }
 
 // ── Cricket scoring ───────────────────────────────────────────────────────────
