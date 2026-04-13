@@ -274,3 +274,21 @@ web/src/
 - Wallet ID: `2f5f5252-f596-48ef-ad0b-42e07661d121` (Signet)
 - Needs funding to start trading — small test amount first
 - Check balance via dashboard wallets tab or `GET /wallets`
+
+
+---
+
+## Tasks
+
+Active tasks are tracked via the Labs directives system and registered centrally.
+
+**"Do we have any tasks today?"**
+
+1. Read `/mnt/vylth/labs/TASKS.md` FIRST — This is the central registry of all pending work.
+2. Find the section for this specific project.
+3. If there is a task marked `[ ] Pending`, see the path it points to.
+4. Open the directive file located at that path (e.g. `/mnt/vylth/labs/directives/.../DIR-XXXX-title.md`).
+5. Execute the work as instructed in the directive, and check off the boxes inside the directive file.
+6. **CRITICAL**: Once the directive is fully complete, you MUST go back to `/mnt/vylth/labs/TASKS.md` and change the status from `[ ] Pending` to `[x] Done`.
+
+Always remember: if you create a new directive yourself, you must register it in `TASKS.md` immediately!

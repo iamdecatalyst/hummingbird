@@ -1,0 +1,11 @@
+[    2442ms] TypeError: Cannot read properties of undefined (reading 'disconnect')
+    at N (https://kolscan.io/_next/static/chunks/app/layout-3b82a81491758fd2.js:1:4440)
+    at https://kolscan.io/_next/static/chunks/app/layout-3b82a81491758fd2.js:1:4819
+    at https://kolscan.io/_next/static/chunks/app/layout-3b82a81491758fd2.js:1:4825
+    at o1 (https://kolscan.io/_next/static/chunks/4bd1b696-c023c6e3521b1417.js:1:88951)
+    at uE (https://kolscan.io/_next/static/chunks/4bd1b696-c023c6e3521b1417.js:1:104843)
+    at ux (https://kolscan.io/_next/static/chunks/4bd1b696-c023c6e3521b1417.js:1:104727)
+    at uE (https://kolscan.io/_next/static/chunks/4bd1b696-c023c6e3521b1417.js:1:104888)
+    at ux (https://kolscan.io/_next/static/chunks/4bd1b696-c023c6e3521b1417.js:1:104727)
+    at uE (https://kolscan.io/_next/static/chunks/4bd1b696-c023c6e3521b1417.js:1:104888)
+    at ux (https://kolscan.io/_next/static/chunks/4bd1b696-c023c6e3521b1417.js:1:104727)

@@ -1,0 +1,270 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - link "Kolscan" [ref=e5] [cursor=pointer]:
+        - /url: /
+      - generic [ref=e6] [cursor=pointer]:
+        - img "sol" [ref=e8]
+        - heading "$81.84" [level=2] [ref=e9]
+      - link "pumpfun Pump app" [ref=e12] [cursor=pointer]:
+        - /url: https://join.pump.fun/HSag/kolscan
+        - img "pumpfun" [ref=e14]
+        - heading "Pump app" [level=1] [ref=e16]
+      - generic [ref=e17]:
+        - img "search" [ref=e18] [cursor=pointer]
+        - img "menu icon" [ref=e19] [cursor=pointer]
+        - generic [ref=e20]:
+          - link "Trades" [ref=e21] [cursor=pointer]:
+            - /url: /trades
+          - link "Tokens" [ref=e22] [cursor=pointer]:
+            - /url: /tokens
+          - link "Leaderboard" [ref=e23] [cursor=pointer]:
+            - /url: /leaderboard
+          - separator [ref=e24]
+          - generic [ref=e26] [cursor=pointer]: Connect Wallet
+          - separator [ref=e27]
+          - generic [ref=e28]:
+            - generic [ref=e29]:
+              - heading "Theme" [level=1] [ref=e30]
+              - generic [ref=e31]:
+                - generic [ref=e32] [cursor=pointer]:
+                  - generic:
+                    - img
+                  - generic:
+                    - img
+                - switch [ref=e34]
+            - generic [ref=e35]:
+              - heading "Sounds" [level=1] [ref=e36]
+              - generic [ref=e37]:
+                - generic [ref=e38] [cursor=pointer]:
+                  - generic:
+                    - img
+                  - generic:
+                    - img
+                - switch [ref=e40]
+            - heading "Custom Settings" [level=1] [ref=e41]
+            - generic [ref=e42]:
+              - textbox "Helius Api Key" [ref=e43]
+              - img "Link to website" [ref=e44] [cursor=pointer]
+            - generic [ref=e45]:
+              - textbox "Rpc Url" [ref=e46]
+              - img "Link to website" [ref=e47] [cursor=pointer]
+            - paragraph [ref=e48]: Supports comma seperated lists
+    - generic [ref=e49]:
+      - heading "Track the Top Memecoin Traders in Realtime" [level=1] [ref=e50]:
+        - text: Track the Top Memecoin
+        - text: Traders in
+        - strong [ref=e51]: Realtime
+      - generic [ref=e53]:
+        - textbox "Enter wallet address" [ref=e54]
+        - button "search" [ref=e55] [cursor=pointer]:
+          - img "search" [ref=e56]
+      - generic [ref=e57]:
+        - generic [ref=e58]:
+          - link "kol pfp" [ref=e59] [cursor=pointer]:
+            - /url: /account/GDoG4tdbx8qkpECQKF5MebbEDpFJn6H739psqgoTG3aN
+            - img "kol pfp" [ref=e61]
+          - generic [ref=e62]:
+            - link "crayohla" [ref=e63] [cursor=pointer]:
+              - /url: /account/GDoG4tdbx8qkpECQKF5MebbEDpFJn6H739psqgoTG3aN
+            - text: bought
+            - generic [ref=e64]: 1.51 sol (45.2m)
+            - text: of
+            - strong [ref=e66] [cursor=pointer]: Teehee
+            - text: at
+            - generic [ref=e67]: $0.0000027
+          - link "1m ago" [ref=e68] [cursor=pointer]:
+            - /url: https://solscan.io/tx/Tu9GRRzKFhxRXNmS9dpQQdpXuKcCJ8CPWm1K9oxRFeY2drLg9D1fvpa7XQd5mGBXLRqRfTVxxnigEZTqutvuoZ1
+            - text: 1m
+            - generic [ref=e69]: ago
+        - generic [ref=e70]:
+          - link "kol pfp" [ref=e71] [cursor=pointer]:
+            - /url: /account/SAALE2x3sn51EyahJyqD6913L3GqHZdZo3egUdMayQp
+            - img "kol pfp" [ref=e73]
+          - generic [ref=e74]:
+            - link "saale" [ref=e75] [cursor=pointer]:
+              - /url: /account/SAALE2x3sn51EyahJyqD6913L3GqHZdZo3egUdMayQp
+            - text: sold
+            - generic [ref=e76]: 1.19 sol (21.8m)
+            - text: of
+            - strong [ref=e78] [cursor=pointer]: pumpcar
+            - text: at
+            - generic [ref=e79]: $0.0000045
+          - link "2m ago" [ref=e80] [cursor=pointer]:
+            - /url: https://solscan.io/tx/YwUwCGiREKbtNEgmPgznXBrgYZiC5XGUVefny7tyXQzhKwgM4BQfaRFzoJ435DPQ5vGe4GhWzCCNgjdEm9duFn4
+            - text: 2m
+            - generic [ref=e81]: ago
+        - generic [ref=e82]:
+          - link "kol pfp" [ref=e83] [cursor=pointer]:
+            - /url: /account/G2mgnzpr59vYjKpwU9q5zVfS9yQ9HezMwjuqF7LACvR4
+            - img "kol pfp" [ref=e85]
+          - generic [ref=e86]:
+            - link "fz7" [ref=e87] [cursor=pointer]:
+              - /url: /account/G2mgnzpr59vYjKpwU9q5zVfS9yQ9HezMwjuqF7LACvR4
+            - text: sold
+            - generic [ref=e88]: 1.08 sol (35.9m)
+            - text: of
+            - strong [ref=e90] [cursor=pointer]: SOLJAK
+            - text: at
+            - generic [ref=e91]: $0.0000025
+          - link "2m ago" [ref=e92] [cursor=pointer]:
+            - /url: https://solscan.io/tx/4175VohftnnHSxS3RVp4mArDY4rho47MtTU4jjQjT7r6ixQjYgxqtcJyFVksQ2A6hUg2RUZ7uk714sQV8YiG7hta
+            - text: 2m
+            - generic [ref=e93]: ago
+        - generic [ref=e94]:
+          - link "kol pfp" [ref=e95] [cursor=pointer]:
+            - /url: /account/G2mgnzpr59vYjKpwU9q5zVfS9yQ9HezMwjuqF7LACvR4
+            - img "kol pfp" [ref=e97]
+          - generic [ref=e98]:
+            - link "fz7" [ref=e99] [cursor=pointer]:
+              - /url: /account/G2mgnzpr59vYjKpwU9q5zVfS9yQ9HezMwjuqF7LACvR4
+            - text: bought
+            - generic [ref=e100]: 1.15 sol (35.9m)
+            - text: of
+            - strong [ref=e102] [cursor=pointer]: SOLJAK
+            - text: at
+            - generic [ref=e103]: $0.0000026
+          - link "2m ago" [ref=e104] [cursor=pointer]:
+            - /url: https://solscan.io/tx/3sHjg28TMeQfhESN4iH69hRjEik4K9s9JfHJ7wFcWf4ATXNdW381CyfTpYMCUUTwytjFs7WCd2dA3hQM7CfRwS5h
+            - text: 2m
+            - generic [ref=e105]: ago
+        - generic [ref=e106]:
+          - link "kol pfp" [ref=e107] [cursor=pointer]:
+            - /url: /account/G2mgnzpr59vYjKpwU9q5zVfS9yQ9HezMwjuqF7LACvR4
+            - img "kol pfp" [ref=e109]
+          - generic [ref=e110]:
+            - link "fz7" [ref=e111] [cursor=pointer]:
+              - /url: /account/G2mgnzpr59vYjKpwU9q5zVfS9yQ9HezMwjuqF7LACvR4
+            - text: sold
+            - generic [ref=e112]: 0.796 sol (23.5m)
+            - text: of
+            - strong [ref=e114] [cursor=pointer]: WLFI
+            - text: at
+            - generic [ref=e115]: $0.0000028
+          - link "2m ago" [ref=e116] [cursor=pointer]:
+            - /url: https://solscan.io/tx/36qPgGJLgrsfLZRTsAiaNNniztJuxnrx1rtf4XpFJezkR17BxUkUg4w4RNWKgwZCdL3ChepyhpHeH8FpcrZX4eHN
+            - text: 2m
+            - generic [ref=e117]: ago
+        - generic [ref=e118]:
+          - link "kol pfp" [ref=e119] [cursor=pointer]:
+            - /url: /account/AVjEtg2ECYKXYeqdRQXvaaAZBjfTjYuSMTR4WLhKoeQN
+            - img "kol pfp" [ref=e121]
+          - generic [ref=e122]:
+            - link "Putrick" [ref=e123] [cursor=pointer]:
+              - /url: /account/AVjEtg2ECYKXYeqdRQXvaaAZBjfTjYuSMTR4WLhKoeQN
+            - text: sold
+            - generic [ref=e124]: 1.62 sol (23.5m)
+            - text: of
+            - strong [ref=e126] [cursor=pointer]: LAND
+            - text: at
+            - generic [ref=e127]: $0.0000056
+          - link "3m ago" [ref=e128] [cursor=pointer]:
+            - /url: https://solscan.io/tx/4TLV2fGjpi24o2hEWoDYAx5NvxevG1k7GAZRDNzzt9FiiUMs8FMyrH8Vef3ergrrLZQZ5TPFgvBN2yXUuRub4YRf
+            - text: 3m
+            - generic [ref=e129]: ago
+        - generic [ref=e130]:
+          - link "kol pfp" [ref=e131] [cursor=pointer]:
+            - /url: /account/23wQ7bodYreW3qhnh2YrW8dMkTYSkHHJqGcsiYEJS3Pr
+            - img "kol pfp" [ref=e133]
+          - generic [ref=e134]:
+            - link "Cope" [ref=e135] [cursor=pointer]:
+              - /url: /account/23wQ7bodYreW3qhnh2YrW8dMkTYSkHHJqGcsiYEJS3Pr
+            - text: bought
+            - generic [ref=e136]: 1.27 sol (22.6m)
+            - text: of
+            - strong [ref=e138] [cursor=pointer]: SOL2
+            - text: at
+            - generic [ref=e139]: $0.0000046
+          - link "3m ago" [ref=e140] [cursor=pointer]:
+            - /url: https://solscan.io/tx/5Kf3ocMpStFENNWZbVqFznu5xNDhKGKqHh9udkz3oYguXVYddaxnGuZUJpeGzWNhZtjBFS7KepLWztwT4mmB4oBt
+            - text: 3m
+            - generic [ref=e141]: ago
+        - generic [ref=e142]:
+          - link "kol pfp" [ref=e143] [cursor=pointer]:
+            - /url: /account/G2mgnzpr59vYjKpwU9q5zVfS9yQ9HezMwjuqF7LACvR4
+            - img "kol pfp" [ref=e145]
+          - generic [ref=e146]:
+            - link "fz7" [ref=e147] [cursor=pointer]:
+              - /url: /account/G2mgnzpr59vYjKpwU9q5zVfS9yQ9HezMwjuqF7LACvR4
+            - text: bought
+            - generic [ref=e148]: 1.02 sol (23.5m)
+            - text: of
+            - strong [ref=e150] [cursor=pointer]: WLFI
+            - text: at
+            - generic [ref=e151]: $0.0000035
+          - link "3m ago" [ref=e152] [cursor=pointer]:
+            - /url: https://solscan.io/tx/57Rm3R5ueNfimbUdbotJzPk9N51n4eiyNhgae5rX6sMvCtT2xrZUNGrub73WEXP4pm2NECgibxk1JHfuZDJTSgsP
+            - text: 3m
+            - generic [ref=e153]: ago
+        - generic [ref=e154]:
+          - link "kol pfp" [ref=e155] [cursor=pointer]:
+            - /url: /account/AVjEtg2ECYKXYeqdRQXvaaAZBjfTjYuSMTR4WLhKoeQN
+            - img "kol pfp" [ref=e157]
+          - generic [ref=e158]:
+            - link "Putrick" [ref=e159] [cursor=pointer]:
+              - /url: /account/AVjEtg2ECYKXYeqdRQXvaaAZBjfTjYuSMTR4WLhKoeQN
+            - text: bought
+            - generic [ref=e160]: 0.037 sol (462k)
+            - text: of
+            - strong [ref=e162] [cursor=pointer]: LAND
+            - text: at
+            - generic [ref=e163]: $0.0000065
+          - link "3m ago" [ref=e164] [cursor=pointer]:
+            - /url: https://solscan.io/tx/3gr82Mmg9ChHjr9WwDC3NQ7piSMNVQ9Gy3Z7bhSQJFqmgGnu1pLVyYqW86oQwTTxs6FZsooi5VvZjxCEDPXvTtFC
+            - text: 3m
+            - generic [ref=e165]: ago
+        - generic [ref=e166]:
+          - link "kol pfp" [ref=e167] [cursor=pointer]:
+            - /url: /account/67SNjkjV2MEyhDZcDjvMQSqFtjkh6TjCq6KDLmCgUxx6
+            - img "kol pfp" [ref=e169]
+          - generic [ref=e170]:
+            - link "CameXBT" [ref=e171] [cursor=pointer]:
+              - /url: /account/67SNjkjV2MEyhDZcDjvMQSqFtjkh6TjCq6KDLmCgUxx6
+            - text: bought
+            - generic [ref=e172]: 0.003 sol (745)
+            - text: of
+            - strong [ref=e174] [cursor=pointer]: pumphouse
+            - text: at
+            - generic [ref=e175]: $0.00033
+          - link "3m ago" [ref=e176] [cursor=pointer]:
+            - /url: https://solscan.io/tx/5TDVU8FmB1DY29dpDh3ygU4MVHChS7ApbCtQef8VRDpVY4HgWaPiwakJSQPUMpiBSBzro3BZ4T4cbUgYQy8LpgKN
+            - text: 3m
+            - generic [ref=e177]: ago
+      - generic [ref=e178]:
+        - generic [ref=e179]:
+          - text: Monitor Trades
+          - text: from Top Wallets
+        - generic [ref=e180]:
+          - text: Discover New and
+          - text: Trending Tokens
+        - generic [ref=e181]:
+          - text: Analyze the Most
+          - text: Profitable Wallets
+      - link "twitter Follow us on X" [ref=e183] [cursor=pointer]:
+        - /url: https://x.com/kolscan
+        - img "twitter" [ref=e185]
+        - heading "Follow us on X" [level=1] [ref=e186]
+      - generic [ref=e187]:
+        - heading "FAQs" [level=1] [ref=e188]
+        - generic [ref=e189]:
+          - generic [ref=e191] [cursor=pointer]:
+            - heading "What is Kolscan?" [level=1] [ref=e192]
+            - img "expand" [ref=e193]
+          - generic [ref=e195] [cursor=pointer]:
+            - heading "Is Kolscan free to use?" [level=1] [ref=e196]
+            - img "expand" [ref=e197]
+          - generic [ref=e199] [cursor=pointer]:
+            - heading "Can I track non-KOL wallets?" [level=1] [ref=e200]
+            - img "expand" [ref=e201]
+          - generic [ref=e203] [cursor=pointer]:
+            - heading "How do I get my wallet on the leaderboard?" [level=1] [ref=e204]
+            - img "expand" [ref=e205]
+    - generic [ref=e206]:
+      - generic [ref=e207]: © 2026 Kolscan. All rights reserved.
+      - text: "|"
+      - link "Privacy" [ref=e208] [cursor=pointer]:
+        - /url: /privacy
+      - text: "|"
+      - link "Terms of Use" [ref=e209] [cursor=pointer]:
+        - /url: /terms
+  - alert [ref=e210]

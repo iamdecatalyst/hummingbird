@@ -1,0 +1,267 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - heading "GMGN.AI Snipe MEME Tokens Faster" [level=2] [ref=e4]
+      - heading "GMGN.AI Best tool to Discover and Snipe MEME tokens faster. Follow Smart Money to earn!" [level=3] [ref=e5]
+      - list [ref=e6]:
+        - listitem [ref=e7]: "CA Security Checks: LP burned, Honeypot, Renounced, Mintable"
+        - listitem [ref=e8]: Monitor the holdings of insider traders, snipers, and the first 70 buyers.
+        - listitem [ref=e9]: New token FOMO Alert
+        - listitem [ref=e10]: Copy Trade Smart Money to Earn
+        - listitem [ref=e11]: What is Pump.fun?
+        - listitem [ref=e12]: Integrate GMGN price chart
+        - listitem [ref=e13]: Watch out honeypoy methods on Solana rug pull tokens
+    - generic [ref=e15]:
+      - generic [ref=e16]:
+        - banner [ref=e17]:
+          - generic [ref=e18]:
+            - link "logo" [ref=e20] [cursor=pointer]:
+              - /url: /?chain=sol
+              - img "logo" [ref=e21]
+            - navigation "Main navigation" [ref=e23]:
+              - link "Trenches" [ref=e24] [cursor=pointer]:
+                - /url: /?chain=sol
+              - link "Trending" [ref=e25] [cursor=pointer]:
+                - /url: /trend?chain=sol
+              - link "CopyTrade" [ref=e26] [cursor=pointer]:
+                - /url: /trade?chain=sol
+              - link "Monitor" [ref=e27] [cursor=pointer]:
+                - /url: /monitor?chain=sol
+              - link "Track" [ref=e28] [cursor=pointer]:
+                - /url: /follow?chain=sol
+              - link "Portfolio" [ref=e29] [cursor=pointer]:
+                - /url: /portfolio?chain=sol
+              - link "Rewards" [ref=e30] [cursor=pointer]:
+                - /url: /rewards?chain=sol
+          - generic [ref=e31]:
+            - generic [ref=e34]:
+              - generic [ref=e35]:
+                - img [ref=e37]
+                - textbox "Search name, CA, wallet" [ref=e40]
+                - generic [ref=e42]: /
+              - group "Search name, CA, wallet"
+            - generic [ref=e46] [cursor=pointer]:
+              - img [ref=e47]
+              - generic [ref=e51]: 9+
+            - generic [ref=e52]:
+              - button [ref=e53] [cursor=pointer]:
+                - link [ref=e54]:
+                  - /url: /app
+                  - img [ref=e55]
+              - link [ref=e57] [cursor=pointer]:
+                - /url: /ai
+                - img [ref=e58]
+            - generic [ref=e64]:
+              - button "network SOL" [ref=e65] [cursor=pointer]:
+                - generic [ref=e66]:
+                  - img "network" [ref=e67]
+                  - generic [ref=e68]: SOL
+                  - img [ref=e69]
+              - link [ref=e71] [cursor=pointer]:
+                - /url: /watchlists
+                - img [ref=e73]
+              - button [ref=e75] [cursor=pointer]:
+                - img [ref=e76]
+            - generic [ref=e80]:
+              - button "Sign Up" [ref=e81] [cursor=pointer]:
+                - generic [ref=e82]: Sign Up
+              - button "Log In" [ref=e83] [cursor=pointer]:
+                - generic [ref=e84]: Log In
+        - generic [ref=e85]:
+          - img [ref=e87] [cursor=pointer]
+          - generic [ref=e91]:
+            - img [ref=e93] [cursor=pointer]
+            - img [ref=e96] [cursor=pointer]
+            - img [ref=e101] [cursor=pointer]
+          - generic [ref=e106]:
+            - generic [ref=e108] [cursor=pointer]:
+              - generic [ref=e110]:
+                - combobox [ref=e112]
+                - img [ref=e115]
+              - generic:
+                - img
+            - group
+          - generic [ref=e118]:
+            - generic [ref=e120] [cursor=pointer]:
+              - generic [ref=e122]:
+                - combobox [ref=e124]
+                - text: All
+              - generic:
+                - img
+            - group
+      - main [ref=e127]:
+        - generic [ref=e129]:
+          - generic [ref=e130]:
+            - button "Track 42 P1 You are not logged in to GMGN Log in" [ref=e131] [cursor=pointer]:
+              - img [ref=e133]
+              - generic [ref=e143]:
+                - generic [ref=e144]:
+                  - generic [ref=e145]:
+                    - tablist [ref=e146]:
+                      - img [ref=e150]
+                      - generic [ref=e153]:
+                        - tab "Wallet" [ref=e155]
+                        - tab "Track" [selected] [ref=e157]
+                        - tab "Monitor" [ref=e159]
+                        - tab "Renames" [ref=e161]
+                        - tab [ref=e163]:
+                          - generic [ref=e165]:
+                            - generic [ref=e167]:
+                              - generic [ref=e169]:
+                                - combobox [ref=e171]
+                                - img [ref=e174]
+                              - generic:
+                                - img
+                            - group
+                      - generic [ref=e176]:
+                        - img [ref=e179]
+                        - generic [ref=e181]:
+                          - img [ref=e183]
+                          - img [ref=e187]
+                          - img [ref=e192]
+                    - generic:
+                      - generic:
+                        - tabpanel "Track"
+                  - generic [ref=e195]:
+                    - generic [ref=e196]:
+                      - button "42" [ref=e200]:
+                        - button "42" [ref=e201]:
+                          - generic [ref=e202]:
+                            - img [ref=e203]
+                            - generic [ref=e205]: "42"
+                      - generic [ref=e206]:
+                        - img [ref=e209]
+                        - button [ref=e212]:
+                          - img [ref=e214]
+                        - img [ref=e218]
+                    - generic [ref=e221]:
+                      - generic [ref=e223]:
+                        - img [ref=e225]
+                        - textbox "0" [ref=e226]
+                      - generic [ref=e228]:
+                        - generic:
+                          - generic:
+                            - generic: P1
+                            - generic:
+                              - img
+                - generic [ref=e232]:
+                  - text: You are not logged in to GMGN
+                  - generic [ref=e233]: Log in
+                - status [ref=e234]
+            - status [ref=e245]
+          - generic [ref=e246]:
+            - button "X Tracker Recommended APP Only CA 14 CA / Symbol / X URL You are not logged in to GMGN Log in No data" [ref=e247] [cursor=pointer]:
+              - img [ref=e249]
+              - generic [ref=e259]:
+                - generic [ref=e262]:
+                  - tablist [ref=e263]:
+                    - generic [ref=e265]:
+                      - tab "X Tracker" [selected] [ref=e267]
+                      - tab "TG Tracker" [ref=e269]
+                    - generic [ref=e272]:
+                      - img [ref=e275]
+                      - img [ref=e280]
+                      - generic [ref=e282]:
+                        - img [ref=e284]
+                        - img [ref=e288]
+                        - img [ref=e293]
+                  - generic:
+                    - generic:
+                      - tabpanel "X Tracker"
+                - generic [ref=e296]:
+                  - generic [ref=e297]:
+                    - generic [ref=e298]:
+                      - generic [ref=e299]:
+                        - tablist [ref=e300]:
+                          - generic [ref=e302]:
+                            - tab "Mine" [ref=e304]
+                            - tab "Featured" [ref=e306]
+                            - tab "Recommended" [selected] [ref=e308]
+                        - generic:
+                          - generic:
+                            - tabpanel "Recommended"
+                      - button "APP" [ref=e309]:
+                        - link "APP" [ref=e310]:
+                          - /url: /app
+                          - img [ref=e311]
+                          - generic [ref=e312]: APP
+                    - generic [ref=e314]:
+                      - generic [ref=e315]:
+                        - generic [ref=e316]:
+                          - img [ref=e318]
+                          - generic [ref=e320]: Only CA
+                        - img [ref=e322]
+                        - img [ref=e326]
+                        - img [ref=e329]
+                        - img [ref=e333]
+                      - generic [ref=e336]:
+                        - generic [ref=e337]:
+                          - img [ref=e338]
+                          - generic [ref=e341]: "14"
+                        - generic [ref=e342]:
+                          - generic [ref=e343]:
+                            - img [ref=e345]
+                            - textbox "CA / Symbol / X URL" [ref=e348]
+                          - group "CA / Symbol / X URL"
+                  - generic [ref=e349]:
+                    - text: You are not logged in to GMGN
+                    - generic [ref=e350]: Log in
+                  - generic [ref=e351]:
+                    - img [ref=e352]
+                    - generic [ref=e353]: No data
+            - status [ref=e354]
+      - contentinfo [ref=e356]:
+        - generic [ref=e357]:
+          - img [ref=e359] [cursor=pointer]
+          - generic [ref=e362] [cursor=pointer]:
+            - img [ref=e363]
+            - generic [ref=e364]: Trenches
+          - generic [ref=e365] [cursor=pointer]:
+            - img [ref=e366]
+            - generic [ref=e369]: Wallet Tracker
+          - generic [ref=e370] [cursor=pointer]:
+            - img [ref=e371]
+            - generic [ref=e374]: Social Tracker
+          - generic [ref=e375] [cursor=pointer]:
+            - img [ref=e376]
+            - generic [ref=e380]: Holding
+          - generic [ref=e381] [cursor=pointer]:
+            - img [ref=e382]
+            - generic [ref=e384]: Watchlist
+          - generic [ref=e385] [cursor=pointer]:
+            - img [ref=e386]
+            - generic [ref=e388]: Trending
+          - generic [ref=e389] [cursor=pointer]:
+            - img [ref=e390]
+            - generic [ref=e392]: Rank
+          - generic [ref=e393] [cursor=pointer]:
+            - img [ref=e394]
+            - generic [ref=e398]: PnL
+          - generic [ref=e399] [cursor=pointer]:
+            - img [ref=e400]
+            - generic [ref=e405]: Signal
+          - button [ref=e407] [cursor=pointer]:
+            - generic [ref=e408]:
+              - img [ref=e409]
+              - img [ref=e413]
+              - img [ref=e414]
+          - generic [ref=e416]:
+            - img [ref=e417]
+            - text: $81.85
+        - generic [ref=e418]:
+          - link [ref=e420] [cursor=pointer]:
+            - /url: /contest/s11?chain=base
+            - img [ref=e421]
+          - button "About" [ref=e422] [cursor=pointer]:
+            - generic [ref=e423]:
+              - img [ref=e424]
+              - generic [ref=e430]: About
+              - img [ref=e431]
+  - alert [ref=e433]
+  - generic:
+    - region "Notifications-top"
+    - region "Notifications-top-left"
+    - region "Notifications-top-right"
+    - region "Notifications-bottom-left"
+    - region "Notifications-bottom"
+    - region "Notifications-bottom-right"

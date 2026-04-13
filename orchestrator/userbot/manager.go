@@ -239,6 +239,9 @@ const (
 // It suppresses alerts for 2 minutes after any trade to avoid false positives from swaps.
 func watchBalance(ctx context.Context, tr *trader.Trader, n alerts.Notifier, userLog *eventlog.Log) {
 	last := tr.BalanceViaRPC()
+	if last < 0 {
+		last = 0
+	}
 	ticker := time.NewTicker(balancePollInterval)
 	defer ticker.Stop()
 	for {
@@ -250,6 +253,9 @@ func watchBalance(ctx context.Context, tr *trader.Trader, n alerts.Notifier, use
 				continue
 			}
 			current := tr.BalanceViaRPC()
+			if current < 0 {
+				continue // RPC error — skip this tick, don't update last
+			}
 			diff := current - last
 			if diff > balanceMinDiff {
 				txHash := tr.LatestTxHash()

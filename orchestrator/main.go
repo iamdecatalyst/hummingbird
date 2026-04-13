@@ -1143,13 +1143,18 @@ func scoreFromCricket(scan *cricket.MantisScanResponse, devWallet *cricket.Firef
 	}
 
 	// ── Liquidity ─────────────────────────────────────────────────────────────
-	if s.LPLocked {
-		score += 10
-		if s.LPLockDurationDays != nil && *s.LPLockDurationDays >= 30 {
-			score += 5 // meaningful lock duration
+	// Pre-graduation bonding curve tokens have no LP pool yet — LP lock is meaningless here.
+	// Only apply LP checks for graduated tokens (Raydium / post-bonding).
+	bondingActive := s.BondingCurveComplete == nil || !*s.BondingCurveComplete
+	if !bondingActive {
+		if s.LPLocked {
+			score += 10
+			if s.LPLockDurationDays != nil && *s.LPLockDurationDays >= 30 {
+				score += 5 // meaningful lock duration
+			}
+		} else {
+			score -= 10 // graduated but LP not locked — liquidity can be pulled
 		}
-	} else {
-		score -= 10 // liquidity can be pulled anytime
 	}
 
 	// ── Bonding curve timing (pump.fun sweet spot) ────────────────────────────
@@ -1192,12 +1197,14 @@ func scoreFromCricket(scan *cricket.MantisScanResponse, devWallet *cricket.Firef
 	}
 
 	// ── Deployer history ──────────────────────────────────────────────────────
+	// Most pump.fun tokens are launched by fresh wallets — a 0-day wallet is extremely common
+	// and doesn't reliably predict a rug. Keep the penalty mild; serial launchers are the real flag.
 	if s.DeployerAgeKnown {
 		switch {
 		case s.DeployerWalletAgeDays == 0:
-			score -= 15 // brand new wallet = high risk
+			score -= 5 // new wallet: mild penalty, very common on pump.fun
 		case s.DeployerWalletAgeDays < 7:
-			score -= 8
+			score -= 3
 		case s.DeployerWalletAgeDays > 90:
 			score += 8 // seasoned wallet — more accountability
 		case s.DeployerWalletAgeDays > 30:
@@ -1242,13 +1249,14 @@ func scoreFromCricket(scan *cricket.MantisScanResponse, devWallet *cricket.Firef
 		score = 0
 	}
 
-	// Entry thresholds
+	// Entry thresholds — calibrated for pump.fun token score distribution (typically 20-65).
+	// Pre-graduation tokens can't lock LP so scores are structurally lower than post-launch.
 	switch {
-	case score < 52:
+	case score < 30:
 		return score, "skip", 0
-	case score < 67:
+	case score < 45:
 		return score, "small", 0.05
-	case score < 82:
+	case score < 60:
 		return score, "medium", 0.10
 	default:
 		return score, "full", 0.20

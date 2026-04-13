@@ -1,0 +1,4 @@
+- generic [active] [ref=e1]:
+  - region "Notifications (F8)":
+    - list
+  - alert [ref=e2]

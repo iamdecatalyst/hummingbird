@@ -310,6 +310,8 @@ func (t *Trader) Balance() float64 {
 
 // BalanceViaRPC fetches SOL balance directly from Helius RPC.
 // Used for polling/display so we don't waste Signet requests.
+// BalanceViaRPC fetches SOL balance directly from Helius RPC.
+// Returns -1 on any RPC error so callers can distinguish "failed" from "real zero balance".
 func (t *Trader) BalanceViaRPC() float64 {
 	if t.rpcURL == "" || t.walletAddress == "" {
 		return t.Balance() // fallback to Signet
@@ -322,7 +324,7 @@ func (t *Trader) BalanceViaRPC() float64 {
 	})
 	resp, err := http.Post(t.rpcURL, "application/json", bytes.NewReader(body))
 	if err != nil || resp.StatusCode != 200 {
-		return 0
+		return -1 // RPC failure — not a real zero balance
 	}
 	defer resp.Body.Close()
 	var result struct {
@@ -330,7 +332,9 @@ func (t *Trader) BalanceViaRPC() float64 {
 			Value int64 `json:"value"`
 		} `json:"result"`
 	}
-	json.NewDecoder(resp.Body).Decode(&result)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return -1
+	}
 	return float64(result.Result.Value) / 1e9
 }
 

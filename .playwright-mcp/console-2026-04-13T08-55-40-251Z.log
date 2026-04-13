@@ -1,0 +1,17 @@
+[     598ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://gmgn.ai/sol/wallets:0
+[    2974ms] [WARNING] [DEPRECATED] atomFamily is deprecated and will be removed in v3. Please use the `jotai-family` package instead: https://github.com/jotaijs/jotai-family @ https://gmgn.ai/_next/static/chunks/sentry-bundle-8cd49fd8280b23c5.js:3
+[    3176ms] [INFO] QuotationSocketMgr init start @ https://gmgn.ai/_next/static/chunks/sentry-bundle-8cd49fd8280b23c5.js:3
+[    3179ms] [INFO] QuotationSocketMgr 4 unlock. @ https://gmgn.ai/_next/static/chunks/sentry-bundle-8cd49fd8280b23c5.js:3
+[    3861ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://gmgn.ai/sol:0
+[    4012ms] [LOG] local error @ https://gmgn.ai/_next/static/chunks/sentry-bundle-8cd49fd8280b23c5.js:3
+[    4039ms] [WARNING] [DEPRECATED] atomFamily is deprecated and will be removed in v3. Please use the `jotai-family` package instead: https://github.com/jotaijs/jotai-family @ https://gmgn.ai/_next/static/chunks/sentry-bundle-8cd49fd8280b23c5.js:3
+[    4081ms] [INFO] QuotationSocketMgr init start @ https://gmgn.ai/_next/static/chunks/sentry-bundle-8cd49fd8280b23c5.js:3
+[    4082ms] [INFO] QuotationSocketMgr 4 unlock. @ https://gmgn.ai/_next/static/chunks/sentry-bundle-8cd49fd8280b23c5.js:3
+[    4312ms] [LOG] local error @ https://gmgn.ai/_next/static/chunks/sentry-bundle-8cd49fd8280b23c5.js:3
+[    4855ms] [INFO] QuotationSocketMgr 1776070545105 websocket opened @ https://gmgn.ai/_next/static/chunks/sentry-bundle-8cd49fd8280b23c5.js:3
+[    5175ms] [WARNING] 13 09:55:45:424 checkTokenExpired  @ https://gmgn.ai/_next/static/chunks/sentry-bundle-8cd49fd8280b23c5.js:3
+[    5238ms] [INFO] WS Heartbeat online:true, visible:true @ https://gmgn.ai/_next/static/chunks/sentry-bundle-8cd49fd8280b23c5.js:3
+[    6805ms] [LOG] 11 custom indicators loaded. @ https://gmgn.ai/_next/static/trading-view/30.2.3/bundles/library.da96fe4a247adfea0ad8.js:0
+[    7047ms] [WARNING] 2026-04-13T08:55:47.296Z:Property:The state with a data type: unknown does not match a schema @ https://gmgn.ai/_next/static/trading-view/30.2.3/bundles/library.da96fe4a247adfea0ad8.js:0
+[    7091ms] [WARNING] 2026-04-13T08:55:47.341Z:Property:The state with a data type: object does not match a schema @ https://gmgn.ai/_next/static/trading-view/30.2.3/bundles/library.da96fe4a247adfea0ad8.js:0
+[    7121ms] [WARNING] 2026-04-13T08:55:47.371Z `resolveSymbol` should return result asynchronously. Use `setTimeout` with 0 interval to execute the callback function. @ https://gmgn.ai/_next/static/trading-view/30.2.3/bundles/library.da96fe4a247adfea0ad8.js:0
