@@ -1090,6 +1090,7 @@ func scoreAndTrade(cc *cricket.Client, dispatch func(*models.ScoreResult), tgTok
 	dispatch(&models.ScoreResult{
 		Mint:        token.Mint,
 		DevWallet:   token.DevWallet,
+		Platform:    token.Platform,
 		Total:       score,
 		Decision:    decision,
 		PositionSOL: posSOL,

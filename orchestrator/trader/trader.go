@@ -3,12 +3,15 @@ package trader
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -138,21 +141,29 @@ func (t *Trader) enter(result *models.ScoreResult) {
 		DeadlineSeconds: 30,
 	}
 
-	// Wait briefly before first swap — new pump.fun tokens take ~10s to appear on Jupiter
+	// Wait briefly before first swap — new tokens take ~10s to be indexed
 	time.Sleep(10 * time.Second)
 
 	var tx *signet.TransactionResult
 	var err error
-	const maxRetries = 5
+	const maxRetries = 3
 	for attempt := range maxRetries {
 		tx, err = t.signet.Wallets.Swap(t.walletID, params)
 		if err == nil {
 			break
 		}
 		var sigErr *signet.SignetError
-		if errors.As(err, &sigErr) && sigErr.StatusCode == 502 {
-			if attempt < maxRetries-1 {
-				log.Printf("[trader] token %s not yet indexed (attempt %d/%d), retrying in 8s", result.Mint[:8], attempt+1, maxRetries)
+		if errors.As(err, &sigErr) {
+			// 422 token_not_routable — Jupiter can't route this token (e.g. pump.fun bonding curve).
+			// Fall back to building the tx via pumpportal and executing via Signet /execute.
+			if sigErr.StatusCode == 422 && strings.Contains(sigErr.Message, "token_not_routable") {
+				log.Printf("[trader] %s not routable via Jupiter — trying pumpportal fallback", result.Mint[:8])
+				tx, err = t.buyViaPumpPortal(result)
+				break
+			}
+			// 502 — Jupiter gateway error, token may not be indexed yet
+			if sigErr.StatusCode == 502 && attempt < maxRetries-1 {
+				log.Printf("[trader] %s not yet indexed (attempt %d/%d), retrying in 8s", result.Mint[:8], attempt+1, maxRetries)
 				time.Sleep(8 * time.Second)
 				continue
 			}
@@ -160,7 +171,7 @@ func (t *Trader) enter(result *models.ScoreResult) {
 		break
 	}
 	if err != nil {
-		log.Printf("[trader] signet swap failed for %s: %v", result.Mint[:8], err)
+		log.Printf("[trader] entry failed for %s: %v", result.Mint[:8], err)
 		t.telegram.Alert(fmt.Sprintf("entry failed: %s\n%v", result.Mint[:8], err))
 		return
 	}
@@ -379,6 +390,60 @@ func (t *Trader) LatestTxHash() string {
 		return result.Result[0].Signature
 	}
 	return ""
+}
+
+// buyViaPumpPortal builds a pump.fun buy transaction via pumpportal.fun and executes it
+// through Signet's /execute endpoint. Called when /swap returns token_not_routable.
+func (t *Trader) buyViaPumpPortal(result *models.ScoreResult) (*signet.TransactionResult, error) {
+	if t.walletAddress == "" {
+		return nil, fmt.Errorf("wallet address not set — cannot build pump.fun tx")
+	}
+
+	// Map platform to pumpportal pool name.
+	pool := "pump" // default: pump.fun bonding curve
+	if result.Platform == "pumpswap" {
+		pool = "pumpswap"
+	}
+
+	// Step 1: ask pumpportal.fun to build the unsigned transaction.
+	reqBody, _ := json.Marshal(map[string]any{
+		"publicKey":        t.walletAddress,
+		"action":           "buy",
+		"mint":             result.Mint,
+		"denominatedInSol": "true",
+		"amount":           result.PositionSOL,
+		"slippage":         10, // 10% — wide for new tokens
+		"priorityFee":      0.0005,
+		"pool":             pool,
+	})
+
+	ppResp, err := http.Post(
+		"https://pumpportal.fun/api/trade-local",
+		"application/json",
+		bytes.NewReader(reqBody),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("pumpportal request failed: %w", err)
+	}
+	defer ppResp.Body.Close()
+
+	txBytes, err := io.ReadAll(ppResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("pumpportal read failed: %w", err)
+	}
+	if ppResp.StatusCode != 200 {
+		return nil, fmt.Errorf("pumpportal %d: %s", ppResp.StatusCode, string(txBytes))
+	}
+
+	// Step 2: hand the unsigned transaction to Signet to sign + broadcast.
+	txBase64 := base64.StdEncoding.EncodeToString(txBytes)
+	tx, err := t.signet.Wallets.Execute(t.walletID, txBase64)
+	if err != nil {
+		return nil, fmt.Errorf("signet execute failed: %w", err)
+	}
+
+	log.Printf("[trader] pumpportal+execute success for %s | tx=%s", result.Mint[:8], tx.TxHash)
+	return tx, nil
 }
 
 // EnsureWallet creates the Solana trading wallet if it doesn't exist yet.

@@ -6,6 +6,7 @@ import "time"
 type ScoreResult struct {
 	Mint        string                 `json:"mint"`
 	DevWallet   string                 `json:"dev_wallet"`
+	Platform    string                 `json:"platform"` // pump_fun | moonshot | raydium_launchlab | boop | etc.
 	Total       int                    `json:"total"`
 	Decision    string                 `json:"decision"` // skip | small | medium | full | scalp
 	PositionSOL float64                `json:"position_sol"`
