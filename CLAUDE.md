@@ -6,6 +6,12 @@ Autonomous pump.fun trading agent. Rust + Python + Go.
 
 ---
 
+## Before Starting Any Work
+
+Read `/mnt/vylth/labs/operations/known-patterns.md` — cross-ecosystem anti-patterns and known bug patterns. These are real mistakes that have occurred across Vylth repos. Read them before touching any code.
+
+---
+
 ## Server
 
 **Host:** Sage — `decatalyst@89.117.52.141`
