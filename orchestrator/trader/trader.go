@@ -629,26 +629,19 @@ type Holding struct {
 }
 
 // Holdings returns all non-zero SPL token balances in the wallet.
+// Holdings returns all non-zero SPL token balances in the wallet.
+// Queries both the legacy Token program and Token-2022 program.
 func (t *Trader) Holdings() ([]Holding, error) {
 	if t.rpcURL == "" || t.walletAddress == "" {
 		return nil, fmt.Errorf("RPC or wallet address not set")
 	}
-	body, _ := json.Marshal(map[string]any{
-		"jsonrpc": "2.0",
-		"id":      1,
-		"method":  "getTokenAccountsByOwner",
-		"params": []any{
-			t.walletAddress,
-			map[string]string{"programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"},
-			map[string]string{"encoding": "jsonParsed"},
-		},
-	})
-	resp, err := http.Post(t.rpcURL, "application/json", bytes.NewReader(body))
-	if err != nil {
-		return nil, err
+
+	programs := []string{
+		"TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", // SPL Token
+		"TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", // Token-2022
 	}
-	defer resp.Body.Close()
-	var result struct {
+
+	type tokenAccountResult struct {
 		Result struct {
 			Value []struct {
 				Account struct {
@@ -667,18 +660,38 @@ func (t *Trader) Holdings() ([]Holding, error) {
 			} `json:"value"`
 		} `json:"result"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
+
 	var out []Holding
-	for _, v := range result.Result.Value {
-		info := v.Account.Data.Parsed.Info
-		if info.TokenAmount.UIAmount > 0 {
-			out = append(out, Holding{
-				Mint:     info.Mint,
-				UIAmount: info.TokenAmount.UIAmount,
-				Decimals: info.TokenAmount.Decimals,
-			})
+	for _, programID := range programs {
+		body, _ := json.Marshal(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      1,
+			"method":  "getTokenAccountsByOwner",
+			"params": []any{
+				t.walletAddress,
+				map[string]string{"programId": programID},
+				map[string]string{"encoding": "jsonParsed"},
+			},
+		})
+		resp, err := http.Post(t.rpcURL, "application/json", bytes.NewReader(body))
+		if err != nil {
+			continue // try next program
+		}
+		var result tokenAccountResult
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			resp.Body.Close()
+			continue
+		}
+		resp.Body.Close()
+		for _, v := range result.Result.Value {
+			info := v.Account.Data.Parsed.Info
+			if info.TokenAmount.UIAmount > 0 {
+				out = append(out, Holding{
+					Mint:     info.Mint,
+					UIAmount: info.TokenAmount.UIAmount,
+					Decimals: info.TokenAmount.Decimals,
+				})
+			}
 		}
 	}
 	return out, nil
