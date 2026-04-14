@@ -967,6 +967,30 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 		json.NewEncoder(w).Encode(result)
 	})
 
+	// GET /holdings — SPL token balances in the active trading wallet
+	mux.HandleFunc("GET /holdings", func(w http.ResponseWriter, r *http.Request) {
+		nexusID, err := requireAuth(r)
+		if err != nil {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		inst := manager.Get(nexusID)
+		if inst == nil {
+			jsonOK(w, []trader.Holding{})
+			return
+		}
+		holdings, err := inst.Trader.Holdings()
+		if err != nil {
+			http.Error(w, `{"error":"rpc error"}`, http.StatusBadGateway)
+			return
+		}
+		if holdings == nil {
+			holdings = []trader.Holding{}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(holdings)
+	})
+
 	// POST /wallets/:id/withdraw — transfer SOL from a wallet
 	mux.HandleFunc("POST /wallets/{id}/withdraw", func(w http.ResponseWriter, r *http.Request) {
 		nexusID, err := requireAuth(r)

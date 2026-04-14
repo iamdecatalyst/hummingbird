@@ -618,6 +618,72 @@ func (t *Trader) tokenBalance(mint string) (uint64, error) {
 	return amt, nil
 }
 
+// WalletAddress returns the cached Solana public key for this trader's wallet.
+func (t *Trader) WalletAddress() string { return t.walletAddress }
+
+// Holding is a single SPL token balance in the wallet.
+type Holding struct {
+	Mint     string  `json:"mint"`
+	UIAmount float64 `json:"ui_amount"`
+	Decimals int     `json:"decimals"`
+}
+
+// Holdings returns all non-zero SPL token balances in the wallet.
+func (t *Trader) Holdings() ([]Holding, error) {
+	if t.rpcURL == "" || t.walletAddress == "" {
+		return nil, fmt.Errorf("RPC or wallet address not set")
+	}
+	body, _ := json.Marshal(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      1,
+		"method":  "getTokenAccountsByOwner",
+		"params": []any{
+			t.walletAddress,
+			map[string]string{"programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"},
+			map[string]string{"encoding": "jsonParsed"},
+		},
+	})
+	resp, err := http.Post(t.rpcURL, "application/json", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var result struct {
+		Result struct {
+			Value []struct {
+				Account struct {
+					Data struct {
+						Parsed struct {
+							Info struct {
+								Mint        string `json:"mint"`
+								TokenAmount struct {
+									UIAmount float64 `json:"uiAmount"`
+									Decimals int     `json:"decimals"`
+								} `json:"tokenAmount"`
+							} `json:"info"`
+						} `json:"parsed"`
+					} `json:"data"`
+				} `json:"account"`
+			} `json:"value"`
+		} `json:"result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	var out []Holding
+	for _, v := range result.Result.Value {
+		info := v.Account.Data.Parsed.Info
+		if info.TokenAmount.UIAmount > 0 {
+			out = append(out, Holding{
+				Mint:     info.Mint,
+				UIAmount: info.TokenAmount.UIAmount,
+				Decimals: info.TokenAmount.Decimals,
+			})
+		}
+	}
+	return out, nil
+}
+
 // EnsureWallet creates the Solana trading wallet if it doesn't exist yet.
 func EnsureWallet(client *signet.Client, label string) (string, error) {
 	wallets, err := client.Wallets.List()

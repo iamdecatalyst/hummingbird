@@ -139,7 +139,8 @@ export const api = {
     return post<{ status: string; bot_active: boolean }>('/auth/setup-signet', { api_key, api_secret })
   },
 
-  // Wallets
+  // Wallets & Holdings
+  holdings(): Promise<{ mint: string; ui_amount: number; decimals: number }[]> { return get('/holdings') },
   wallets():                           Promise<WalletEntry[]> { return get('/wallets') },
   createWallet(label?: string):        Promise<{ id: string; address: string }> {
     return post('/wallets', { label: label ?? 'hummingbird' })

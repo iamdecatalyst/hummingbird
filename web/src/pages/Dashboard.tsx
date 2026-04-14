@@ -1525,6 +1525,7 @@ function WalletCard({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; 
   const [addrCopied,   setAddrCopied]   = useState(false)
 
   const [refreshing, setRefreshing] = useState(false)
+  const [holdings,   setHoldings]   = useState<{ mint: string; ui_amount: number }[]>([])
 
   const load = (silent = false) => {
     if (!silent) setLoading(true)
@@ -1533,6 +1534,7 @@ function WalletCard({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; 
       setWallets(ws)
       setActiveWallet(prev => prev ?? (ws.find(w => w.id === mainWalletId)?.id ?? ws[0]?.id ?? null))
     }).catch(() => {}).finally(() => { setLoading(false); setRefreshing(false) })
+    api.holdings().then(setHoldings).catch(() => {})
   }
   useEffect(() => {
     load()
@@ -1724,6 +1726,30 @@ function WalletCard({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; 
                     style={{ background: 'rgba(0,168,255,0.08)', color: '#00A8FF', border: '1px solid rgba(0,168,255,0.12)' }}>
                     <PaperPlaneTilt size={13} /> Withdraw
                   </button>
+                </div>
+              )}
+
+              {/* Token Holdings */}
+              {holdings.length > 0 && (
+                <div>
+                  <p className="font-mono text-[10px] text-[#888] uppercase tracking-widest mb-2">Token Holdings</p>
+                  <div className="flex flex-col gap-1">
+                    {holdings.map(h => (
+                      <div key={h.mint} className="flex items-center gap-3 px-3 py-2 rounded-lg" style={{ background: 'rgba(255,255,255,0.03)' }}>
+                        <a
+                          href={`https://solscan.io/token/${h.mint}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-mono text-[10px] text-[#00A8FF] hover:text-white transition-colors flex-1 truncate"
+                        >
+                          {h.mint.slice(0, 8)}…{h.mint.slice(-6)}
+                        </a>
+                        <span className="font-mono text-[10px] text-[#aaa] shrink-0">
+                          {h.ui_amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </>
