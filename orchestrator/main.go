@@ -992,6 +992,32 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 		json.NewEncoder(w).Encode(holdings)
 	})
 
+	// POST /holdings/{mint}/sell — force-sell a token back to SOL
+	mux.HandleFunc("POST /holdings/{mint}/sell", func(w http.ResponseWriter, r *http.Request) {
+		nexusID, err := requireAuth(r)
+		if err != nil {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		mint := r.PathValue("mint")
+		if mint == "" {
+			http.Error(w, `{"error":"mint required"}`, http.StatusBadRequest)
+			return
+		}
+		inst := mgr.Get(nexusID)
+		if inst == nil {
+			http.Error(w, `{"error":"bot not running"}`, http.StatusBadRequest)
+			return
+		}
+		txHash, err := inst.Trader.ForceSell(mint)
+		if err != nil {
+			http.Error(w, fmt.Sprintf(`{"error":%q}`, err.Error()), http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"tx_hash": txHash})
+	})
+
 	// POST /wallets/:id/withdraw — transfer SOL from a wallet
 	mux.HandleFunc("POST /wallets/{id}/withdraw", func(w http.ResponseWriter, r *http.Request) {
 		nexusID, err := requireAuth(r)

@@ -1511,6 +1511,65 @@ function WithdrawDialog({ wal, onClose, onDone }: { wal: WalletEntry; onClose: (
   )
 }
 
+function HoldingsList({ holdings, onSold }: {
+  holdings: { mint: string; ui_amount: number }[]
+  onSold: () => void
+}) {
+  const [selling, setSelling] = useState<string | null>(null)
+  const [result,  setResult]  = useState<Record<string, 'ok' | 'err'>>({})
+
+  const sell = async (mint: string) => {
+    if (selling) return
+    setSelling(mint)
+    try {
+      await api.forceSell(mint)
+      setResult(r => ({ ...r, [mint]: 'ok' }))
+      setTimeout(onSold, 2000) // refresh holdings after a short delay
+    } catch {
+      setResult(r => ({ ...r, [mint]: 'err' }))
+    } finally {
+      setSelling(null)
+    }
+  }
+
+  return (
+    <div>
+      <p className="font-mono text-[10px] text-[#888] uppercase tracking-widest mb-2">Token Holdings</p>
+      <div className="flex flex-col gap-1">
+        {holdings.map(h => (
+          <div key={h.mint} className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'rgba(255,255,255,0.03)' }}>
+            <a
+              href={`https://solscan.io/token/${h.mint}`}
+              target="_blank"
+              rel="noreferrer"
+              className="font-mono text-[10px] text-[#00A8FF] hover:text-white transition-colors flex-1 truncate"
+            >
+              {h.mint.slice(0, 8)}…{h.mint.slice(-6)}
+            </a>
+            <span className="font-mono text-[10px] text-[#aaa] shrink-0 mr-1">
+              {h.ui_amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            </span>
+            {result[h.mint] === 'ok' ? (
+              <span className="font-mono text-[10px] text-[#4ADE80]">sold</span>
+            ) : result[h.mint] === 'err' ? (
+              <span className="font-mono text-[10px] text-[#EF4444]">failed</span>
+            ) : (
+              <button
+                onClick={() => sell(h.mint)}
+                disabled={!!selling}
+                className="font-mono text-[10px] px-2 py-0.5 rounded transition-colors disabled:opacity-40 shrink-0"
+                style={{ background: 'rgba(239,68,68,0.1)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.2)' }}
+              >
+                {selling === h.mint ? <Spinner size={10} className="animate-spin" /> : 'Sell'}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function WalletCard({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; onMainWalletSet?: () => void }) {
   const [wallets,      setWallets]      = useState<WalletEntry[]>([])
   const [loading,      setLoading]      = useState(true)
@@ -1731,26 +1790,7 @@ function WalletCard({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; 
 
               {/* Token Holdings */}
               {holdings.length > 0 && (
-                <div>
-                  <p className="font-mono text-[10px] text-[#888] uppercase tracking-widest mb-2">Token Holdings</p>
-                  <div className="flex flex-col gap-1">
-                    {holdings.map(h => (
-                      <div key={h.mint} className="flex items-center gap-3 px-3 py-2 rounded-lg" style={{ background: 'rgba(255,255,255,0.03)' }}>
-                        <a
-                          href={`https://solscan.io/token/${h.mint}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="font-mono text-[10px] text-[#00A8FF] hover:text-white transition-colors flex-1 truncate"
-                        >
-                          {h.mint.slice(0, 8)}…{h.mint.slice(-6)}
-                        </a>
-                        <span className="font-mono text-[10px] text-[#aaa] shrink-0">
-                          {h.ui_amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <HoldingsList holdings={holdings} onSold={load} />
               )}
             </>
           )}

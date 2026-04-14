@@ -685,6 +685,32 @@ func (t *Trader) Holdings() ([]Holding, error) {
 }
 
 // EnsureWallet creates the Solana trading wallet if it doesn't exist yet.
+// ForceSell swaps 100% of a token back to SOL regardless of whether HB has an
+// open position for it. Used for manual recovery of stuck tokens.
+// Tries Jupiter first (via Signet), falls back to pumpportal.
+func (t *Trader) ForceSell(mint string) (string, error) {
+	tx, err := t.signet.Wallets.Swap(t.walletID, signet.SwapParams{
+		FromToken:       mint,
+		ToToken:         "SOL",
+		Amount:          "100%",
+		SlippageBps:     1000, // 10% — wider slippage for manual force-sell
+		DeadlineSeconds: 30,
+	})
+	if err != nil {
+		var sigErr *signet.SignetError
+		notRoutable := !errors.As(err, &sigErr) || sigErr.StatusCode == 502 ||
+			strings.Contains(sigErr.Message, "token_not_routable")
+		if notRoutable {
+			tx, err = t.sellViaPumpPortal(mint, 0)
+		}
+	}
+	if err != nil {
+		return "", err
+	}
+	t.markTrade()
+	return tx.TxHash, nil
+}
+
 func EnsureWallet(client *signet.Client, label string) (string, error) {
 	wallets, err := client.Wallets.List()
 	if err != nil {

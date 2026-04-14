@@ -141,6 +141,7 @@ export const api = {
 
   // Wallets & Holdings
   holdings(): Promise<{ mint: string; ui_amount: number; decimals: number }[]> { return get('/holdings') },
+  forceSell(mint: string): Promise<{ tx_hash: string }> { return post(`/holdings/${mint}/sell`) },
   wallets():                           Promise<WalletEntry[]> { return get('/wallets') },
   createWallet(label?: string):        Promise<{ id: string; address: string }> {
     return post('/wallets', { label: label ?? 'hummingbird' })
