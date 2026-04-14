@@ -44,11 +44,12 @@ type Position struct {
 type ExitReason string
 
 const (
-	ExitTakeProfit  ExitReason = "take_profit"
-	ExitStopLoss    ExitReason = "stop_loss"
-	ExitRugDetected ExitReason = "rug_detected"
-	ExitTimeout     ExitReason = "timeout"
-	ExitManual      ExitReason = "manual"
+	ExitTakeProfit   ExitReason = "take_profit"
+	ExitStopLoss     ExitReason = "stop_loss"
+	ExitRugDetected  ExitReason = "rug_detected"
+	ExitNoLiquidity  ExitReason = "no_liquidity"
+	ExitTimeout      ExitReason = "timeout"
+	ExitManual       ExitReason = "manual"
 )
 
 // ClosedPosition is a completed trade with final P&L.

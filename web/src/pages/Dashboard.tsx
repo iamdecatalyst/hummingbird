@@ -1740,51 +1740,43 @@ function WalletCard({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; 
                 )}
               </div>
 
-              {/* Balance display */}
+              {/* Balance + actions — compact row */}
               {active && (
-                <div style={{ borderRadius: 14, background: 'linear-gradient(135deg, #0f1318 0%, #111827 100%)', border: '1px solid rgba(255,255,255,0.06)', padding: '16px 18px' }}>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="font-mono text-[10px] text-[#888]">SOLANA MAINNET</span>
-                    {isMain ? (
-                      <span className="font-mono text-[9px] px-2 py-0.5 rounded-full" style={{ background: 'rgba(0,168,255,0.12)', color: '#00A8FF' }}>Trading</span>
-                    ) : (
-                      <button onClick={() => handleSetMain(active.id)} disabled={settingMain}
-                        className="font-mono text-[10px] px-2.5 py-1 rounded-lg transition-colors disabled:opacity-40"
-                        style={{ background: 'rgba(255,255,255,0.05)', color: '#555' }}
-                        onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
-                        onMouseLeave={e => (e.currentTarget.style.color = '#555')}>
-                        {settingMain ? '…' : 'Set as main'}
+                <div style={{ borderRadius: 14, background: 'linear-gradient(135deg, #0f1318 0%, #111827 100%)', border: '1px solid rgba(255,255,255,0.06)', padding: '12px 14px' }}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div>
+                      <span className="font-mono text-2xl font-bold text-white">{active.balance_sol.toFixed(4)}</span>
+                      <span className="font-mono text-xs text-[#888] ml-1.5">SOL</span>
+                      {isMain
+                        ? <span className="ml-2 font-mono text-[9px] px-1.5 py-0.5 rounded-full" style={{ background: 'rgba(0,168,255,0.12)', color: '#00A8FF' }}>Trading</span>
+                        : <button onClick={() => handleSetMain(active.id)} disabled={settingMain}
+                            className="ml-2 font-mono text-[9px] px-1.5 py-0.5 rounded-full transition-colors disabled:opacity-40"
+                            style={{ background: 'rgba(255,255,255,0.05)', color: '#888' }}>
+                            {settingMain ? '…' : 'Set main'}
+                          </button>
+                      }
+                    </div>
+                    <div className="flex gap-1.5">
+                      <button onClick={() => setShowDeposit(true)}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-mono text-[10px] transition-all"
+                        style={{ background: 'rgba(74,222,128,0.08)', color: '#4ADE80', border: '1px solid rgba(74,222,128,0.12)' }}>
+                        <QrCode size={11} /> Deposit
                       </button>
-                    )}
+                      <button onClick={() => setShowWithdraw(true)}
+                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-mono text-[10px] transition-all"
+                        style={{ background: 'rgba(0,168,255,0.08)', color: '#00A8FF', border: '1px solid rgba(0,168,255,0.12)' }}>
+                        <PaperPlaneTilt size={11} /> Send
+                      </button>
+                    </div>
                   </div>
-                  <div className="mb-3">
-                    <span className="font-mono text-3xl font-bold text-white">{active.balance_sol.toFixed(4)}</span>
-                    <span className="font-mono text-sm text-[#888] ml-2">SOL</span>
-                  </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <span className="font-mono text-[10px] text-[#666] flex-1 truncate">
-                      {active.address.slice(0, 12)}…{active.address.slice(-8)}
+                      {active.address.slice(0, 14)}…{active.address.slice(-8)}
                     </span>
                     <button onClick={() => copyAddr(active.address)} className="text-[#666] hover:text-white transition-colors shrink-0">
-                      {addrCopied ? <Check size={11} className="text-[#4ADE80]" /> : <Copy size={11} />}
+                      {addrCopied ? <Check size={10} className="text-[#4ADE80]" /> : <Copy size={10} />}
                     </button>
                   </div>
-                </div>
-              )}
-
-              {/* Action buttons */}
-              {active && (
-                <div className="grid grid-cols-2 gap-2">
-                  <button onClick={() => setShowDeposit(true)}
-                    className="flex items-center justify-center gap-2 py-2.5 rounded-xl font-mono text-xs transition-all"
-                    style={{ background: 'rgba(74,222,128,0.08)', color: '#4ADE80', border: '1px solid rgba(74,222,128,0.12)' }}>
-                    <QrCode size={13} /> Deposit
-                  </button>
-                  <button onClick={() => setShowWithdraw(true)}
-                    className="flex items-center justify-center gap-2 py-2.5 rounded-xl font-mono text-xs transition-all"
-                    style={{ background: 'rgba(0,168,255,0.08)', color: '#00A8FF', border: '1px solid rgba(0,168,255,0.12)' }}>
-                    <PaperPlaneTilt size={13} /> Withdraw
-                  </button>
                 </div>
               )}
 

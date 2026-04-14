@@ -286,7 +286,7 @@ func (t *Trader) handleExit(sig monitor.ExitSignal) {
 					ExitAmountSOL: 0,
 					PnLSOL:        -pos.EntryAmountSOL,
 					PnLPercent:    -100,
-					Reason:        models.ExitRugDetected,
+					Reason:        models.ExitNoLiquidity,
 					ClosedAt:      time.Now(),
 					TxHash:        "writeoff",
 				}
