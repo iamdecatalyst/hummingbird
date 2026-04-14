@@ -974,9 +974,10 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
-		inst := manager.Get(nexusID)
+		inst := mgr.Get(nexusID)
 		if inst == nil {
-			jsonOK(w, []trader.Holding{})
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte("[]"))
 			return
 		}
 		holdings, err := inst.Trader.Holdings()
