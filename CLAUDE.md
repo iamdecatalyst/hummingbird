@@ -10,6 +10,8 @@ Autonomous pump.fun trading agent. Rust + Python + Go.
 
 Read `/mnt/vylth/labs/operations/known-patterns.md` — cross-ecosystem anti-patterns and known bug patterns. These are real mistakes that have occurred across Vylth repos. Read them before touching any code.
 
+If you encounter a bug, anti-pattern, or recurring mistake during your work that is not already listed there, add it to `known-patterns.md` before finishing. Include the pattern category, what went wrong, and the correct approach.
+
 ---
 
 ## Server
