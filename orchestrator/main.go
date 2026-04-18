@@ -170,7 +170,7 @@ func startSingleTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMu
 			tr.Execute(r)
 		}
 	})
-	tr = trader.New(signetClient, walletID, port, notifier, cc, sc, monitor.DefaultMonitorConfig(), 0, cfg.SolanaRPC)
+	tr = trader.New(signetClient, walletID, port, notifier, cc, sc, monitor.DefaultMonitorConfig(), 0, 0, cfg.SolanaRPC)
 
 	go sc.Run(context.Background())
 

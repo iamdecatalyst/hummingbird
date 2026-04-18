@@ -136,7 +136,7 @@ func (m *Manager) startInstance(userID, apiKey, apiSecret, walletID, telegramCha
 		TimeoutMinutes:  userCfg.TimeoutMinutes,
 	}
 
-	tr := trader.New(client, walletID, port, n, m.cricket, m.scalper, monCfg, userCfg.MinBalanceSOL, m.cfg.SolanaRPC)
+	tr := trader.New(client, walletID, port, n, m.cricket, m.scalper, monCfg, userCfg.MinBalanceSOL, userCfg.MaxPositionSOL, m.cfg.SolanaRPC)
 
 	// Restore closed position stats so P&L / win-rate survive restarts.
 	if m.db != nil {

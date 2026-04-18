@@ -35,14 +35,15 @@ type ScalperCloser interface {
 
 // Trader executes trades via Signet and manages position lifecycle.
 type Trader struct {
-	signet        *signet.Client
-	walletID      string
-	portfolio     *portfolio.Portfolio
-	telegram      alerts.Notifier
-	cricket       *cricket.Client // passed to per-position monitors
-	scalper       ScalperCloser   // notified on close to free scalp slots
-	monitorCfg    monitor.MonitorConfig
-	minBalanceSOL float64
+	signet         *signet.Client
+	walletID       string
+	portfolio      *portfolio.Portfolio
+	telegram       alerts.Notifier
+	cricket        *cricket.Client // passed to per-position monitors
+	scalper        ScalperCloser   // notified on close to free scalp slots
+	monitorCfg     monitor.MonitorConfig
+	minBalanceSOL  float64
+	maxPositionSOL float64 // hard cap on per-trade SOL — clamps incoming ScoreResult
 
 	exitCh    chan monitor.ExitSignal
 	cancelFns sync.Map // mint → context.CancelFunc
@@ -63,19 +64,21 @@ func New(
 	sc ScalperCloser,
 	monitorCfg monitor.MonitorConfig,
 	minBalanceSOL float64,
+	maxPositionSOL float64,
 	rpcURL string,
 ) *Trader {
 	t := &Trader{
-		signet:        signetClient,
-		walletID:      walletID,
-		portfolio:     port,
-		telegram:      tg,
-		cricket:       cc,
-		scalper:       sc,
-		monitorCfg:    monitorCfg,
-		minBalanceSOL: minBalanceSOL,
-		rpcURL:        rpcURL,
-		exitCh:        make(chan monitor.ExitSignal, 32),
+		signet:         signetClient,
+		walletID:       walletID,
+		portfolio:      port,
+		telegram:       tg,
+		cricket:        cc,
+		scalper:        sc,
+		monitorCfg:     monitorCfg,
+		minBalanceSOL:  minBalanceSOL,
+		maxPositionSOL: maxPositionSOL,
+		rpcURL:         rpcURL,
+		exitCh:         make(chan monitor.ExitSignal, 32),
 	}
 
 	// Fetch and cache the wallet's Solana public address for RPC balance lookups.
@@ -94,6 +97,13 @@ const entryCooldown = 45 * time.Second // min gap between entry attempts
 func (t *Trader) Execute(result *models.ScoreResult) {
 	if result.Decision == "skip" || result.PositionSOL <= 0 {
 		return
+	}
+
+	// Clamp to per-user max position size. Without this, the user's configured cap
+	// (set in Telegram or web) would be cosmetic and the score result's raw size used.
+	if t.maxPositionSOL > 0 && result.PositionSOL > t.maxPositionSOL {
+		log.Printf("[trader] clamping %s position %.3f → %.3f SOL (user cap)", result.Mint[:8], result.PositionSOL, t.maxPositionSOL)
+		result.PositionSOL = t.maxPositionSOL
 	}
 
 	if ok, reason := t.portfolio.CanEnter(); !ok {
@@ -124,12 +134,15 @@ func (t *Trader) Execute(result *models.ScoreResult) {
 func (t *Trader) enter(result *models.ScoreResult) {
 	log.Printf("[trader] entering %s | score=%d | %.3f SOL", result.Mint[:8], result.Total, result.PositionSOL)
 
-	// Min balance guard — check before swap so users' floor is respected
+	// Min balance guard — check before swap so users' floor is respected.
+	// Buffer covers ATA rent + priority fee + network fee so the user actually stays
+	// above their configured floor after the swap settles.
+	const swapFeeBuffer = 0.005 // SOL — empirical: ~0.002 priority + 0.002 ATA + dust
 	if t.minBalanceSOL > 0 {
 		balance := t.Balance()
-		if balance-result.PositionSOL < t.minBalanceSOL {
-			log.Printf("[trader] skip %s — would drop below min balance (balance=%.3f pos=%.3f min=%.3f)",
-				result.Mint[:8], balance, result.PositionSOL, t.minBalanceSOL)
+		if balance-result.PositionSOL-swapFeeBuffer < t.minBalanceSOL {
+			log.Printf("[trader] skip %s — would drop below min balance (balance=%.3f pos=%.3f buffer=%.3f min=%.3f)",
+				result.Mint[:8], balance, result.PositionSOL, swapFeeBuffer, t.minBalanceSOL)
 			return
 		}
 	}
