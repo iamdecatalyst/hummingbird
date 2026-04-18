@@ -7,7 +7,10 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-const tokenTTL    = 30 * 24 * time.Hour
+// tokenTTL: short on purpose. Without revocation infrastructure, a stolen JWT
+// stays valid for the full TTL — 30d was way too long given /wallets/withdraw
+// is reachable with just a Bearer header.
+const tokenTTL    = 24 * time.Hour
 const cliTokenTTL =  7 * 24 * time.Hour
 
 type Claims struct {

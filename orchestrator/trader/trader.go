@@ -341,14 +341,34 @@ func (t *Trader) handleExit(sig monitor.ExitSignal) {
 
 	// Only fully close the position on full exits
 	if sig.Partial == 0 {
-		balAfter := t.Balance()
-		exitAmount := balAfter - balBefore
-		if exitAmount <= 0 {
-			// RPC failed or returned stale data — fall back to entry amount
-			exitAmount = pos.EntryAmountSOL
+		// Retry the Balance call — RPC blips are common right after a swap settles.
+		// If it stays broken we surface the loss honestly rather than reporting a
+		// fake breakeven (which would silently hide rugs from users).
+		var balAfter, exitAmount float64
+		var pnl, pnlPct float64
+		var balOK bool
+		for attempt := 0; attempt < 3; attempt++ {
+			balAfter = t.Balance()
+			exitAmount = balAfter - balBefore
+			if exitAmount > 0 {
+				balOK = true
+				break
+			}
+			time.Sleep(time.Duration(1+attempt) * time.Second)
 		}
-		pnl := exitAmount - pos.EntryAmountSOL
-		pnlPct := (pnl / pos.EntryAmountSOL) * 100
+		if balOK {
+			pnl = exitAmount - pos.EntryAmountSOL
+			pnlPct = (pnl / pos.EntryAmountSOL) * 100
+		} else {
+			// RPC didn't come back. Don't lie to the user — record the worst-case
+			// (treat as total loss) so the win-rate stat doesn't get inflated by
+			// fake-breakeven entries. Telegram alert flags it for manual review.
+			log.Printf("[trader] %s exit balance fetch failed after retries — recording as unknown loss", util.ShortMint(pos.Mint))
+			t.telegram.Alert(fmt.Sprintf("⚠️ Exit P&L unknown for %s — RPC didn't return balance. Check Solscan: %s", util.ShortMint(pos.Mint), tx.TxHash))
+			exitAmount = 0
+			pnl = -pos.EntryAmountSOL
+			pnlPct = -100
+		}
 
 		closed := &models.ClosedPosition{
 			Position:      *pos,
