@@ -46,6 +46,11 @@ type ExitSignal struct {
 	Partial float64 // 0 = full exit, 0.4 = sell 40%, etc.
 }
 
+// ProgressFn is called when the monitor advances a TP threshold so that the
+// state (peak price + TP level) can be persisted. Without this, a restart would
+// re-fire every TP that was already paid out.
+type ProgressFn func(pos *models.Position)
+
 // Monitor watches a single open position and sends exit signals.
 type Monitor struct {
 	pos        *models.Position
@@ -53,15 +58,17 @@ type Monitor struct {
 	exitCh     chan<- ExitSignal
 	httpClient *http.Client
 	cfg        MonitorConfig
+	onProgress ProgressFn // optional — fired on TP advance
 }
 
-func New(pos *models.Position, cc *cricket.Client, exitCh chan<- ExitSignal, cfg MonitorConfig) *Monitor {
+func New(pos *models.Position, cc *cricket.Client, exitCh chan<- ExitSignal, cfg MonitorConfig, onProgress ProgressFn) *Monitor {
 	return &Monitor{
 		pos:        pos,
 		cricket:    cc,
 		exitCh:     exitCh,
 		httpClient: &http.Client{Timeout: 3 * time.Second},
 		cfg:        cfg,
+		onProgress: onProgress,
 	}
 }
 
@@ -137,21 +144,24 @@ func (m *Monitor) Watch(ctx context.Context) {
 				return
 			}
 
-			// Take profit — staged exits
+			// Take profit — staged exits. Persist after advance so a restart
+			// doesn't re-fire TP1/TP2 (would lose 40% of remaining position per crash).
 			switch m.pos.TakeProfitLevel {
 			case 0:
 				if ratio >= m.cfg.TakeProfit1x {
 					m.pos.TakeProfitLevel = 1
-					m.exit(models.ExitTakeProfit, 0.40) // sell 40%, keep watching
+					m.persistProgress()
+					m.exit(models.ExitTakeProfit, 0.40)
 				}
 			case 1:
 				if ratio >= m.cfg.TakeProfit2x {
 					m.pos.TakeProfitLevel = 2
-					m.exit(models.ExitTakeProfit, 0.40) // sell another 40%
+					m.persistProgress()
+					m.exit(models.ExitTakeProfit, 0.40)
 				}
 			case 2:
 				if ratio >= m.cfg.TakeProfit3x {
-					m.exit(models.ExitTakeProfit, 0) // sell everything
+					m.exit(models.ExitTakeProfit, 0)
 					return
 				}
 			}
@@ -238,6 +248,14 @@ func (m *Monitor) isDevSelling() bool {
 		}
 	}
 	return false
+}
+
+// persistProgress fires the optional callback to persist peak + TP level.
+// Errors are swallowed inside the callback — DB hiccup shouldn't block trading.
+func (m *Monitor) persistProgress() {
+	if m.onProgress != nil {
+		m.onProgress(m.pos)
+	}
 }
 
 // exit sends an exit signal to the trader. Blocks if the trader's exit channel

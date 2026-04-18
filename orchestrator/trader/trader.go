@@ -44,7 +44,8 @@ type Trader struct {
 	scalper        ScalperCloser   // notified on close to free scalp slots
 	monitorCfg     monitor.MonitorConfig
 	minBalanceSOL  float64
-	maxPositionSOL float64 // hard cap on per-trade SOL — clamps incoming ScoreResult
+	maxPositionSOL float64            // hard cap on per-trade SOL — clamps incoming ScoreResult
+	onProgress     monitor.ProgressFn // optional — fired by monitor on TP advance for DB persistence
 
 	exitCh    chan monitor.ExitSignal
 	cancelFns sync.Map // mint → context.CancelFunc
@@ -67,6 +68,7 @@ func New(
 	minBalanceSOL float64,
 	maxPositionSOL float64,
 	rpcURL string,
+	onProgress monitor.ProgressFn,
 ) *Trader {
 	t := &Trader{
 		signet:         signetClient,
@@ -79,6 +81,7 @@ func New(
 		minBalanceSOL:  minBalanceSOL,
 		maxPositionSOL: maxPositionSOL,
 		rpcURL:         rpcURL,
+		onProgress:     onProgress,
 		exitCh:         make(chan monitor.ExitSignal, 32),
 	}
 
@@ -253,7 +256,7 @@ func (t *Trader) enter(result *models.ScoreResult) {
 	// Start post-entry monitor — uses Cricket Firefly for exodus detection
 	ctx, cancel := context.WithCancel(context.Background())
 	t.cancelFns.Store(result.Mint, cancel)
-	m := monitor.New(pos, t.cricket, t.exitCh, t.monitorCfg)
+	m := monitor.New(pos, t.cricket, t.exitCh, t.monitorCfg, t.onProgress)
 	go m.Watch(ctx)
 }
 
@@ -375,7 +378,7 @@ func (t *Trader) Restore(pos *models.Position) {
 	t.portfolio.RestoreOpen(pos)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.cancelFns.Store(pos.Mint, cancel)
-	m := monitor.New(pos, t.cricket, t.exitCh, t.monitorCfg)
+	m := monitor.New(pos, t.cricket, t.exitCh, t.monitorCfg, t.onProgress)
 	go m.Watch(ctx)
 	log.Printf("[trader] restored position %s from DB", pos.Mint[:8])
 }

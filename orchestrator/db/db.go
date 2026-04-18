@@ -163,6 +163,7 @@ func (d *DB) migrate() error {
 			status        TEXT NOT NULL DEFAULT 'open',
 			opened_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			peak_price    DOUBLE PRECISION NOT NULL DEFAULT 0,
+			take_profit_level INTEGER NOT NULL DEFAULT 0,
 			closed_at     TIMESTAMPTZ,
 			exit_price    DOUBLE PRECISION,
 			exit_sol      DOUBLE PRECISION,
@@ -173,6 +174,10 @@ func (d *DB) migrate() error {
 	`); err != nil {
 		return err
 	}
+	// Idempotent migration for already-deployed installs predating the column.
+	if _, err := d.sql.Exec(`ALTER TABLE hb_positions ADD COLUMN IF NOT EXISTS take_profit_level INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
 	_, err := d.sql.Exec(`CREATE INDEX IF NOT EXISTS idx_positions_user_status ON hb_positions (nexus_user_id, status)`)
 	return err
 }
@@ -181,12 +186,23 @@ func (d *DB) migrate() error {
 func (d *DB) SavePosition(nexusUserID string, pos *models.Position) error {
 	_, err := d.sql.Exec(`
 		INSERT INTO hb_positions
-			(id, nexus_user_id, mint, dev_wallet, wallet_id, entry_price, entry_sol, token_balance, score, decision, status, opened_at, peak_price)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'open',$11,$12)
+			(id, nexus_user_id, mint, dev_wallet, wallet_id, entry_price, entry_sol, token_balance, score, decision, status, opened_at, peak_price, take_profit_level)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'open',$11,$12,$13)
 		ON CONFLICT (id) DO NOTHING
 	`, pos.ID, nexusUserID, pos.Mint, pos.DevWallet, pos.WalletID,
 		pos.EntryPriceSOL, pos.EntryAmountSOL, pos.TokenBalance,
-		pos.Score, pos.Decision, pos.OpenedAt, pos.PeakPriceSOL)
+		pos.Score, pos.Decision, pos.OpenedAt, pos.PeakPriceSOL, pos.TakeProfitLevel)
+	return err
+}
+
+// UpdatePositionProgress persists peak price + TP level — called when monitor
+// advances a TP threshold so that a restart doesn't re-fire TP1/TP2 (losing
+// 40% of remaining position per crash).
+func (d *DB) UpdatePositionProgress(nexusUserID, posID string, peakPrice float64, tpLevel int) error {
+	_, err := d.sql.Exec(`
+		UPDATE hb_positions SET peak_price=$1, take_profit_level=$2
+		WHERE id=$3 AND nexus_user_id=$4 AND status='open'
+	`, peakPrice, tpLevel, posID, nexusUserID)
 	return err
 }
 
@@ -206,7 +222,7 @@ func (d *DB) ClosePosition(nexusUserID string, closed *models.ClosedPosition) er
 // OpenPositionsByUser returns all open positions for a user (for restart recovery).
 func (d *DB) OpenPositionsByUser(nexusUserID string) ([]*models.Position, error) {
 	rows, err := d.sql.Query(`
-		SELECT id, mint, dev_wallet, wallet_id, entry_price, entry_sol, token_balance, score, decision, opened_at, peak_price
+		SELECT id, mint, dev_wallet, wallet_id, entry_price, entry_sol, token_balance, score, decision, opened_at, peak_price, take_profit_level
 		FROM hb_positions WHERE nexus_user_id=$1 AND status='open'
 		ORDER BY opened_at ASC
 	`, nexusUserID)
@@ -220,7 +236,7 @@ func (d *DB) OpenPositionsByUser(nexusUserID string) ([]*models.Position, error)
 		if err := rows.Scan(
 			&p.ID, &p.Mint, &p.DevWallet, &p.WalletID,
 			&p.EntryPriceSOL, &p.EntryAmountSOL, &p.TokenBalance,
-			&p.Score, &p.Decision, &p.OpenedAt, &p.PeakPriceSOL,
+			&p.Score, &p.Decision, &p.OpenedAt, &p.PeakPriceSOL, &p.TakeProfitLevel,
 		); err == nil {
 			positions = append(positions, &p)
 		}

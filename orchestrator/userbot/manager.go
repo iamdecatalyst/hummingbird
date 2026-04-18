@@ -136,7 +136,16 @@ func (m *Manager) startInstance(userID, apiKey, apiSecret, walletID, telegramCha
 		TimeoutMinutes:  userCfg.TimeoutMinutes,
 	}
 
-	tr := trader.New(client, walletID, port, n, m.cricket, m.scalper, monCfg, userCfg.MinBalanceSOL, userCfg.MaxPositionSOL, m.cfg.SolanaRPC)
+	// Persist TP/peak progress so a restart doesn't re-fire TP1/TP2 (would double-sell).
+	var onProgress func(pos *models.Position)
+	if m.db != nil {
+		onProgress = func(pos *models.Position) {
+			if err := m.db.UpdatePositionProgress(userID, pos.ID, pos.PeakPriceSOL, pos.TakeProfitLevel); err != nil {
+				log.Printf("[userbot] UpdatePositionProgress failed for user %s: %v", short(userID), err)
+			}
+		}
+	}
+	tr := trader.New(client, walletID, port, n, m.cricket, m.scalper, monCfg, userCfg.MinBalanceSOL, userCfg.MaxPositionSOL, m.cfg.SolanaRPC, onProgress)
 
 	// Restore closed position stats so P&L / win-rate survive restarts.
 	if m.db != nil {
