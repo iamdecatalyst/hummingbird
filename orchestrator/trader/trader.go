@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"math"
+	"math/big"
 	"net/http"
 	"strconv"
 	"strings"
@@ -540,6 +541,10 @@ func (t *Trader) pumpPortalBuy(mint string, amountSOL float64, pool string) (*si
 		return nil, fmt.Errorf("pumpportal %s", ppResp.Status)
 	}
 
+	if err := validatePumpPortalTx(txBytes, t.walletAddress); err != nil {
+		return nil, fmt.Errorf("pumpportal tx rejected by safety check: %w", err)
+	}
+
 	txBase64 := base64.StdEncoding.EncodeToString(txBytes)
 	tx, err := t.signet.Wallets.Execute(t.walletID, txBase64)
 	if err != nil {
@@ -590,6 +595,11 @@ func (t *Trader) sellViaPumpPortal(mint string, partial float64) (*signet.Transa
 		if ppResp.StatusCode != 200 {
 			log.Printf("[trader] pumpportal sell pool=%s failed for %s: %s", pool, mint[:8], ppResp.Status)
 			lastErr = fmt.Errorf("pumpportal sell %s", ppResp.Status)
+			continue
+		}
+		if err := validatePumpPortalTx(txBytes, t.walletAddress); err != nil {
+			lastErr = fmt.Errorf("pumpportal sell tx rejected by safety check: %w", err)
+			log.Printf("[trader] %v", lastErr)
 			continue
 		}
 		tx, err := t.signet.Wallets.Execute(t.walletID, base64.StdEncoding.EncodeToString(txBytes))
@@ -781,4 +791,184 @@ func EnsureWallet(client *signet.Client, label string) (string, error) {
 	}
 	log.Printf("[trader] created wallet %s (%s)", w.ID, w.Address)
 	return w.ID, nil
+}
+
+// validatePumpPortalTx parses the wire-format Solana tx returned by pumpportal.fun
+// and rejects anything that could drain the wallet via SystemProgram::Transfer
+// (or any other SystemProgram instruction at top-level), or whose fee payer is
+// not our wallet. This is the only check between a compromised pumpportal API
+// and Signet broadcasting whatever bytes it gets.
+//
+// We don't fully decode instructions — we just verify program IDs are not the
+// SystemProgram (32-zero-byte pubkey). pump.fun + pump-amm + ATA + ComputeBudget
+// are fine; SystemProgram never appears at top-level in a legit pump-portal swap.
+func validatePumpPortalTx(txBytes []byte, expectedFromBase58 string) error {
+	if len(txBytes) < 64 {
+		return fmt.Errorf("tx too short (%d bytes)", len(txBytes))
+	}
+	expectedFrom, err := base58Decode(expectedFromBase58)
+	if err != nil {
+		return fmt.Errorf("decode wallet address: %w", err)
+	}
+	if len(expectedFrom) != 32 {
+		return fmt.Errorf("wallet address wrong length: %d", len(expectedFrom))
+	}
+
+	buf := txBytes
+
+	// Signatures section: compact-u16 count, then count * 64 bytes
+	sigCount, n, err := compactU16(buf)
+	if err != nil {
+		return fmt.Errorf("sig count: %w", err)
+	}
+	buf = buf[n:]
+	if sigCount > 16 {
+		return fmt.Errorf("absurd signature count: %d", sigCount)
+	}
+	if len(buf) < sigCount*64 {
+		return fmt.Errorf("truncated signatures (need %d, have %d)", sigCount*64, len(buf))
+	}
+	buf = buf[sigCount*64:]
+
+	// Optional v0 version byte (high bit set)
+	if len(buf) == 0 {
+		return fmt.Errorf("missing message body")
+	}
+	if buf[0]&0x80 != 0 {
+		buf = buf[1:]
+	}
+
+	// Header: 3 bytes (numRequiredSignatures, numReadonlySigned, numReadonlyUnsigned)
+	if len(buf) < 3 {
+		return fmt.Errorf("truncated header")
+	}
+	buf = buf[3:]
+
+	// Account keys
+	accCount, n, err := compactU16(buf)
+	if err != nil {
+		return fmt.Errorf("acc count: %w", err)
+	}
+	buf = buf[n:]
+	if accCount == 0 || accCount > 256 {
+		return fmt.Errorf("absurd account count: %d", accCount)
+	}
+	if len(buf) < accCount*32 {
+		return fmt.Errorf("truncated account keys")
+	}
+	accountKeys := make([][]byte, accCount)
+	for i := 0; i < accCount; i++ {
+		accountKeys[i] = buf[:32]
+		buf = buf[32:]
+	}
+
+	// Fee payer = accountKeys[0] must be our wallet
+	if !bytes.Equal(accountKeys[0], expectedFrom) {
+		return fmt.Errorf("fee payer mismatch: tx fee payer is not our wallet")
+	}
+
+	// Recent blockhash: 32 bytes
+	if len(buf) < 32 {
+		return fmt.Errorf("truncated blockhash")
+	}
+	buf = buf[32:]
+
+	// Instructions
+	ixCount, n, err := compactU16(buf)
+	if err != nil {
+		return fmt.Errorf("ix count: %w", err)
+	}
+	buf = buf[n:]
+	if ixCount == 0 || ixCount > 32 {
+		return fmt.Errorf("ix count out of expected range: %d", ixCount)
+	}
+
+	var systemProgram [32]byte // all-zero pubkey
+
+	for i := 0; i < ixCount; i++ {
+		if len(buf) < 1 {
+			return fmt.Errorf("truncated ix %d", i)
+		}
+		progIdx := int(buf[0])
+		buf = buf[1:]
+		if progIdx >= accCount {
+			return fmt.Errorf("ix %d: program index %d out of range", i, progIdx)
+		}
+		if bytes.Equal(accountKeys[progIdx], systemProgram[:]) {
+			return fmt.Errorf("ix %d uses SystemProgram — denied (could direct-transfer SOL)", i)
+		}
+		// Skip account indices section
+		accIdxCount, n, err := compactU16(buf)
+		if err != nil {
+			return fmt.Errorf("ix %d acc count: %w", i, err)
+		}
+		buf = buf[n:]
+		if len(buf) < accIdxCount {
+			return fmt.Errorf("ix %d truncated accounts", i)
+		}
+		buf = buf[accIdxCount:]
+		// Skip data
+		dataLen, n, err := compactU16(buf)
+		if err != nil {
+			return fmt.Errorf("ix %d data len: %w", i, err)
+		}
+		buf = buf[n:]
+		if len(buf) < dataLen {
+			return fmt.Errorf("ix %d truncated data", i)
+		}
+		buf = buf[dataLen:]
+	}
+
+	return nil
+}
+
+// compactU16 decodes Solana's variable-length u16 (1-3 bytes).
+func compactU16(buf []byte) (val int, n int, err error) {
+	if len(buf) == 0 {
+		return 0, 0, fmt.Errorf("empty")
+	}
+	val = int(buf[0] & 0x7F)
+	if buf[0]&0x80 == 0 {
+		return val, 1, nil
+	}
+	if len(buf) < 2 {
+		return 0, 0, fmt.Errorf("truncated")
+	}
+	val |= int(buf[1]&0x7F) << 7
+	if buf[1]&0x80 == 0 {
+		return val, 2, nil
+	}
+	if len(buf) < 3 {
+		return 0, 0, fmt.Errorf("truncated")
+	}
+	val |= int(buf[2]&0x03) << 14
+	return val, 3, nil
+}
+
+// base58Decode decodes a Bitcoin/Solana base58 string into bytes.
+const b58Alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+
+func base58Decode(s string) ([]byte, error) {
+	if s == "" {
+		return nil, fmt.Errorf("empty")
+	}
+	var leadingZeros int
+	for _, c := range s {
+		if c != '1' {
+			break
+		}
+		leadingZeros++
+	}
+	num := new(big.Int)
+	base := big.NewInt(58)
+	for _, c := range s {
+		idx := strings.IndexRune(b58Alphabet, c)
+		if idx < 0 {
+			return nil, fmt.Errorf("invalid char %q", c)
+		}
+		num.Mul(num, base)
+		num.Add(num, big.NewInt(int64(idx)))
+	}
+	out := append(make([]byte, leadingZeros), num.Bytes()...)
+	return out, nil
 }
