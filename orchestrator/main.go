@@ -54,8 +54,16 @@ func main() {
 			log.Printf("[main] WARNING: CRICKET_API_KEY not set — all tokens will be scored as 0 and skipped")
 		}
 	}
-	if cfg.JWTSecret == "change-me-in-production" {
-		log.Printf("[main] WARNING: JWT_SECRET is using the default value — set a real secret before going live")
+	if cfg.MultiTenant {
+		if cfg.JWTSecret == "" || cfg.JWTSecret == "change-me-in-production" || len(cfg.JWTSecret) < 32 {
+			log.Fatal("[main] JWT_SECRET must be set to a strong value (>=32 chars) — JWTs guard every per-user endpoint")
+		}
+		if strings.Contains(cfg.AllowedOrigins, "*") {
+			log.Fatal("[main] ALLOWED_ORIGINS cannot contain '*' in multi-tenant mode — set explicit origins (e.g. https://hummingbird.vylth.com)")
+		}
+	} else if cfg.JWTSecret == "" {
+		// Single-tenant doesn't issue JWTs but a hardcoded warning previously lived here.
+		cfg.JWTSecret = "change-me-in-production"
 	}
 	if cfg.ScorerSecret == "" {
 		log.Fatal("[main] SCORER_SECRET is required — POST /trade fans out to every user wallet and must be authenticated. Set the same value in scorer/.env and listener/.env.")
@@ -120,7 +128,7 @@ func main() {
 	if cfg.MultiTenant {
 		handler = withRateLimit(handler, cfg.JWTSecret)
 	}
-	handler = withCORS(handler)
+	handler = withCORS(handler, cfg.AllowedOrigins)
 	if err := http.ListenAndServe(addr, handler); err != nil {
 		log.Fatalf("[main] server error: %v", err)
 	}
@@ -1745,9 +1753,21 @@ func withRateLimit(next http.Handler, jwtSecret string) http.Handler {
 	})
 }
 
-func withCORS(h http.Handler) http.Handler {
+func withCORS(h http.Handler, allowedOrigins string) http.Handler {
+	// Build allowlist set from comma-separated env. A request is only echoed back
+	// its own Origin if it appears in the allowlist; never reflect arbitrary origins.
+	allowed := map[string]bool{}
+	for _, o := range strings.Split(allowedOrigins, ",") {
+		if o = strings.TrimSpace(o); o != "" {
+			allowed[o] = true
+		}
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := r.Header.Get("Origin")
+		if origin != "" && allowed[origin] {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Vary", "Origin")
+		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		if r.Method == http.MethodOptions {

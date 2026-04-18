@@ -42,6 +42,10 @@ type Config struct {
 	// Internal service auth — shared secret between listener, scorer, and orchestrator
 	// for POST /trade (scorer → orchestrator) and POST /score (listener → scorer).
 	ScorerSecret string
+
+	// CORS — comma-separated list of allowed origins for the browser dashboard.
+	// Wildcard "*" is rejected in multi-tenant mode (lets any site exfil JWTs).
+	AllowedOrigins string
 }
 
 func Load() *Config {
@@ -66,10 +70,11 @@ func Load() *Config {
 		MaxConcurrentPositions: getInt("MAX_CONCURRENT_POSITIONS", 5),
 		MaxDailyLossPercent:    getFloat("MAX_DAILY_LOSS_PERCENT", 0.30),
 
-		DatabaseURL:   getEnv("DATABASE_URL", ""),
-		EncryptionKey: getEnv("ENCRYPTION_KEY", ""),
-		JWTSecret:     getEnv("JWT_SECRET", "change-me-in-production"),
-		ScorerSecret:  getEnv("SCORER_SECRET", ""),
+		DatabaseURL:    getEnv("DATABASE_URL", ""),
+		EncryptionKey:  getEnv("ENCRYPTION_KEY", ""),
+		JWTSecret:      getEnv("JWT_SECRET", ""),
+		ScorerSecret:   getEnv("SCORER_SECRET", ""),
+		AllowedOrigins: getEnv("ALLOWED_ORIGINS", "https://hummingbird.vylth.com"),
 	}
 }
 
