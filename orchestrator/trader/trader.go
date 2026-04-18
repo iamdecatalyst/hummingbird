@@ -806,7 +806,7 @@ func validatePumpPortalTx(txBytes []byte, expectedFromBase58 string) error {
 	if len(txBytes) < 64 {
 		return fmt.Errorf("tx too short (%d bytes)", len(txBytes))
 	}
-	expectedFrom, err := base58Decode(expectedFromBase58)
+	expectedFrom, err := Base58Decode(expectedFromBase58)
 	if err != nil {
 		return fmt.Errorf("decode wallet address: %w", err)
 	}
@@ -945,10 +945,10 @@ func compactU16(buf []byte) (val int, n int, err error) {
 	return val, 3, nil
 }
 
-// base58Decode decodes a Bitcoin/Solana base58 string into bytes.
+// Base58Decode decodes a Bitcoin/Solana base58 string into bytes.
 const b58Alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 
-func base58Decode(s string) ([]byte, error) {
+func Base58Decode(s string) ([]byte, error) {
 	if s == "" {
 		return nil, fmt.Errorf("empty")
 	}

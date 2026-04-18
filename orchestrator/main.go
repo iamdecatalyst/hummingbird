@@ -1052,7 +1052,10 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 		json.NewEncoder(w).Encode(map[string]string{"tx_hash": txHash})
 	})
 
-	// POST /wallets/:id/withdraw — transfer SOL from a wallet
+	// POST /wallets/:id/withdraw — transfer SOL from a wallet.
+	// Hardened: per-call cap, per-day cap, destination format check, ownership check.
+	// A stolen JWT or XSS still has a 30-day TTL on the API surface (see H10), but
+	// these caps make it impossible to drain a wallet in a single CSRF/XSS request.
 	mux.HandleFunc("POST /wallets/{id}/withdraw", func(w http.ResponseWriter, r *http.Request) {
 		nexusID, err := requireAuth(r)
 		if err != nil {
@@ -1068,12 +1071,52 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 			http.Error(w, `{"error":"to and amount required"}`, http.StatusBadRequest)
 			return
 		}
+		// Destination must be a real 32-byte Solana pubkey.
+		destBytes, derr := trader.Base58Decode(req.To)
+		if derr != nil || len(destBytes) != 32 {
+			http.Error(w, `{"error":"invalid destination address"}`, http.StatusBadRequest)
+			return
+		}
+		// Amount must be a positive number we can reason about.
+		amountSOL, perr := strconv.ParseFloat(req.Amount, 64)
+		if perr != nil || amountSOL <= 0 {
+			http.Error(w, `{"error":"invalid amount"}`, http.StatusBadRequest)
+			return
+		}
+		if amountSOL > maxPerWithdrawSOL {
+			http.Error(w, fmt.Sprintf(`{"error":"amount exceeds %.2f SOL per-call limit"}`, maxPerWithdrawSOL), http.StatusBadRequest)
+			return
+		}
+		// Daily cap, per user, in-memory (resets at UTC midnight). Cheap defense
+		// against stolen-JWT drain — restart resets but they'd need to wait anyway.
+		if !withdrawDailyOK(nexusID, amountSOL) {
+			http.Error(w, fmt.Sprintf(`{"error":"daily withdraw limit (%.2f SOL) reached"}`, maxDailyWithdrawSOL), http.StatusTooManyRequests)
+			return
+		}
 		apiKey, apiSecret, err := database.GetSignetCredentials(nexusID)
 		if err != nil {
 			http.Error(w, `{"error":"no signet credentials"}`, http.StatusBadRequest)
 			return
 		}
 		client := signet.NewClient(apiKey, apiSecret).WithBaseURL(cfg.SignetBaseURL)
+		// Ownership check — Signet credentials are per-user, so List() is scoped.
+		// If walletID isn't in the list, the user doesn't own it.
+		userWallets, werr := client.Wallets.List()
+		if werr != nil {
+			http.Error(w, `{"error":"signet error"}`, http.StatusBadGateway)
+			return
+		}
+		var owned bool
+		for _, uw := range userWallets {
+			if uw.ID == walletID {
+				owned = true
+				break
+			}
+		}
+		if !owned {
+			http.Error(w, `{"error":"wallet not found"}`, http.StatusForbidden)
+			return
+		}
 		result, err := client.Wallets.Transfer(walletID, signet.TransferParams{
 			To:     req.To,
 			Amount: req.Amount,
@@ -1776,6 +1819,40 @@ func withCORS(h http.Handler, allowedOrigins string) http.Handler {
 		}
 		h.ServeHTTP(w, r)
 	})
+}
+
+// Withdraw caps and daily tracker — module-level so the handler can reach them.
+const (
+	maxPerWithdrawSOL   = 10.0 // per-call cap
+	maxDailyWithdrawSOL = 50.0 // per-user, per-UTC-day cap
+)
+
+type withdrawState struct {
+	date     time.Time // UTC midnight of the day this counter belongs to
+	totalSOL float64
+}
+
+var (
+	withdrawMu     sync.Mutex
+	withdrawByUser = map[string]*withdrawState{}
+)
+
+// withdrawDailyOK records a pending withdrawal and returns false if it would
+// push the user past their daily limit. Resets per UTC day.
+func withdrawDailyOK(nexusID string, amountSOL float64) bool {
+	withdrawMu.Lock()
+	defer withdrawMu.Unlock()
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	st := withdrawByUser[nexusID]
+	if st == nil || !st.date.Equal(today) {
+		st = &withdrawState{date: today}
+		withdrawByUser[nexusID] = st
+	}
+	if st.totalSOL+amountSOL > maxDailyWithdrawSOL {
+		return false
+	}
+	st.totalSOL += amountSOL
+	return true
 }
 
 type noopNotifier struct{}
