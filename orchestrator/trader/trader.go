@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -196,20 +197,39 @@ func (t *Trader) enter(result *models.ScoreResult) {
 
 	log.Printf("[trader] entered %s | tx=%s", result.Mint[:8], tx.TxHash)
 
-	// Estimate entry price: position SOL / token balance (approximation)
-	// Real balance fetch would require an extra RPC call — use position SOL as proxy for now.
+	// Compute true per-token entry price = SOL spent / UI tokens received.
+	// Without this, EntryPriceSOL would hold the lamport notional (~0.10) and the monitor
+	// would compare it against DexScreener's per-token price (~1e-7), instant-stop-outing
+	// every position. Retry a few times — the just-created ATA needs RPC indexing time.
+	var entryPrice, tokenUIBal float64
+	for attempt := 0; attempt < 3; attempt++ {
+		time.Sleep(2 * time.Second)
+		raw, dec, balErr := t.tokenBalance(result.Mint)
+		if balErr == nil && raw > 0 {
+			tokenUIBal = float64(raw) / math.Pow10(int(dec))
+			if tokenUIBal > 0 {
+				entryPrice = result.PositionSOL / tokenUIBal
+				break
+			}
+		}
+	}
+	if entryPrice == 0 {
+		log.Printf("[trader] %s could not fetch entry token balance after swap — monitor will use first price tick as baseline", result.Mint[:8])
+	}
+
 	pos := &models.Position{
 		ID:             tx.TxHash,
 		Mint:           result.Mint,
 		DevWallet:      result.DevWallet,
 		WalletID:       t.walletID,
 		Platform:       result.Platform,
-		EntryPriceSOL:  result.PositionSOL, // refined by monitor on first price tick
+		EntryPriceSOL:  entryPrice,    // 0 = monitor will capture from first DexScreener tick
 		EntryAmountSOL: result.PositionSOL,
+		TokenBalance:   tokenUIBal,
 		Score:          result.Total,
 		Decision:       result.Decision,
 		OpenedAt:       time.Now(),
-		PeakPriceSOL:   result.PositionSOL,
+		PeakPriceSOL:   entryPrice,    // matches entry; monitor will update
 	}
 
 	t.markTrade()
@@ -525,7 +545,7 @@ func (t *Trader) sellViaPumpPortal(mint string, partial float64) (*signet.Transa
 	}
 
 	// Get actual token balance from Helius so pumpportal knows how many to sell.
-	tokenAmt, err := t.tokenBalance(mint)
+	tokenAmt, _, err := t.tokenBalance(mint)
 	if err != nil || tokenAmt == 0 {
 		return nil, fmt.Errorf("could not get token balance for %s: %w", mint[:8], err)
 	}
@@ -570,10 +590,11 @@ func (t *Trader) sellViaPumpPortal(mint string, partial float64) (*signet.Transa
 	return nil, lastErr
 }
 
-// tokenBalance returns the raw token amount held by this wallet for a given mint.
-func (t *Trader) tokenBalance(mint string) (uint64, error) {
+// tokenBalance returns the raw token amount and decimals held by this wallet for a mint.
+// Caller computes UI amount via raw / 10^decimals.
+func (t *Trader) tokenBalance(mint string) (uint64, uint8, error) {
 	if t.rpcURL == "" || t.walletAddress == "" {
-		return 0, fmt.Errorf("RPC or wallet address not set")
+		return 0, 0, fmt.Errorf("RPC or wallet address not set")
 	}
 	body, _ := json.Marshal(map[string]any{
 		"jsonrpc": "2.0",
@@ -587,7 +608,7 @@ func (t *Trader) tokenBalance(mint string) (uint64, error) {
 	})
 	resp, err := http.Post(t.rpcURL, "application/json", bytes.NewReader(body))
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	defer resp.Body.Close()
 	var result struct {
@@ -598,7 +619,8 @@ func (t *Trader) tokenBalance(mint string) (uint64, error) {
 						Parsed struct {
 							Info struct {
 								TokenAmount struct {
-									Amount string `json:"amount"`
+									Amount   string `json:"amount"`
+									Decimals uint8  `json:"decimals"`
 								} `json:"tokenAmount"`
 							} `json:"info"`
 						} `json:"parsed"`
@@ -608,14 +630,15 @@ func (t *Trader) tokenBalance(mint string) (uint64, error) {
 		} `json:"result"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	if len(result.Result.Value) == 0 {
-		return 0, fmt.Errorf("no token account found for mint %s", mint[:8])
+		return 0, 0, fmt.Errorf("no token account found for mint %s", mint[:8])
 	}
+	info := result.Result.Value[0].Account.Data.Parsed.Info
 	var amt uint64
-	fmt.Sscan(result.Result.Value[0].Account.Data.Parsed.Info.TokenAmount.Amount, &amt)
-	return amt, nil
+	fmt.Sscan(info.TokenAmount.Amount, &amt)
+	return amt, info.TokenAmount.Decimals, nil
 }
 
 // WalletAddress returns the cached Solana public key for this trader's wallet.

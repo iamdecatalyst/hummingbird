@@ -113,6 +113,16 @@ func (m *Monitor) Watch(ctx context.Context) {
 			lastPrice = price
 			lastPriceTime = time.Now()
 
+			// Fallback baseline: trader couldn't fetch token balance after swap, so it
+			// recorded EntryPriceSOL=0. Treat the first valid DexScreener tick as our
+			// reference price. Skip ratio checks this round so we don't compare against 0.
+			if m.pos.EntryPriceSOL <= 0 {
+				m.pos.EntryPriceSOL = price
+				m.pos.PeakPriceSOL = price
+				log.Printf("[monitor] %s baseline price set from first tick: %.10f SOL", m.pos.Mint[:8], price)
+				continue
+			}
+
 			// Update peak
 			if price > m.pos.PeakPriceSOL {
 				m.pos.PeakPriceSOL = price
