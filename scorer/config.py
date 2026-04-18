@@ -4,6 +4,10 @@ RPC_HTTP = os.getenv("RPC_HTTP", "https://api.mainnet-beta.solana.com")
 ORCHESTRATOR_URL = os.getenv("ORCHESTRATOR_URL", "http://localhost:8002")
 PORT = int(os.getenv("SCORER_PORT", "8001"))
 
+# Shared secret with the listener (incoming /score) and orchestrator (outgoing /trade).
+# Required — startup will fail if unset. See orchestrator/main.go checkScorerAuth.
+SCORER_SECRET = os.getenv("SCORER_SECRET", "")
+
 # pump.fun program
 PUMP_FUN_PROGRAM = os.getenv(
     "PUMP_FUN_PROGRAM", "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P"

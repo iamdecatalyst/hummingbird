@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -55,6 +56,12 @@ func main() {
 	}
 	if cfg.JWTSecret == "change-me-in-production" {
 		log.Printf("[main] WARNING: JWT_SECRET is using the default value — set a real secret before going live")
+	}
+	if cfg.ScorerSecret == "" {
+		log.Fatal("[main] SCORER_SECRET is required — POST /trade fans out to every user wallet and must be authenticated. Set the same value in scorer/.env and listener/.env.")
+	}
+	if len(cfg.ScorerSecret) < 32 {
+		log.Fatal("[main] SCORER_SECRET must be at least 32 characters")
 	}
 	if cfg.TelegramToken == "" {
 		log.Printf("[main] WARNING: TELEGRAM_BOT_TOKEN not set — Telegram alerts disabled")
@@ -189,8 +196,12 @@ func startSingleTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMu
 
 	// POST /score — receives TokenDetected from the Rust listener.
 	// Scores the token via Cricket and enters a position if it passes.
-	// Replaces the Python scorer service entirely.
+	// Requires Authorization: Bearer <SCORER_SECRET>.
 	mux.HandleFunc("POST /score", func(w http.ResponseWriter, r *http.Request) {
+		if !checkScorerAuth(r, cfg.ScorerSecret) {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
 		if !configured {
 			http.Error(w, `{"error":"not configured"}`, http.StatusServiceUnavailable)
 			return
@@ -205,7 +216,12 @@ func startSingleTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMu
 	})
 
 	// POST /trade — receives score results from Python scorer.
+	// Requires Authorization: Bearer <SCORER_SECRET>.
 	mux.HandleFunc("POST /trade", func(w http.ResponseWriter, r *http.Request) {
+		if !checkScorerAuth(r, cfg.ScorerSecret) {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
 		if !configured {
 			http.Error(w, `{"error":"not configured"}`, http.StatusServiceUnavailable)
 			return
@@ -564,8 +580,12 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 
 	// POST /score — receives TokenDetected from the Rust listener.
 	// Scores via Cricket and fans out to all active user traders.
-	// This replaces the Python scorer service entirely.
+	// Requires Authorization: Bearer <SCORER_SECRET>.
 	mux.HandleFunc("POST /score", func(w http.ResponseWriter, r *http.Request) {
+		if !checkScorerAuth(r, cfg.ScorerSecret) {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
 		var token cricket.TokenDetected
 		if err := json.NewDecoder(r.Body).Decode(&token); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
@@ -580,7 +600,13 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 	})
 
 	// POST /trade — receives score results from Python scorer, fans out to traders.
+	// Requires Authorization: Bearer <SCORER_SECRET> header. Without this, any
+	// internet user could craft a ScoreResult and force every wallet to swap.
 	mux.HandleFunc("POST /trade", func(w http.ResponseWriter, r *http.Request) {
+		if !checkScorerAuth(r, cfg.ScorerSecret) {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
 		var result models.ScoreResult
 		if err := json.NewDecoder(r.Body).Decode(&result); err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
@@ -1739,6 +1765,22 @@ func safeShort(s string) string {
 		return s[:8]
 	}
 	return s
+}
+
+// checkScorerAuth validates the Authorization: Bearer <secret> header on internal
+// listener→orchestrator and scorer→orchestrator endpoints (/score, /trade). Uses
+// constant-time comparison so timing can't leak the secret.
+func checkScorerAuth(r *http.Request, secret string) bool {
+	if secret == "" {
+		return false
+	}
+	const prefix = "Bearer "
+	h := r.Header.Get("Authorization")
+	if len(h) <= len(prefix) || h[:len(prefix)] != prefix {
+		return false
+	}
+	provided := h[len(prefix):]
+	return subtle.ConstantTimeCompare([]byte(provided), []byte(secret)) == 1
 }
 
 func (noopNotifier) Entered(p *models.Position) {

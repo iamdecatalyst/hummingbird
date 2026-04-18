@@ -16,6 +16,7 @@ from typing import Optional
 
 import httpx
 
+from config import SCORER_SECRET
 from models import CheckResult, ScoreResult
 from store import StoredToken, TokenStore
 
@@ -251,9 +252,10 @@ class Scalper:
 
     async def _forward(self, signal: ScoreResult):
         url = f"{self.orchestrator_url}/trade"
+        headers = {"Authorization": f"Bearer {SCORER_SECRET}"}
         try:
             async with httpx.AsyncClient(timeout=3.0) as client:
-                resp = await client.post(url, json=signal.model_dump())
+                resp = await client.post(url, json=signal.model_dump(), headers=headers)
                 if resp.status_code == 200:
                     self._active.add(signal.mint)
                     log.info("[scalper] → forwarded %s to orchestrator", signal.mint[:8])

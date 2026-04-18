@@ -29,10 +29,18 @@ pub struct Config {
 
     // Scorer
     pub scorer_url: String,
+    // Shared secret with scorer/orchestrator. Required — startup fails if unset.
+    pub scorer_secret: String,
 }
 
 impl Config {
     pub fn from_env() -> Result<Self> {
+        let scorer_secret = std::env::var("SCORER_SECRET").unwrap_or_default();
+        if scorer_secret.len() < 32 {
+            anyhow::bail!(
+                "SCORER_SECRET env var must be set (>=32 chars); same value goes in scorer/.env and orchestrator/.env"
+            );
+        }
         Ok(Config {
             solana_ws: env("RPC_WS", "wss://api.mainnet-beta.solana.com"),
             solana_http: env("RPC_HTTP", "https://api.mainnet-beta.solana.com"),
@@ -42,6 +50,7 @@ impl Config {
             evm_chains: evm_chains_from_env(),
 
             scorer_url: env("SCORER_URL", "http://localhost:8002/score"),
+            scorer_secret,
         })
     }
 }

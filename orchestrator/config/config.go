@@ -38,6 +38,10 @@ type Config struct {
 	DatabaseURL   string // postgres://...
 	EncryptionKey string // 64 hex chars = 32 bytes for AES-256
 	JWTSecret     string
+
+	// Internal service auth — shared secret between listener, scorer, and orchestrator
+	// for POST /trade (scorer → orchestrator) and POST /score (listener → scorer).
+	ScorerSecret string
 }
 
 func Load() *Config {
@@ -65,6 +69,7 @@ func Load() *Config {
 		DatabaseURL:   getEnv("DATABASE_URL", ""),
 		EncryptionKey: getEnv("ENCRYPTION_KEY", ""),
 		JWTSecret:     getEnv("JWT_SECRET", "change-me-in-production"),
+		ScorerSecret:  getEnv("SCORER_SECRET", ""),
 	}
 }
 

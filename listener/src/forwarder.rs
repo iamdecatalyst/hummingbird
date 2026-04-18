@@ -6,6 +6,7 @@ use crate::types::TokenDetected;
 /// Forwards detected tokens to the Python scorer via HTTP POST
 pub struct Forwarder {
     scorer_url: String,
+    scorer_secret: String,
     client: reqwest::Client,
 }
 
@@ -14,9 +15,14 @@ impl Forwarder {
         self.scorer_url.clone()
     }
 
-    pub fn new(scorer_url: String) -> Self {
+    pub fn scorer_secret(&self) -> String {
+        self.scorer_secret.clone()
+    }
+
+    pub fn new(scorer_url: String, scorer_secret: String) -> Self {
         Self {
             scorer_url,
+            scorer_secret,
             client: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(3))
                 .build()
@@ -27,7 +33,13 @@ impl Forwarder {
     pub async fn forward(&self, token: &TokenDetected) -> Result<()> {
         let url = format!("{}/score", self.scorer_url);
 
-        match self.client.post(&url).json(token).send().await {
+        let req = self
+            .client
+            .post(&url)
+            .bearer_auth(&self.scorer_secret)
+            .json(token);
+
+        match req.send().await {
             Ok(resp) if resp.status().is_success() => {
                 debug!("Forwarded {} to scorer", token.mint);
             }

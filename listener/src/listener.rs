@@ -16,7 +16,7 @@ use crate::types::{LogsNotification, TokenDetected};
 
 /// Spawns all chain listeners concurrently and runs forever.
 pub async fn run(config: Config) -> Result<()> {
-    let forwarder = Forwarder::new(config.scorer_url.clone());
+    let forwarder = Forwarder::new(config.scorer_url.clone(), config.scorer_secret.clone());
 
     // Shared semaphore — limits total concurrent getTransaction RPC calls across ALL platforms.
     // Helius free tier is ~10 RPS; 3 concurrent calls at ~300ms each ≈ 10 RPS max.
@@ -28,7 +28,7 @@ pub async fn run(config: Config) -> Result<()> {
     for program in config.solana_programs.clone() {
         let ws = config.solana_ws.clone();
         let http = config.solana_http.clone();
-        let fwd = Forwarder::new(config.scorer_url.clone());
+        let fwd = Forwarder::new(config.scorer_url.clone(), config.scorer_secret.clone());
         let sem = rpc_sem.clone();
         let h = tokio::spawn(async move {
             run_solana_program(ws, http, program, fwd, sem).await;
@@ -38,7 +38,7 @@ pub async fn run(config: Config) -> Result<()> {
 
     // One EVM listener per chain/platform
     for chain in config.evm_chains.clone() {
-        let fwd = Forwarder::new(config.scorer_url.clone());
+        let fwd = Forwarder::new(config.scorer_url.clone(), config.scorer_secret.clone());
         let h = tokio::spawn(async move {
             run_evm_chain(chain, fwd).await;
         });
@@ -105,7 +105,7 @@ async fn solana_once(
 
     // Fetch + forward worker — acquires shared semaphore before each RPC call.
     let http = http_url.to_string();
-    let fwd = Forwarder::new(forwarder.scorer_url());
+    let fwd = Forwarder::new(forwarder.scorer_url(), forwarder.scorer_secret());
     let platform = program.platform.clone();
     tokio::spawn(async move {
         let fetcher = TransactionFetcher::new(http);

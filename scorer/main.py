@@ -6,14 +6,16 @@ Two jobs:
   2. Run scalper background task → find second-wave patterns → forward scalp signals
 """
 import asyncio
+import hmac
 import logging
+import sys
 import uvicorn
 from contextlib import asynccontextmanager
 
 import httpx
-from fastapi import BackgroundTasks, FastAPI
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, status
 
-from config import ORCHESTRATOR_URL, PORT
+from config import ORCHESTRATOR_URL, PORT, SCORER_SECRET
 from models import ScoreResult, TokenDetected
 from scalper import Scalper
 from scorer import score as run_score
@@ -25,6 +27,24 @@ log = logging.getLogger(__name__)
 # Shared state
 store = TokenStore(max_age_minutes=45)
 scalper = Scalper(store=store, orchestrator_url=ORCHESTRATOR_URL)
+
+
+if not SCORER_SECRET or len(SCORER_SECRET) < 32:
+    print(
+        "[scorer] FATAL: SCORER_SECRET env var must be set (>=32 chars). "
+        "Same value goes in orchestrator and listener .env files.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+
+def require_scorer_auth(authorization: str = Header(default="")) -> None:
+    """Constant-time bearer-token check for listener → scorer endpoints."""
+    prefix = "Bearer "
+    if not authorization.startswith(prefix) or not hmac.compare_digest(
+        authorization[len(prefix):], SCORER_SECRET
+    ):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="unauthorized")
 
 
 @asynccontextmanager
@@ -42,7 +62,7 @@ app = FastAPI(title="Hummingbird Scorer", lifespan=lifespan)
 
 # ── Sniper endpoint ───────────────────────────────────────────────────────────
 
-@app.post("/score")
+@app.post("/score", dependencies=[Depends(require_scorer_auth)])
 async def score_token(token: TokenDetected, background_tasks: BackgroundTasks):
     """
     Receives a new token from the Rust listener.
@@ -107,9 +127,10 @@ def _log_breakdown(result: ScoreResult):
 
 async def _forward(result: ScoreResult):
     url = f"{ORCHESTRATOR_URL}/trade"
+    headers = {"Authorization": f"Bearer {SCORER_SECRET}"}
     try:
         async with httpx.AsyncClient(timeout=3.0) as client:
-            resp = await client.post(url, json=result.model_dump())
+            resp = await client.post(url, json=result.model_dump(), headers=headers)
             if resp.status_code == 200:
                 log.info("   → forwarded to orchestrator")
             else:
