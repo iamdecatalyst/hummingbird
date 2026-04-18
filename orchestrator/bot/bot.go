@@ -16,6 +16,7 @@ import (
 	"github.com/iamdecatalyst/hummingbird/orchestrator/models"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/pnl"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/portfolio"
+	"github.com/iamdecatalyst/hummingbird/orchestrator/util"
 )
 
 // Executor is implemented by trader.Trader.
@@ -358,7 +359,7 @@ func (b *Bot) handleCallback(cq *tgbotapi.CallbackQuery) {
 			_, _, exec, ok := b.ctx(cid)
 			if ok && exec != nil {
 				exec.Close(mint, models.ExitManual)
-				b.editText(cid, mid, "⏹ Closing position <code>"+mint[:8]+"...</code>", nil)
+				b.editText(cid, mid, "⏹ Closing position <code>"+util.ShortMint(mint)+"...</code>", nil)
 			}
 		case strings.HasPrefix(cq.Data, "view_pos:"):
 			mint := strings.TrimPrefix(cq.Data, "view_pos:")
@@ -373,7 +374,7 @@ func (b *Bot) handleCallback(cq *tgbotapi.CallbackQuery) {
 					held := time.Since(p.OpenedAt).Round(time.Second)
 					txt := fmt.Sprintf(
 						"📍 <b>POSITION</b>\n<code>%s</code>\nEntry: <b>%.4f SOL</b>\nScore: <b>%d</b>/100\nHeld: <b>%s</b>",
-						mint[:8]+"...", p.EntryAmountSOL, p.Score, held,
+						util.ShortMint(mint)+"...", p.EntryAmountSOL, p.Score, held,
 					)
 					b.send(cid, txt, nil)
 					return

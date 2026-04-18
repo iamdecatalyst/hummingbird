@@ -19,6 +19,7 @@ import (
 	"github.com/iamdecatalyst/hummingbird/orchestrator/monitor"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/portfolio"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/trader"
+	"github.com/iamdecatalyst/hummingbird/orchestrator/util"
 )
 
 // Instance holds a user's isolated bot state.
@@ -180,7 +181,7 @@ func (m *Manager) startInstance(userID, apiKey, apiSecret, walletID, telegramCha
 	}
 
 	// Balance watcher — detects external deposits/withdrawals.
-	go watchBalance(ctx, tr, n, userLog)
+	util.Go("watchBalance:"+short(userID), func() { watchBalance(ctx, tr, n, userLog) })
 
 	m.mu.Lock()
 	m.instances[userID] = inst

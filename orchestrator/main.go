@@ -30,6 +30,7 @@ import (
 	"github.com/iamdecatalyst/hummingbird/orchestrator/scalper"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/trader"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/userbot"
+	"github.com/iamdecatalyst/hummingbird/orchestrator/util"
 )
 
 func main() {
@@ -180,13 +181,13 @@ func startSingleTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMu
 	})
 	tr = trader.New(signetClient, walletID, port, notifier, cc, sc, monitor.DefaultMonitorConfig(), 0, 0, cfg.SolanaRPC, nil)
 
-	go sc.Run(context.Background())
+	util.Go("scalper.Run", func() { sc.Run(context.Background()) })
 
 	if tgBot != nil {
 		tgBot.SetExecutor(tr)
-		go tgBot.Run()
+		util.Go("bot.Run.single", tgBot.Run)
 	}
-	go dailyStats(tgBot, port)
+	util.Go("dailyStats", func() { dailyStats(tgBot, port) })
 
 	if configured {
 		log.Printf("[main] wallet=%s | max_pos=%d | daily_loss_limit=%.0f%%",
@@ -317,7 +318,7 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 
 	mgr = userbot.NewManager(cfg, database, cc, sc)
 
-	go sc.Run(context.Background())
+	util.Go("scalper.Run.multi", func() { sc.Run(context.Background()) })
 
 	// Telegram bot (multi-tenant mode)
 	var tgBot *bot.Bot
@@ -394,7 +395,7 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 			log.Printf("[main] telegram bot init failed: %v", err)
 			tgBot = nil
 		} else {
-			go tgBot.Run()
+			util.Go("bot.Run.multi", tgBot.Run)
 		}
 	}
 

@@ -24,6 +24,7 @@ import (
 	"github.com/iamdecatalyst/hummingbird/orchestrator/models"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/monitor"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/portfolio"
+	"github.com/iamdecatalyst/hummingbird/orchestrator/util"
 )
 
 // compile-time check that alerts.Telegram still satisfies Notifier
@@ -90,7 +91,7 @@ func New(
 		t.walletAddress = w.Address
 	}
 
-	go t.processExits()
+	util.Go("trader.processExits", t.processExits)
 	return t
 }
 
@@ -132,7 +133,7 @@ func (t *Trader) Execute(result *models.ScoreResult) {
 	t.lastEntryAt = time.Now()
 	t.lastTradeMu.Unlock()
 
-	go t.enter(result)
+	util.Go("trader.enter:"+util.ShortMint(result.Mint), func() { t.enter(result) })
 }
 
 func (t *Trader) enter(result *models.ScoreResult) {
@@ -257,7 +258,7 @@ func (t *Trader) enter(result *models.ScoreResult) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.cancelFns.Store(result.Mint, cancel)
 	m := monitor.New(pos, t.cricket, t.exitCh, t.monitorCfg, t.onProgress)
-	go m.Watch(ctx)
+	util.Go("monitor.Watch:"+util.ShortMint(result.Mint), func() { m.Watch(ctx) })
 }
 
 // processExits handles exit signals from monitors in a single goroutine.
@@ -379,8 +380,8 @@ func (t *Trader) Restore(pos *models.Position) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.cancelFns.Store(pos.Mint, cancel)
 	m := monitor.New(pos, t.cricket, t.exitCh, t.monitorCfg, t.onProgress)
-	go m.Watch(ctx)
-	log.Printf("[trader] restored position %s from DB", pos.Mint[:8])
+	util.Go("monitor.Watch:"+util.ShortMint(pos.Mint), func() { m.Watch(ctx) })
+	log.Printf("[trader] restored position %s from DB", util.ShortMint(pos.Mint))
 }
 
 // ExitAll closes all open positions immediately (e.g. on /stop command).
