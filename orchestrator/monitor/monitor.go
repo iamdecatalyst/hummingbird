@@ -240,10 +240,18 @@ func (m *Monitor) isDevSelling() bool {
 	return false
 }
 
+// exit sends an exit signal to the trader. Blocks if the trader's exit channel
+// is full — losing a stop-loss or rug signal here means the position becomes
+// unwatched (the monitor goroutine returns immediately after exit() at every
+// critical-path call site). 5s timeout guards against a wedged trader.
 func (m *Monitor) exit(reason models.ExitReason, partial float64) {
+	sig := ExitSignal{Mint: m.pos.Mint, Reason: reason, Partial: partial}
 	select {
-	case m.exitCh <- ExitSignal{Mint: m.pos.Mint, Reason: reason, Partial: partial}:
-	default:
-		log.Printf("[monitor] exit channel full for %s", m.pos.Mint[:8])
+	case m.exitCh <- sig:
+	case <-time.After(5 * time.Second):
+		// Trader is wedged. Last-ditch blocking send: better to stall the monitor
+		// goroutine than to lose a stop-loss / rug signal.
+		log.Printf("[monitor] 🚨 exit channel full for %s — blocking until accepted (reason=%s)", m.pos.Mint[:8], reason)
+		m.exitCh <- sig
 	}
 }
