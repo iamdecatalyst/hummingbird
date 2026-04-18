@@ -131,13 +131,57 @@ hummingbird status   # one-shot stats
 
 ---
 
+## Required Services
+
+Hummingbird needs three external services. All have free tiers.
+
+<table>
+<tr>
+<td align="center" width="33%" valign="top">
+<h3>🪶 Signet</h3>
+<p><strong>Wallet & swap execution</strong></p>
+<p>Non-custodial KMS — your keys live encrypted, signed on-demand. Powers every swap, transfer, and balance lookup.</p>
+<a href="https://signet.vylth.com"><img src="https://img.shields.io/badge/Get_API_Key-→-22c55e?style=for-the-badge&labelColor=0a1510" alt="Signet"/></a>
+<br/>
+<sub>Free: 1k req · 5 wallets · no card</sub>
+</td>
+<td align="center" width="33%" valign="top">
+<h3>🦗 Cricket</h3>
+<p><strong>Risk score + smart-money signals</strong></p>
+<p>Mantis pre-entry rug score. Firefly real-time accumulation / exodus signals from on-chain wallet flow — drives entry and exit.</p>
+<a href="https://cricket.vylth.com"><img src="https://img.shields.io/badge/Get_API_Key-→-00A8FF?style=for-the-badge&labelColor=0a1015" alt="Cricket"/></a>
+<br/>
+<sub>Free tier · no card</sub>
+</td>
+<td align="center" width="33%" valign="top">
+<h3>⚡ Helius</h3>
+<p><strong>Solana RPC</strong></p>
+<p>WebSocket <code>logsSubscribe</code> + <code>getTransaction</code> with <code>jsonParsed</code>. Required for sub-100ms detection on pump.fun and friends.</p>
+<a href="https://helius.dev"><img src="https://img.shields.io/badge/Get_API_Key-→-FFA500?style=for-the-badge&labelColor=1a1208" alt="Helius"/></a>
+<br/>
+<sub>Free: 100k req/day · 10 RPS</sub>
+</td>
+</tr>
+</table>
+
+> **Why not public RPC?** Mainnet-beta is heavily rate-limited and drops WSS subscriptions under load. You'll detect maybe 1 in 10 launches. A private RPC is the difference between "interesting demo" and "actually trading."
+
+---
+
 ## Self-Hosted Setup
 
 **Prerequisites:** Rust, Python 3.11+, Go 1.22+, PostgreSQL
 
 ```bash
 cp .env.example .env
-# Fill in: RPC_HTTP, SIGNET_API_KEY, SIGNET_API_SECRET, DATABASE_URL
+# Required:
+#   SIGNET_API_KEY, SIGNET_API_SECRET     — from signet.vylth.com
+#   CRICKET_API_KEY                       — from cricket.vylth.com
+#   RPC_HTTP, RPC_WS                      — Helius (or other private RPC)
+#   DATABASE_URL                          — postgres://...
+#   ENCRYPTION_KEY                        — `openssl rand -hex 32`
+#   JWT_SECRET                            — `openssl rand -hex 32` (≥32 chars)
+#   SCORER_SECRET                         — `openssl rand -hex 32` (≥32 chars, same in all 3 services)
 ```
 
 ```bash
@@ -150,19 +194,6 @@ cd listener && cargo run --release
 # 3. Orchestrator
 cd orchestrator && go run .
 ```
-
-You need a **Signet API key** to execute trades → [signet.vylth.com](https://signet.vylth.com)
-Free tier: 1,000 requests · 5 wallets · no credit card.
-
----
-
-## RPC
-
-For real detection speed, use a private RPC — public mainnet rate-limits under load:
-
-- [Helius](https://helius.xyz) — recommended
-- [QuickNode](https://quicknode.com)
-- [Triton](https://triton.one)
 
 ---
 
