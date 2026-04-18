@@ -138,7 +138,8 @@ Hummingbird needs three external services. All have free tiers.
 <table>
 <tr>
 <td align="center" width="33%" valign="top">
-<h3>🪶 Signet</h3>
+<img src="https://media.vylth.com/images/cbnHq6IQ.png" height="44" alt="Signet"/>
+<h3>Signet</h3>
 <p><strong>Wallet & swap execution</strong></p>
 <p>Non-custodial KMS — your keys live encrypted, signed on-demand. Powers every swap, transfer, and balance lookup.</p>
 <a href="https://signet.vylth.com"><img src="https://img.shields.io/badge/Get_API_Key-→-22c55e?style=for-the-badge&labelColor=0a1510" alt="Signet"/></a>
@@ -146,7 +147,8 @@ Hummingbird needs three external services. All have free tiers.
 <sub>Free: 1k req · 5 wallets · no card</sub>
 </td>
 <td align="center" width="33%" valign="top">
-<h3>🦗 Cricket</h3>
+<img src="https://media.vylth.com/images/zC4CjWmS.png" height="44" alt="Cricket"/>
+<h3>Cricket</h3>
 <p><strong>Risk score + smart-money signals</strong></p>
 <p>Mantis pre-entry rug score. Firefly real-time accumulation / exodus signals from on-chain wallet flow — drives entry and exit.</p>
 <a href="https://cricket.vylth.com"><img src="https://img.shields.io/badge/Get_API_Key-→-00A8FF?style=for-the-badge&labelColor=0a1015" alt="Cricket"/></a>
@@ -154,7 +156,8 @@ Hummingbird needs three external services. All have free tiers.
 <sub>Free tier · no card</sub>
 </td>
 <td align="center" width="33%" valign="top">
-<h3>⚡ Helius</h3>
+<img src="https://www.helius.dev/_next/image?url=%2Flogo.svg&w=128&q=75" height="44" alt="Helius"/>
+<h3>Helius</h3>
 <p><strong>Solana RPC</strong></p>
 <p>WebSocket <code>logsSubscribe</code> + <code>getTransaction</code> with <code>jsonParsed</code>. Required for sub-100ms detection on pump.fun and friends.</p>
 <a href="https://helius.dev"><img src="https://img.shields.io/badge/Get_API_Key-→-FFA500?style=for-the-badge&labelColor=1a1208" alt="Helius"/></a>
