@@ -1234,6 +1234,7 @@ function ClosedTradeCard({ t }: { t: ClosedPosition }) {
     setSharing(true)
     try {
       await api.downloadCard(t.mint)
+      window.umami?.track('pnl_card_shared', { product: 'hummingbird' })
     } catch {
       // fallback: wkhtmltoimage may not be installed yet
     } finally {

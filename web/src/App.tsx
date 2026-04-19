@@ -21,6 +21,7 @@ function AuthCallback() {
           const nexusToken = getAccessToken()
           if (!nexusToken) throw new Error('no token')
           const { has_signet } = await nexusSignin(nexusToken)
+          window.umami?.track('signup', { product: 'hummingbird', plan: 'default' })
           navigate(has_signet ? '/dashboard' : '/dashboard/setup', { replace: true })
         } catch {
           navigate('/', { replace: true })
@@ -76,6 +77,10 @@ function DashboardRoute() {
       />
     )
   }
+
+  useEffect(() => {
+    window.umami?.track('dashboard_visit', { product: 'hummingbird' })
+  }, [])
 
   return (
     <Dashboard
