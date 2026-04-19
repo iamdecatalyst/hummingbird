@@ -12,3 +12,5 @@ web/.vite/
 npm/@decatalyst/hummingbird-*/bin/hummingbird
 npm/@decatalyst/hummingbird-*/bin/hummingbird.exe
 .playwright-mcp/
+scorer/__pycache__/
+**/__pycache__/
