@@ -8,6 +8,9 @@
     <img src="https://img.shields.io/badge/Go-orchestrator-00ADD8?style=flat-square&logo=go" />
     <img src="https://img.shields.io/badge/Solana-non--custodial-9945FF?style=flat-square&logo=solana" />
   </p>
+  <p>
+    <a href="https://t.me/vylthummingbird"><img src="https://img.shields.io/badge/Telegram-Join_Community-24A1DE?style=for-the-badge&logo=telegram&logoColor=white" alt="Join Telegram"/></a>
+  </p>
 </div>
 
 ---
@@ -197,6 +200,13 @@ cd listener && cargo run --release
 # 3. Orchestrator
 cd orchestrator && go run .
 ```
+
+---
+
+## Community
+
+Join the Telegram channel for the live trade feed, support, and announcements:
+**[t.me/vylthummingbird](https://t.me/vylthummingbird)**
 
 ---
 

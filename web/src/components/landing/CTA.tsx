@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
+import { TelegramLogo } from '@phosphor-icons/react'
 
 export default function CTA() {
   return (
@@ -50,7 +51,7 @@ export default function CTA() {
             No infrastructure. No private key risk. No babysitting.
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-6">
             <Link to="/dashboard" className="hb-btn text-base px-8 py-4">
               Launch Dashboard →
             </Link>
@@ -63,6 +64,16 @@ export default function CTA() {
               ★ View on GitHub
             </a>
           </div>
+
+          <a
+            href="https://t.me/vylthummingbird"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 font-mono text-sm text-[#24A1DE] hover:text-white transition-colors mb-10"
+          >
+            <TelegramLogo size={18} weight="fill" />
+            Join the Hummingbird community — live trade feed, support, announcements
+          </a>
 
           {/* Signet callout */}
           <div className="inline-flex items-center gap-3 neu-card-inset px-5 py-3 rounded-2xl">

@@ -86,9 +86,32 @@ function authHeaders(): HeadersInit {
                 : { 'Content-Type': 'application/json' }
 }
 
+// If the server rejects our JWT mid-session (expired, revoked, rotated secret),
+// wipe the token and bounce to /login. Without this the dashboard kept polling
+// forever showing "offline" without redirecting.
+function handleUnauthorized() {
+  localStorage.removeItem('hb_token')
+  if (window.location.pathname !== '/login') {
+    window.location.href = '/login'
+  }
+}
+
+// Extract a user-friendly error from orchestrator responses like
+// {"error":"amount exceeds 10.00 SOL per-call limit"}. Falls back to raw text.
+async function readError(res: Response): Promise<string> {
+  const text = await res.text().catch(() => '')
+  if (!text) return `${res.status} ${res.statusText}`
+  try {
+    const j = JSON.parse(text) as { error?: string }
+    if (j?.error) return j.error
+  } catch { /* not JSON */ }
+  return text
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`, { headers: authHeaders() })
-  if (!res.ok) throw new Error(`${path} → ${res.status}`)
+  if (res.status === 401) { handleUnauthorized(); throw new Error('unauthorized') }
+  if (!res.ok) throw new Error(await readError(res))
   return res.json() as Promise<T>
 }
 
@@ -98,10 +121,8 @@ async function post<T = void>(path: string, body?: unknown): Promise<T> {
     headers: authHeaders(),
     body: body ? JSON.stringify(body) : undefined,
   })
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(text || `${path} → ${res.status}`)
-  }
+  if (res.status === 401) { handleUnauthorized(); throw new Error('unauthorized') }
+  if (!res.ok) throw new Error(await readError(res))
   return res.json() as Promise<T>
 }
 
@@ -162,12 +183,15 @@ export const api = {
 
   // Per-user trading config
   config(): Promise<UserConfig> { return get('/config') },
-  saveConfig(cfg: Omit<UserConfig, 'wallet_id'>): Promise<{ status: string }> {
-    return fetch(`${BASE}/config`, {
+  async saveConfig(cfg: Omit<UserConfig, 'wallet_id'>): Promise<{ status: string }> {
+    const res = await fetch(`${BASE}/config`, {
       method: 'PUT',
       headers: authHeaders(),
       body: JSON.stringify(cfg),
-    }).then(r => r.json())
+    })
+    if (res.status === 401) { handleUnauthorized(); throw new Error('unauthorized') }
+    if (!res.ok) throw new Error(await readError(res))
+    return res.json()
   },
 
   deleteSignet(): Promise<void> {

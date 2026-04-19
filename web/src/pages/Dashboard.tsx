@@ -819,6 +819,38 @@ function WalletsModal({ onClose, mainWalletId, onMainWalletSet }: {
 
 type WalletView = 'overview' | 'deposit' | 'withdraw'
 
+// Backend enforces 10 SOL per-call + 50 SOL/day/user (see orchestrator main.go
+// maxPerWithdrawSOL / maxDailyWithdrawSOL). Surface them here so users don't
+// hit a 400 with no context.
+const WITHDRAW_MAX_PER_CALL_SOL = 10
+const WITHDRAW_MAX_DAILY_SOL    = 50
+
+// MAX button must truncate, not round — `(0.00009).toFixed(4) === "0.0001"`
+// used to be a footgun that overspent the wallet by the rounded-up delta.
+function truncToDecimals(n: number, digits: number): string {
+  const f = Math.pow(10, digits)
+  return (Math.floor(n * f) / f).toFixed(digits)
+}
+
+// validateWithdraw returns an error string or '' if the inputs are OK.
+// Client-side validation is defense-in-depth — the backend validates again.
+function validateWithdraw(to: string, amountStr: string, balance: number): string {
+  const addr = to.trim()
+  // base58 alphabet (no 0/O/I/l), Solana pubkeys are typically 32-44 chars
+  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr)) {
+    return 'Recipient is not a valid Solana address'
+  }
+  // strict decimal: "1", "0.5", "1.2345" — no scientific, no commas, no negatives
+  if (!/^\d+(\.\d+)?$/.test(amountStr.trim())) {
+    return 'Amount must be a decimal number (e.g. 0.5)'
+  }
+  const amount = Number.parseFloat(amountStr)
+  if (!Number.isFinite(amount) || amount <= 0) return 'Amount must be greater than 0'
+  if (amount > balance)                        return `Amount exceeds balance (${balance.toFixed(4)} SOL)`
+  if (amount > WITHDRAW_MAX_PER_CALL_SOL)      return `Per-call limit is ${WITHDRAW_MAX_PER_CALL_SOL} SOL`
+  return ''
+}
+
 function WalletDetail({ wal, onRefresh, mainWalletId, onMainWalletSet }: {
   wal: WalletEntry
   onRefresh: () => void
@@ -850,10 +882,15 @@ function WalletDetail({ wal, onRefresh, mainWalletId, onMainWalletSet }: {
   }
 
   const handleWithdraw = async () => {
-    if (!sendTo.trim() || !sendAmt.trim()) { setSendErr('Address and amount required'); return }
+    const err = validateWithdraw(sendTo, sendAmt, wal.balance_sol)
+    if (err) { setSendErr(err); return }
+    // Final confirm — address is irreversible and users paste from exchanges.
+    const full = sendTo.trim()
+    const preview = `${full.slice(0, 8)}…${full.slice(-8)}`
+    if (!window.confirm(`Send ${sendAmt} SOL to ${preview}?\n\nThis cannot be undone.`)) return
     setSending(true); setSendErr(''); setTxHash('')
     try {
-      const res = await api.withdraw(wal.id, sendTo.trim(), sendAmt.trim())
+      const res = await api.withdraw(wal.id, full, sendAmt.trim())
       setTxHash(res.tx_hash)
       setSendTo(''); setSendAmt('')
       onRefresh()
@@ -1019,13 +1056,16 @@ function WalletDetail({ wal, onRefresh, mainWalletId, onMainWalletSet }: {
                 className="flex-1 px-3 py-2.5 bg-transparent font-mono text-sm text-white placeholder-[#333] outline-none"
               />
               <button
-                onClick={() => setSendAmt(wal.balance_sol.toFixed(4))}
+                onClick={() => setSendAmt(truncToDecimals(Math.min(wal.balance_sol, WITHDRAW_MAX_PER_CALL_SOL), 4))}
                 className="px-3 py-1.5 mr-1.5 rounded-lg font-mono text-[10px] font-bold tracking-widest"
                 style={{ background: 'rgba(0,168,255,0.1)', color: '#00A8FF' }}
               >
                 MAX
               </button>
             </div>
+            <p className="font-mono text-[10px] text-[#555] mt-1.5">
+              Limits: {WITHDRAW_MAX_PER_CALL_SOL} SOL per withdrawal · {WITHDRAW_MAX_DAILY_SOL} SOL per day
+            </p>
           </div>
 
           {sendErr && <p className="font-mono text-xs text-[#EF4444]">{sendErr}</p>}
@@ -1450,10 +1490,14 @@ function WithdrawDialog({ wal, onClose, onDone }: { wal: WalletEntry; onClose: (
   const [txHash,  setTxHash]  = useState('')
 
   const handleWithdraw = async () => {
-    if (!sendTo.trim() || !sendAmt.trim()) { setSendErr('Address and amount required'); return }
+    const err = validateWithdraw(sendTo, sendAmt, wal.balance_sol)
+    if (err) { setSendErr(err); return }
+    const full = sendTo.trim()
+    const preview = `${full.slice(0, 8)}…${full.slice(-8)}`
+    if (!window.confirm(`Send ${sendAmt} SOL to ${preview}?\n\nThis cannot be undone.`)) return
     setSending(true); setSendErr(''); setTxHash('')
     try {
-      const res = await api.withdraw(wal.id, sendTo.trim(), sendAmt.trim())
+      const res = await api.withdraw(wal.id, full, sendAmt.trim())
       setTxHash(res.tx_hash); setSendTo(''); setSendAmt('')
       onDone()
     } catch (e: unknown) {
@@ -1484,10 +1528,13 @@ function WithdrawDialog({ wal, onClose, onDone }: { wal: WalletEntry; onClose: (
             <input type="text" inputMode="decimal" value={sendAmt} onChange={e => setSendAmt(e.target.value)}
               placeholder="0.000"
               className="flex-1 px-3 py-2.5 bg-transparent font-mono text-sm text-white placeholder-[#333] outline-none" />
-            <button onClick={() => setSendAmt(wal.balance_sol.toFixed(4))}
+            <button onClick={() => setSendAmt(truncToDecimals(Math.min(wal.balance_sol, WITHDRAW_MAX_PER_CALL_SOL), 4))}
               className="px-3 py-1.5 mr-1.5 rounded-lg font-mono text-[10px] font-bold tracking-widest"
               style={{ background: 'rgba(0,168,255,0.1)', color: '#00A8FF' }}>MAX</button>
           </div>
+          <p className="font-mono text-[10px] text-[#555] mt-1.5">
+            Limits: {WITHDRAW_MAX_PER_CALL_SOL} SOL per withdrawal · {WITHDRAW_MAX_DAILY_SOL} SOL per day
+          </p>
         </div>
         {sendErr && <p className="font-mono text-xs text-[#EF4444]">{sendErr}</p>}
         {txHash && (

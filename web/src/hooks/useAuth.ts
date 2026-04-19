@@ -34,7 +34,14 @@ export function useAuth(): AuthState {
   }
 
   const logout = () => {
+    // Clear Hummingbird JWT + any Nexus SSO artifacts. Without wiping the nx_*
+    // keys, "Sign out" on a shared device leaves the Nexus refresh token behind
+    // and the next visit auto-signs back in.
     localStorage.removeItem('hb_token')
+    Object.keys(localStorage)
+      .filter(k => k.startsWith('nx_') || k.startsWith('nexus_'))
+      .forEach(k => localStorage.removeItem(k))
+    sessionStorage.clear()
     setToken(null)
     setMe(null)
   }
