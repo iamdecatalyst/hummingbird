@@ -58,6 +58,12 @@ function DashboardRoute() {
       .catch(() => setMultiTenant(false))
   }, [])
 
+  useEffect(() => {
+    if (multiTenant && token) {
+      window.umami?.track('dashboard_visit', { product: 'hummingbird' })
+    }
+  }, [multiTenant, token])
+
   if (multiTenant === null || loading) return <Spinner />
 
   // Single-tenant: no auth needed
@@ -77,10 +83,6 @@ function DashboardRoute() {
       />
     )
   }
-
-  useEffect(() => {
-    window.umami?.track('dashboard_visit', { product: 'hummingbird' })
-  }, [])
 
   return (
     <Dashboard
