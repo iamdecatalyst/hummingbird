@@ -69,10 +69,11 @@ export default function CTA() {
             href="https://t.me/vylthummingbird"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 font-mono text-sm text-[#24A1DE] hover:text-white transition-colors mb-10"
+            className="inline-flex items-center gap-2.5 font-mono text-sm font-bold px-5 py-2.5 rounded-2xl mb-10 transition-all hover:scale-105"
+            style={{ background: 'rgba(36,161,222,0.1)', color: '#24A1DE', border: '1px solid rgba(36,161,222,0.2)' }}
           >
             <TelegramLogo size={18} weight="fill" />
-            Join the Hummingbird community — live trade feed, support, announcements
+            Join the Community
           </a>
 
           {/* Signet callout */}
