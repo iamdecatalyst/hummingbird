@@ -66,6 +66,10 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover { background: rgba(0,168,255,0.3); }
 
+/* Used by the top-nav tab row when it needs to scroll horizontally on mobile */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
 /* ── Neumorphic utility classes ───────────────────────────────────────────── */
 .neu-card {
   background: var(--neu-bg-card);

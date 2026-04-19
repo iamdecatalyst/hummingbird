@@ -23,7 +23,7 @@ const FEATURES = [
   {
     icon: <ShieldWarning size={24} weight="duotone" />,
     title: 'Rug Detection',
-    desc: 'Exits immediately when dev wallet sells >5% supply, liquidity drops, or price crashes >15% in 10 seconds.',
+    desc: 'Exits immediately on smart-money exodus signals, liquidity drops, or price crashes &gt;15% in 10 seconds.',
   },
   {
     icon: <ChartBar size={24} weight="duotone" />,
@@ -38,7 +38,7 @@ const FEATURES = [
   {
     icon: <Key size={24} weight="duotone" />,
     title: 'Powered by Signet',
-    desc: 'Uses Signet\'s custodial wallet API for all trade execution — no private keys in config files. Set up in minutes.',
+    desc: 'Uses Signet\'s non-custodial wallet API for all trade execution — your keys encrypted at rest, signed on-demand. No private keys in config files.',
   },
   {
     icon: <GithubLogo size={24} weight="duotone" />,

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
+import MobileBottomNav from '../components/ui/MobileBottomNav'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -134,9 +135,9 @@ function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpe
   const [userMenuOpen, setUserMenuOpen] = useState(false)
 
   return (
-    <nav className="sticky top-0 z-20 bg-[#0d0d0d]/90 backdrop-blur-md border-b border-white/5 px-6 h-14 flex items-center gap-4">
+    <nav className="sticky top-0 z-20 bg-[#0d0d0d]/90 backdrop-blur-md border-b border-white/5 px-3 sm:px-6 h-14 flex items-center gap-2 sm:gap-4">
       {/* Logo */}
-      <Link to="/" className="flex items-center gap-2 shrink-0 group mr-2">
+      <Link to="/" className="flex items-center gap-2 shrink-0 group mr-1 sm:mr-2">
         <img src="/logo.png" alt="" className="w-6 h-6 object-contain"
           style={{ filter: 'drop-shadow(0 0 6px rgba(0,168,255,0.4))' }} />
         <span className="font-mono text-sm font-bold text-white group-hover:text-[#00A8FF] transition-colors hidden sm:block">
@@ -144,8 +145,8 @@ function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpe
         </span>
       </Link>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1 flex-1">
+      {/* Tabs — hidden on mobile; MobileBottomNav handles tab switching below lg */}
+      <div className="hidden lg:flex items-center gap-1 flex-1 min-w-0">
         {TABS.map(t => (
           <button
             key={t.id}
@@ -182,22 +183,22 @@ function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpe
             </button>
         }
 
-        {/* Icon buttons — Wallets + Credentials + Telegram */}
+        {/* Icon buttons — Wallets + Credentials + Telegram. Hidden on mobile; available in the bottom-nav menu sheet. */}
         {onOpenConfig && (
           <button onClick={onOpenConfig} title="Config"
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#888] hover:text-white hover:bg-white/5 transition-colors">
+            className="hidden lg:flex w-8 h-8 rounded-lg items-center justify-center text-[#888] hover:text-white hover:bg-white/5 transition-colors">
             <SlidersHorizontal size={15} />
           </button>
         )}
         {onOpenCredentials && (
           <button onClick={onOpenCredentials} title="API Credentials"
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-[#888] hover:text-white hover:bg-white/5 transition-colors">
+            className="hidden lg:flex w-8 h-8 rounded-lg items-center justify-center text-[#888] hover:text-white hover:bg-white/5 transition-colors">
             <Key size={15} />
           </button>
         )}
         {onOpenTelegram && (
           <button onClick={onOpenTelegram} title={telegramConnected ? 'Telegram connected' : 'Connect Telegram'}
-            className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors hover:bg-white/5"
+            className="hidden lg:flex w-8 h-8 rounded-lg items-center justify-center transition-colors hover:bg-white/5"
             style={{ color: telegramConnected ? '#24A1DE' : '#555' }}>
             <TelegramLogo size={15} weight={telegramConnected ? 'fill' : 'regular'} />
           </button>
@@ -210,7 +211,7 @@ function TopNav({ tab, setTab, paused, online, onStop, onResume, onLogout, onOpe
               onClick={() => setUserMenuOpen(v => !v)}
               className="flex items-center gap-2 pl-1.5 pr-2.5 py-1 rounded-lg hover:bg-white/5 transition-colors"
             >
-              {userAvatar
+              {userAvatar && userAvatar.startsWith('https://')
                 ? <img src={userAvatar} className="w-6 h-6 rounded-full object-cover ring-1 ring-white/10" alt="" />
                 : <div className="w-6 h-6 rounded-full bg-[#1a1a1a] border border-white/10 flex items-center justify-center">
                     <span className="font-mono text-[10px] text-[#666]">{(userName || 'U')[0].toUpperCase()}</span>
@@ -338,9 +339,15 @@ function CredentialsModal({ signetKeyPrefix, hasSignet, telegramChatId, onClose,
   }
 
   const handleDelete = async () => {
+    // Destructive: stops the bot, erases encrypted Signet creds. No undo.
+    if (!window.confirm('Remove Signet credentials?\n\nThis stops the bot and deletes your stored API key. You will need to re-enter it to trade again.')) {
+      return
+    }
     setDeleting(true)
     try { await api.deleteSignet(); onClose(); onSaved?.() }
-    catch { /* ignore */ } finally { setDeleting(false) }
+    catch (e: unknown) {
+      window.alert(e instanceof Error ? e.message : 'Failed to remove credentials')
+    } finally { setDeleting(false) }
   }
 
   const handleConnectTelegram = async () => {
@@ -645,177 +652,6 @@ const SolanaIcon = ({ size = 16 }: { size?: number }) => (
   </svg>
 )
 
-function WalletsModal({ onClose, mainWalletId, onMainWalletSet }: {
-  onClose: () => void
-  mainWalletId?: string
-  onMainWalletSet?: () => void
-}) {
-  const [wallets,      setWallets]      = useState<WalletEntry[]>([])
-  const [loading,      setLoading]      = useState(true)
-  const [creating,     setCreating]     = useState(false)
-  const [createLabel,  setCreateLabel]  = useState('')
-  const [showCreate,   setShowCreate]   = useState(false)
-  const [activeWallet, setActiveWallet] = useState<string | null>(null)
-  const [dropOpen,     setDropOpen]     = useState(false)
-
-  const load = () => {
-    setLoading(true)
-    api.wallets().then(ws => { setWallets(ws); if (ws.length > 0 && !activeWallet) setActiveWallet(ws[0].id) })
-      .catch(() => {}).finally(() => setLoading(false))
-  }
-  useEffect(() => { load() }, [])
-
-  const handleCreate = async () => {
-    if (creating) return
-    setCreating(true)
-    try {
-      await api.createWallet(createLabel.trim() || undefined)
-      setCreateLabel(''); setShowCreate(false); load()
-    } catch { /* ignore */ } finally { setCreating(false) }
-  }
-
-  const active = wallets.find(w => w.id === activeWallet)
-
-  return (
-    <Modal onClose={onClose}>
-      <ModalHeader
-        icon={<SolanaIcon size={16} />}
-        title="Solana Wallets"
-        sub="Powered by Signet KMS"
-        onClose={onClose}
-      />
-      <div className="p-5">
-        {loading ? (
-          <p className="font-mono text-xs text-[#333] text-center py-12">Loading wallets…</p>
-        ) : (
-          <>
-            {/* Wallet switcher dropdown */}
-            {wallets.length > 0 && (
-              <div className="relative mb-4">
-                {/* Trigger */}
-                <button
-                  onClick={() => setDropOpen(v => !v)}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all"
-                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}
-                >
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(153,69,255,0.15)' }}>
-                    <SolanaIcon size={13} />
-                  </div>
-                  <div className="flex-1 text-left min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <p className="font-mono text-xs text-white font-bold truncate">
-                        {wallets.find(w => w.id === activeWallet)?.label || 'Wallet'}
-                      </p>
-                      {mainWalletId && mainWalletId === activeWallet && (
-                        <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full shrink-0"
-                          style={{ background: 'rgba(74,222,128,0.12)', color: '#4ADE80' }}>
-                          main
-                        </span>
-                      )}
-                    </div>
-                    <p className="font-mono text-[10px] text-[#888]">
-                      {wallets.find(w => w.id === activeWallet)?.balance_sol.toFixed(4)} SOL
-                    </p>
-                  </div>
-                  <CaretDown size={13} className="text-[#888] shrink-0 transition-transform" style={{ transform: dropOpen ? 'rotate(180deg)' : 'none' }} />
-                </button>
-
-                {/* Dropdown list */}
-                {dropOpen && (
-                  <>
-                    <div className="fixed inset-0 z-10" onClick={() => setDropOpen(false)} />
-                    <div className="absolute left-0 right-0 top-full mt-1.5 z-20 rounded-xl overflow-hidden"
-                      style={{ background: '#111', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 12px 40px rgba(0,0,0,0.7)' }}>
-                      {wallets.map(w => (
-                        <button
-                          key={w.id}
-                          onClick={() => { setActiveWallet(w.id); setDropOpen(false) }}
-                          className="w-full flex items-center gap-3 px-4 py-3 transition-colors hover:bg-white/4"
-                          style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}
-                        >
-                          <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(153,69,255,0.12)' }}>
-                            <SolanaIcon size={11} />
-                          </div>
-                          <div className="flex-1 text-left min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <p className="font-mono text-xs text-white truncate">{w.label || 'Wallet'}</p>
-                              {mainWalletId === w.id && (
-                                <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-full shrink-0"
-                                  style={{ background: 'rgba(74,222,128,0.12)', color: '#4ADE80' }}>
-                                  main
-                                </span>
-                              )}
-                            </div>
-                            <p className="font-mono text-[10px] text-[#888]">{w.balance_sol.toFixed(4)} SOL</p>
-                          </div>
-                          {activeWallet === w.id && <Check size={13} className="text-[#00A8FF] shrink-0" />}
-                        </button>
-                      ))}
-                      {/* New wallet row */}
-                      {showCreate ? (
-                        <div className="flex items-center gap-2 px-3 py-2.5">
-                          <input
-                            autoFocus
-                            type="text"
-                            placeholder="Label (optional)…"
-                            value={createLabel}
-                            onChange={e => setCreateLabel(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && handleCreate()}
-                            className="flex-1 bg-[#1a1a1a] rounded-lg px-3 py-1.5 font-mono text-xs text-white placeholder-[#444] outline-none"
-                          />
-                          <button onClick={handleCreate} disabled={creating}
-                            className="px-3 py-1.5 rounded-lg font-mono text-[10px] disabled:opacity-40 shrink-0"
-                            style={{ background: 'rgba(0,168,255,0.1)', color: '#00A8FF' }}>
-                            {creating ? '…' : 'Create'}
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setShowCreate(true)}
-                          className="w-full flex items-center gap-2 px-4 py-3 text-[#888] hover:text-white transition-colors"
-                        >
-                          <Plus size={13} />
-                          <span className="font-mono text-xs">New wallet</span>
-                        </button>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-
-            {wallets.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="font-mono text-xs text-[#666] mb-4">No wallets yet.</p>
-                {showCreate ? (
-                  <div className="flex gap-2 justify-center">
-                    <input autoFocus type="text" placeholder="Label (optional)"
-                      value={createLabel} onChange={e => setCreateLabel(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && handleCreate()}
-                      className="neu-card-inset rounded-xl px-3 py-2 font-mono text-xs text-white placeholder-[#444] outline-none w-40" />
-                    <button onClick={handleCreate} disabled={creating}
-                      className="px-4 py-2 rounded-xl font-mono text-xs disabled:opacity-40"
-                      style={{ background: 'rgba(0,168,255,0.1)', color: '#00A8FF' }}>
-                      {creating ? '…' : 'Create'}
-                    </button>
-                  </div>
-                ) : (
-                  <button onClick={() => setShowCreate(true)}
-                    className="flex items-center gap-2 mx-auto px-4 py-2.5 rounded-xl font-mono text-xs text-[#888] hover:text-white transition-colors"
-                    style={{ background: 'rgba(255,255,255,0.04)' }}>
-                    <Plus size={13} /> Create first wallet
-                  </button>
-                )}
-              </div>
-            ) : active ? (
-              <WalletDetail wal={active} onRefresh={load} mainWalletId={mainWalletId} onMainWalletSet={onMainWalletSet} />
-            ) : null}
-          </>
-        )}
-      </div>
-    </Modal>
-  )
-}
 
 type WalletView = 'overview' | 'deposit' | 'withdraw'
 
@@ -1073,7 +909,14 @@ function WalletDetail({ wal, onRefresh, mainWalletId, onMainWalletSet }: {
           {txHash && (
             <div className="flex items-center gap-2 p-3 rounded-xl" style={{ background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.15)' }}>
               <Check size={13} className="text-[#4ADE80] shrink-0" />
-              <span className="font-mono text-[10px] text-[#4ADE80] flex-1 truncate">Sent · {txHash.slice(0, 16)}…</span>
+              <a
+                href={`https://solscan.io/tx/${txHash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono text-[10px] text-[#4ADE80] flex-1 truncate underline decoration-dotted underline-offset-2"
+              >
+                Sent · {txHash.slice(0, 16)}… ↗
+              </a>
             </div>
           )}
 
@@ -1871,10 +1714,12 @@ function TabAccounts({ positions, closed, mainWalletId, onMainWalletSet }: {
   }
 
   return (
-    <div className="grid grid-cols-2 grid-rows-2 gap-3 p-3 overflow-hidden" style={{ height: 'calc(100vh - 3.5rem)' }}>
+    // Mobile: stack four tiles vertically and let the page scroll naturally.
+    // Desktop (md+): original 2x2 quadrant layout that fills the viewport.
+    <div className="grid grid-cols-1 md:grid-cols-2 md:grid-rows-2 gap-3 p-3 md:overflow-hidden md:h-[calc(100vh-3.5rem)]">
 
       {/* Top-left — Open Positions */}
-      <div className="neu-tile flex flex-col overflow-hidden">
+      <div className="neu-tile flex flex-col overflow-hidden min-h-[280px] md:min-h-0">
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.04] shrink-0">
           <span className="font-mono text-xs font-bold text-white">Open Positions</span>
           <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-[#00A8FF]/10 text-[#00A8FF]">{positions.length}</span>
@@ -1897,7 +1742,7 @@ function TabAccounts({ positions, closed, mainWalletId, onMainWalletSet }: {
       <WalletCard mainWalletId={mainWalletId} onMainWalletSet={onMainWalletSet} />
 
       {/* Bottom-left — Trade History */}
-      <div className="neu-tile flex flex-col overflow-hidden">
+      <div className="neu-tile flex flex-col overflow-hidden min-h-[280px] md:min-h-0">
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.04] shrink-0">
           <span className="font-mono text-xs font-bold text-white">Trade History</span>
           <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-[#888]">{closed.length}</span>
@@ -1914,7 +1759,7 @@ function TabAccounts({ positions, closed, mainWalletId, onMainWalletSet }: {
       </div>
 
       {/* Bottom-right — Transaction History (deposits/withdrawals) */}
-      <div className="neu-tile flex flex-col overflow-hidden">
+      <div className="neu-tile flex flex-col overflow-hidden min-h-[280px] md:min-h-0">
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.04] shrink-0">
           <span className="font-mono text-xs font-bold text-white">Transaction History</span>
           <button
@@ -2239,141 +2084,6 @@ function ConfigModal({ onClose }: { onClose: () => void }) {
   )
 }
 
-function _TabConfigRemoved({ userName, userUsername, userAvatar, botActive }: {
-  userName?: string; userUsername?: string; userAvatar?: string; botActive?: boolean
-}) {
-  const [wallets, setWallets]       = useState<WalletEntry[]>([])
-  const [walletsLoading, setWLoad]  = useState(true)
-  const [creating, setCreating]     = useState(false)
-  const [createLabel, setCreateLabel] = useState('')
-  const [showCreate, setShowCreate] = useState(false)
-
-  const loadWallets = () => {
-    setWLoad(true)
-    api.wallets().then(setWallets).catch(() => {}).finally(() => setWLoad(false))
-  }
-  useEffect(() => { loadWallets() }, [])
-
-  const handleCreate = async () => {
-    setCreating(true)
-    try {
-      await api.createWallet(createLabel || undefined)
-      setCreateLabel('')
-      setShowCreate(false)
-      loadWallets()
-    } catch { /* ignore */ } finally {
-      setCreating(false)
-    }
-  }
-
-  return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="font-mono font-bold text-xl text-white">Config</h1>
-        <p className="font-mono text-xs text-[#888] mt-0.5">Account & bot configuration</p>
-      </div>
-
-      <div className="grid md:grid-cols-2 gap-6">
-        {/* Profile card */}
-        <div className="neu-tile p-6 space-y-4">
-          <div className="flex items-center gap-3 pb-4 border-b border-white/5">
-            {userAvatar
-              ? <img src={userAvatar} className="w-10 h-10 rounded-full object-cover ring-1 ring-white/10" alt="" />
-              : <div className="w-10 h-10 rounded-full bg-[#141414] border border-white/10 flex items-center justify-center">
-                  <span className="font-mono text-sm text-[#666]">{(userName || 'U')[0].toUpperCase()}</span>
-                </div>
-            }
-            <div>
-              <p className="font-mono text-sm text-white font-bold">{userName || 'User'}</p>
-              {userUsername && <p className="font-mono text-xs text-[#888]">@{userUsername}</p>}
-            </div>
-          </div>
-
-          {/* Bot status */}
-          <p className="font-mono text-xs text-[#888] uppercase tracking-widest">Bot Status</p>
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-xs text-[#666]">Status</span>
-              <span className={`font-mono text-xs px-2.5 py-1 rounded-full ${botActive ? 'bg-[#4ADE80]/10 text-[#4ADE80]' : 'bg-[#EF4444]/10 text-[#EF4444]'}`}>
-                {botActive ? 'Running' : 'Stopped'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-xs text-[#666]">Network</span>
-              <span className="font-mono text-xs text-[#a0a0a0]">Solana Mainnet</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-xs text-[#666]">DEX</span>
-              <span className="font-mono text-xs text-[#a0a0a0]">pump.fun / Raydium</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 pt-3 border-t border-white/5">
-            <Key size={14} className="text-[#888] shrink-0" />
-            <p className="font-mono text-xs text-[#888]">Signet credentials encrypted at rest</p>
-          </div>
-        </div>
-
-        {/* Wallets card */}
-        <div className="neu-tile p-6 space-y-4">
-          <div className="flex items-center justify-between pb-4 border-b border-white/5">
-            <div className="flex items-center gap-2">
-              <Wallet size={14} className="text-[#888] shrink-0" />
-              <p className="font-mono text-xs text-[#888] uppercase tracking-widest">Signet Wallets</p>
-            </div>
-            <button
-              onClick={() => setShowCreate(v => !v)}
-              className="font-mono text-xs px-3 py-1 rounded-lg bg-white/5 text-[#666] hover:bg-white/8 hover:text-white transition-colors"
-            >
-              + New
-            </button>
-          </div>
-
-          {showCreate && (
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Label (optional)"
-                value={createLabel}
-                onChange={e => setCreateLabel(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleCreate()}
-                className="flex-1 bg-[#141414] border border-white/8 rounded-lg px-3 py-2 font-mono text-xs text-white placeholder-[#444] outline-none focus:border-white/20"
-              />
-              <button
-                onClick={handleCreate}
-                disabled={creating}
-                className="font-mono text-xs px-3 py-2 rounded-lg bg-[#00A8FF]/10 text-[#00A8FF] hover:bg-[#00A8FF]/20 transition-colors disabled:opacity-40"
-              >
-                {creating ? '…' : 'Create'}
-              </button>
-            </div>
-          )}
-
-          {walletsLoading ? (
-            <p className="font-mono text-xs text-[#333] text-center py-6">Loading wallets...</p>
-          ) : wallets.length === 0 ? (
-            <p className="font-mono text-xs text-[#666] text-center py-6">No wallets yet.</p>
-          ) : (
-            <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
-              {wallets.map(wal => (
-                <div key={wal.id} className="neu-card-inset p-4 rounded-xl space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-xs text-white font-bold truncate max-w-[140px]">
-                      {wal.label || 'Unnamed'}
-                    </span>
-                    <span className="font-mono text-sm font-bold text-[#4ADE80]">
-                      {wal.balance_sol.toFixed(3)} <span className="text-xs font-normal text-[#888]">SOL</span>
-                    </span>
-                  </div>
-                  <CopyField label="Address" value={wal.address} />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
@@ -2394,7 +2104,6 @@ export default function Dashboard({ onLogout, walletId, userName, userUsername, 
   const { stats, positions, closed, online, loading, error, stop, resume } = useOrchestrator()
   const [tab, setTab] = useState('overview')
   const [showCredentials, setShowCredentials] = useState(false)
-  const [showWallets,     setShowWallets]     = useState(false)
   const [showConfig,      setShowConfig]      = useState(false)
 
   if (loading) {
@@ -2450,6 +2159,20 @@ export default function Dashboard({ onLogout, walletId, userName, userUsername, 
       {tab === 'accounts'  && <TabAccounts positions={positions} closed={closed} mainWalletId={mainWalletId} onMainWalletSet={onCredentialsSaved} />}
       {tab === 'logs'      && <TabLogs />}
 
+      <MobileBottomNav
+        tab={tab}
+        setTab={setTab}
+        paused={s.paused}
+        onStop={stop}
+        onResume={resume}
+        onOpenConfig={() => setShowConfig(true)}
+        onOpenCredentials={() => setShowCredentials(true)}
+        telegramConnected={!!telegramChatId}
+        userName={userName}
+        userAvatar={userAvatar}
+        onLogout={onLogout}
+      />
+
       {showConfig      && <ConfigModal onClose={() => setShowConfig(false)} />}
       {showCredentials && (
         <CredentialsModal
@@ -2460,7 +2183,6 @@ export default function Dashboard({ onLogout, walletId, userName, userUsername, 
           onSaved={onCredentialsSaved}
         />
       )}
-      {showWallets && <WalletsModal onClose={() => setShowWallets(false)} mainWalletId={mainWalletId} onMainWalletSet={onCredentialsSaved} />}
     </div>
   )
 }

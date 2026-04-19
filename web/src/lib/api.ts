@@ -3,6 +3,16 @@
 
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8002'
 
+// Guard against a production build accidentally talking to a plain-text API.
+// VITE_API_URL is baked in at build time; if someone ships a prod build without
+// it (or with an http:// URL), every JWT traverses the network in cleartext.
+if (import.meta.env.PROD && !BASE.startsWith('https://')) {
+  // Fail loud, in console and visibly, so the misconfiguration is caught fast.
+  console.error('[hb] VITE_API_URL must be HTTPS in production. Got:', BASE)
+  document.body.innerHTML = '<pre style="padding:40px;font-family:monospace;color:#EF4444;background:#0d0d0d;color:#fff;min-height:100vh;margin:0">Hummingbird is misconfigured: API URL must be HTTPS in production.\n\nSet VITE_API_URL at build time.</pre>'
+  throw new Error('insecure API URL')
+}
+
 export interface Stats {
   open_positions: number
   total_trades:   number
@@ -149,7 +159,6 @@ export const api = {
   logs():      Promise<LogEntry[]>            { return get('/logs') },
   stop():      Promise<void>                 { return post('/stop') },
   resume():    Promise<void>                 { return post('/resume') },
-  startBot():  Promise<void>                 { return post('/start') },
 
   // Multi-tenant auth — Nexus SSO
   nexusSignin(access_token: string) {
