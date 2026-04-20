@@ -181,7 +181,7 @@ func startSingleTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMu
 	})
 	tr = trader.New(signetClient, walletID, port, notifier, cc, sc, monitor.DefaultMonitorConfig(), 0, 0, cfg.SolanaRPC, nil)
 
-	util.Go("scalper.Run", func() { sc.Run(context.Background()) })
+	// Go-side scalper disabled — Python scorer/scalper.py handles discovery via DexScreener+Cricket
 
 	if tgBot != nil {
 		tgBot.SetExecutor(tr)
@@ -319,7 +319,7 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 
 	mgr = userbot.NewManager(cfg, database, cc, sc)
 
-	util.Go("scalper.Run.multi", func() { sc.Run(context.Background()) })
+	// Go-side scalper disabled — Python scorer/scalper.py handles discovery via DexScreener+Cricket
 
 	// Telegram bot (multi-tenant mode)
 	var tgBot *bot.Bot
