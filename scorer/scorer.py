@@ -53,9 +53,8 @@ async def _firefly_wallet(client: httpx.AsyncClient, address: str) -> Optional[d
 
 
 async def score(token: TokenDetected) -> ScoreResult:
-    # Wait for the launch tx to confirm before Mantis can see the mint account.
-    # Scanning immediately (~ms after detection) causes "token not found" on Cricket's end.
-    await asyncio.sleep(3)
+    # Wait briefly for the launch tx to confirm before Mantis can see the mint account.
+    await asyncio.sleep(1)
 
     async with httpx.AsyncClient(timeout=8.0, headers=_HEADERS) as client:
         mantis_task = asyncio.create_task(

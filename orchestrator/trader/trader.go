@@ -160,11 +160,28 @@ func (t *Trader) enter(result *models.ScoreResult) {
 		DeadlineSeconds: 30,
 	}
 
-	// Wait briefly before first swap — new tokens take ~10s to be indexed
-	time.Sleep(10 * time.Second)
-
 	var tx *signet.TransactionResult
 	var err error
+
+	// pump_fun tokens live on the bonding curve — PumpPortal talks directly to the
+	// pump.fun program with no Jupiter indexing delay. Try it first so we enter while
+	// the curve is still active. Fall back to Signet/Jupiter for graduated tokens and
+	// non-pump platforms (raydium_launchlab, moonshot, boop).
+	if result.Platform == "pump_fun" {
+		log.Printf("[trader] pump_fun — trying PumpPortal directly for %s", result.Mint[:8])
+		tx, err = t.buyViaPumpPortal(result)
+		if err != nil {
+			log.Printf("[trader] PumpPortal failed for %s: %v — falling back to Jupiter", result.Mint[:8], err)
+			err = nil // clear so Jupiter path runs
+		} else {
+			goto entryDone
+		}
+	}
+
+	// Non-pump_fun or PumpPortal fallback: use Signet/Jupiter.
+	// New tokens take ~10s to be indexed by Jupiter.
+	time.Sleep(10 * time.Second)
+
 	const maxRetries = 3
 	for attempt := range maxRetries {
 		tx, err = t.signet.Wallets.Swap(t.walletID, params)
@@ -180,8 +197,6 @@ func (t *Trader) enter(result *models.ScoreResult) {
 				break
 			}
 			// 502 from Jupiter — retry a few times for indexing delay, then fall back to pumpportal.
-			// Signet currently returns 502 for both "not indexed yet" and "not routable" —
-			// after exhausting retries we try pumpportal as a last resort.
 			if sigErr.StatusCode == 502 {
 				if attempt < maxRetries-1 {
 					log.Printf("[trader] %s not yet indexed (attempt %d/%d), retrying in 8s", result.Mint[:8], attempt+1, maxRetries)
@@ -194,6 +209,8 @@ func (t *Trader) enter(result *models.ScoreResult) {
 		}
 		break
 	}
+
+entryDone:
 	if err != nil {
 		// Routing failures (no pool, not indexed, unroutable) are expected for many new tokens.
 		// Log them but don't spam the user — only alert on truly unexpected errors.
