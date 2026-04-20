@@ -98,9 +98,6 @@ async def _score_and_forward(token: TokenDetected):
     )
     _log_breakdown(result)
 
-    if result.decision == "skip":
-        return
-
     await _forward(result)
 
 
