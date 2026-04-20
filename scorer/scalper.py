@@ -109,18 +109,13 @@ class Scalper:
                 mint = (pair.get("baseToken") or {}).get("address")
                 if not mint or self.store.get(mint):
                     continue
-                created_at = pair.get("pairCreatedAt") or now_ms
-                age_minutes = (now_ms - created_at) / 60_000
-                # DexScreener boosts can be hours old — allow up to 4 hours.
-                # Use 1-min floor so we don't catch tokens with bad timestamp data.
-                if age_minutes > 240 or age_minutes < 1:
-                    continue
                 liquidity = float((pair.get("liquidity") or {}).get("usd") or 0)
                 if liquidity < 1_000:
                     continue
-                # Store with timestamp_ms = now so the 45-min store eligibility window
-                # is based on when WE discovered it, not when the token launched.
-                # _dex_score uses its own age_minutes from token.first_seen_ms for scoring.
+                created_at = pair.get("pairCreatedAt") or now_ms
+                age_minutes = (now_ms - created_at) / 60_000
+                # No age cap — scalper rides momentum waves on any token (even days old).
+                # Store with timestamp_ms = now; eligibility window is based on discovery time.
                 self.store.add(
                     mint=mint,
                     platform="pump_fun",
@@ -129,7 +124,7 @@ class Scalper:
                     bonding_curve="",
                     timestamp_ms=now_ms,
                 )
-                log.info("[scalper] 🔎 discovered %s... age=%.1fm liq=$%.0f", mint[:8], age_minutes, liquidity)
+                log.info("[scalper] 🔎 discovered %s... age=%.0fd%.0fh liq=$%.0f", mint[:8], age_minutes // 1440, (age_minutes % 1440) // 60, liquidity)
         except Exception as e:
             log.warning("[scalper] store_discovered error: %s", e)
 
@@ -194,9 +189,6 @@ class Scalper:
 
     def _dex_score(self, token: StoredToken, pair: dict) -> Optional[ScoreResult]:
         now_ms = int(time.time() * 1000)
-        # Use actual pairCreatedAt for age scoring — first_seen_ms is set to discovery time.
-        pair_created_at = pair.get("pairCreatedAt") or token.first_seen_ms
-        age_minutes = (now_ms - pair_created_at) / 60_000
 
         price_usd = float(pair.get("priceUsd") or 0)
         if price_usd <= 0:
@@ -207,7 +199,9 @@ class Scalper:
         peak = stored.peak_price_usd if stored else price_usd
 
         price_change_5m = float((pair.get("priceChange") or {}).get("m5") or 0)
+        price_change_1h = float((pair.get("priceChange") or {}).get("h1") or 0)
         vol_5m = float((pair.get("volume") or {}).get("m5") or 0)
+        vol_1h = float((pair.get("volume") or {}).get("h1") or 0)
         liquidity_usd = float((pair.get("liquidity") or {}).get("usd") or 0)
         txns_5m = (pair.get("txns") or {}).get("m5") or {}
         buys_5m = int(txns_5m.get("buys") or 0)
@@ -216,7 +210,7 @@ class Scalper:
         checks: dict[str, CheckResult] = {}
         total = 0
 
-        # Pullback depth — 25pts
+        # Pullback depth — 25pts (still useful: we track peak from repeated scans)
         pullback_pct = ((peak - price_usd) / peak * 100) if peak > 0 else 0
         if 20 <= pullback_pct <= 40:
             pts, reason = 25, f"ideal pullback ({pullback_pct:.1f}% from ATH)"
@@ -229,16 +223,16 @@ class Scalper:
         checks["pullback"] = CheckResult(score=pts, max_score=25, reason=reason)
         total += pts
 
-        # Volume recovery — 25pts
+        # Volume momentum — 25pts (5m price up + meaningful volume)
         if price_change_5m > 0 and vol_5m > 500:
-            pts, reason = 25, f"recovering +{price_change_5m:.1f}% ${vol_5m:,.0f}"
+            pts, reason = 25, f"momentum +{price_change_5m:.1f}% ${vol_5m:,.0f}"
         elif price_change_5m > 0:
             pts, reason = 15, f"price up, thin vol ${vol_5m:,.0f}"
         elif vol_5m > 500:
-            pts, reason = 10, f"vol present, flat ${vol_5m:,.0f}"
+            pts, reason = 10, f"vol active, flat ${vol_5m:,.0f}"
         else:
-            pts, reason = 0, "no volume recovery"
-        checks["volume"] = CheckResult(score=pts, max_score=25, reason=reason)
+            pts, reason = 0, "no momentum"
+        checks["momentum"] = CheckResult(score=pts, max_score=25, reason=reason)
         total += pts
 
         # Buy pressure — 20pts
@@ -250,32 +244,36 @@ class Scalper:
             elif buy_ratio >= 0.50:
                 pts, reason = 12, f"neutral {buys_5m}B/{sells_5m}S"
             else:
-                pts, reason = 0, f"sellers {buys_5m}B/{sells_5m}S"
+                pts, reason = 0, f"sellers dominate {buys_5m}B/{sells_5m}S"
         else:
             pts, reason = 0, "no txns"
         checks["buy_pressure"] = CheckResult(score=pts, max_score=20, reason=reason)
         total += pts
 
-        # Age — 15pts
-        if 8 <= age_minutes <= 25:
-            pts, reason = 15, f"ideal age {age_minutes:.1f}m"
-        elif 5 <= age_minutes < 8:
-            pts, reason = 10, f"young {age_minutes:.1f}m"
-        elif 25 < age_minutes <= 45:
-            pts, reason = 8, f"maturing {age_minutes:.1f}m"
+        # 1h trend — 20pts (replaces age — is the wave still going?)
+        if price_change_1h > 20 and vol_1h > 5_000:
+            pts, reason = 20, f"strong 1h trend +{price_change_1h:.0f}% ${vol_1h:,.0f}"
+        elif price_change_1h > 5:
+            pts, reason = 12, f"positive 1h +{price_change_1h:.0f}%"
+        elif price_change_1h > 0:
+            pts, reason = 6, f"flat 1h +{price_change_1h:.0f}%"
+        elif price_change_1h > -10:
+            pts, reason = 3, f"slight dip 1h {price_change_1h:.0f}%"
         else:
-            pts, reason = 0, f"outside window {age_minutes:.1f}m"
-        checks["age"] = CheckResult(score=pts, max_score=15, reason=reason)
+            pts, reason = 0, f"dumping 1h {price_change_1h:.0f}%"
+        checks["trend_1h"] = CheckResult(score=pts, max_score=20, reason=reason)
         total += pts
 
-        # Liquidity — 15pts
-        if liquidity_usd >= 10_000:
-            pts, reason = 15, f"${liquidity_usd:,.0f}"
+        # Liquidity — 10pts (tightened: enough to enter/exit cleanly)
+        if liquidity_usd >= 50_000:
+            pts, reason = 10, f"deep ${liquidity_usd:,.0f}"
+        elif liquidity_usd >= 10_000:
+            pts, reason = 7, f"${liquidity_usd:,.0f}"
         elif liquidity_usd >= 3_000:
-            pts, reason = 8, f"${liquidity_usd:,.0f}"
+            pts, reason = 4, f"thin ${liquidity_usd:,.0f}"
         else:
             pts, reason = 0, f"low ${liquidity_usd:,.0f}"
-        checks["liquidity"] = CheckResult(score=pts, max_score=15, reason=reason)
+        checks["liquidity"] = CheckResult(score=pts, max_score=10, reason=reason)
         total += pts
 
         return ScoreResult(
