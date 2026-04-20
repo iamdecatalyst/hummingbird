@@ -240,8 +240,9 @@ func startSingleTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMu
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
+		broadcastCopy := result
 		if cfg.TelegramChannelID != "" && cfg.TelegramToken != "" {
-			go broadcastTradeResult(cfg.TelegramToken, cfg.TelegramChannelID, &result)
+			go broadcastTradeResult(cfg.TelegramToken, cfg.TelegramChannelID, &broadcastCopy)
 		}
 		tr.Execute(&result)
 		fmt.Fprint(w, `{"status":"queued"}`)
@@ -621,8 +622,9 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
+		broadcastCopy := result // copy before Execute can mutate PositionSOL
 		if cfg.TelegramChannelID != "" && cfg.TelegramToken != "" {
-			go broadcastTradeResult(cfg.TelegramToken, cfg.TelegramChannelID, &result)
+			go broadcastTradeResult(cfg.TelegramToken, cfg.TelegramChannelID, &broadcastCopy)
 		}
 		instances := mgr.All()
 		for _, inst := range instances {
@@ -1510,16 +1512,19 @@ func broadcastTradeResult(tgToken, channelID string, result *models.ScoreResult)
 		header = fmt.Sprintf("🐦 *Sniped — %s*   %s %s (%d/100)\n%s  ·  %.3f SOL  ·  %s", posLabel, rEmoji, ratingLabel, result.Total, platform, result.PositionSOL, mintShort)
 	}
 
-	// Security line
-	mintOk := "✅ Mint revoked"
-	if result.MintAuthorityRevoked != nil && !*result.MintAuthorityRevoked {
-		mintOk = "⚠️ Mint active"
+	// Security line — only shown when we have actual Cricket data
+	security := ""
+	if result.MintAuthorityRevoked != nil || result.FreezeAuthorityRevoked != nil {
+		mintOk := "✅ Mint revoked"
+		if result.MintAuthorityRevoked != nil && !*result.MintAuthorityRevoked {
+			mintOk = "⚠️ Mint active"
+		}
+		freezeOk := "✅ Freeze revoked"
+		if result.FreezeAuthorityRevoked != nil && !*result.FreezeAuthorityRevoked {
+			freezeOk = "⚠️ Freeze active"
+		}
+		security = mintOk + "   " + freezeOk
 	}
-	freezeOk := "✅ Freeze revoked"
-	if result.FreezeAuthorityRevoked != nil && !*result.FreezeAuthorityRevoked {
-		freezeOk = "⚠️ Freeze active"
-	}
-	security := mintOk + "   " + freezeOk
 
 	// Supply / bonding line
 	var supplyParts []string
@@ -1562,7 +1567,10 @@ func broadcastTradeResult(tgToken, channelID string, result *models.ScoreResult)
 		flagLines = append(flagLines, "🚩 "+detail)
 	}
 
-	parts := []string{header, security}
+	parts := []string{header}
+	if security != "" {
+		parts = append(parts, security)
+	}
 	if supply != "" {
 		parts = append(parts, supply)
 	}
