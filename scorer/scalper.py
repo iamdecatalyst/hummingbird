@@ -114,8 +114,10 @@ class Scalper:
                     continue
                 created_at = pair.get("pairCreatedAt") or now_ms
                 age_minutes = (now_ms - created_at) / 60_000
-                # No age cap — scalper rides momentum waves on any token (even days old).
-                # Store with timestamp_ms = now; eligibility window is based on discovery time.
+                # Require at least 10 min old — avoids instant rugs on brand-new tokens.
+                # No upper cap — scalper rides momentum on any established token.
+                if age_minutes < 10:
+                    continue
                 self.store.add(
                     mint=mint,
                     platform="pump_fun",
