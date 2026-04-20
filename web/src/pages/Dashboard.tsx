@@ -1906,9 +1906,10 @@ function TabLogs() {
 
 // ── Config tab ────────────────────────────────────────────────────────────────
 
-function ConfigRow({ label, sub, value, onDec, onInc, display }: {
+function ConfigRow({ label, sub, value, onDec, onInc, display, onEdit }: {
   label: string; sub?: string; value?: number | boolean | string
   onDec?: () => void; onInc?: () => void; display?: string
+  onEdit?: (raw: string) => void
 }) {
   return (
     <div className="flex items-center justify-between py-3 border-b border-white/[0.04] last:border-0">
@@ -1922,7 +1923,17 @@ function ConfigRow({ label, sub, value, onDec, onInc, display }: {
             className="w-7 h-7 rounded-lg flex items-center justify-center font-mono text-sm text-[#666] hover:text-white hover:bg-white/8 transition-colors">
             −
           </button>
-          <span className="font-mono text-xs text-[#00A8FF] min-w-[72px] text-center">{display ?? String(value)}</span>
+          {onEdit ? (
+            <input
+              type="text"
+              inputMode="decimal"
+              value={display ?? String(value)}
+              onChange={e => onEdit(e.target.value)}
+              className="font-mono text-xs text-[#00A8FF] min-w-[72px] w-[72px] text-center bg-transparent border border-white/10 rounded-md px-1 py-0.5 focus:outline-none focus:border-[#00A8FF]/50"
+            />
+          ) : (
+            <span className="font-mono text-xs text-[#00A8FF] min-w-[72px] text-center">{display ?? String(value)}</span>
+          )}
           <button onClick={onInc}
             className="w-7 h-7 rounded-lg flex items-center justify-center font-mono text-sm text-[#666] hover:text-white hover:bg-white/8 transition-colors">
             +
@@ -1981,6 +1992,17 @@ function ConfigModal({ onClose }: { onClose: () => void }) {
     update({ [field]: parseFloat(clamped.toFixed(decimals)) })
   }
 
+  const edit = (field: keyof UserConfig, raw: string, min: number, max: number, decimals = 2) => {
+    const n = parseFloat(raw)
+    if (!isNaN(n)) {
+      const clamped = Math.max(min, Math.min(max, n))
+      update({ [field]: parseFloat(clamped.toFixed(decimals)) })
+    } else {
+      // Allow mid-type strings like "0." by storing raw temporarily
+      update({ [field]: raw as unknown as number })
+    }
+  }
+
   const handleSave = async () => {
     if (!cfg) return
     setSaving(true); setError('')
@@ -2023,51 +2045,60 @@ function ConfigModal({ onClose }: { onClose: () => void }) {
           <div className="neu-tile p-4">
             <p className="font-mono text-[10px] text-[#888] uppercase tracking-widest mb-3">Position Sizing</p>
             <ConfigRow label="Max position size" sub="SOL per trade"
-              value={cfg.max_position_sol} display={`${cfg.max_position_sol.toFixed(2)} SOL`}
+              value={cfg.max_position_sol} display={`${cfg.max_position_sol}`}
               onDec={() => step('max_position_sol', -0.05, 0.01, 5.0, 2)}
-              onInc={() => step('max_position_sol', +0.05, 0.01, 5.0, 2)} />
+              onInc={() => step('max_position_sol', +0.05, 0.01, 5.0, 2)}
+              onEdit={v => edit('max_position_sol', v, 0.01, 5.0, 2)} />
             <ConfigRow label="Max concurrent positions" sub="Open trades at once"
               value={cfg.max_positions} display={`${cfg.max_positions}`}
               onDec={() => step('max_positions', -1, 1, 20, 0)}
-              onInc={() => step('max_positions', +1, 1, 20, 0)} />
+              onInc={() => step('max_positions', +1, 1, 20, 0)}
+              onEdit={v => edit('max_positions', v, 1, 20, 0)} />
             <ConfigRow label="Min wallet balance" sub="Stop trading below this"
-              value={cfg.min_balance_sol} display={`${cfg.min_balance_sol.toFixed(2)} SOL`}
+              value={cfg.min_balance_sol} display={`${cfg.min_balance_sol}`}
               onDec={() => step('min_balance_sol', -0.1, 0.0, 10.0, 2)}
-              onInc={() => step('min_balance_sol', +0.1, 0.0, 10.0, 2)} />
+              onInc={() => step('min_balance_sol', +0.1, 0.0, 10.0, 2)}
+              onEdit={v => edit('min_balance_sol', v, 0.0, 10.0, 2)} />
           </div>
 
           {/* Risk */}
           <div className="neu-tile p-4">
             <p className="font-mono text-[10px] text-[#888] uppercase tracking-widest mb-3">Risk Controls</p>
-            <ConfigRow label="Stop loss" sub="Exit immediately below this"
-              value={cfg.stop_loss_pct} display={`−${(cfg.stop_loss_pct * 100).toFixed(0)}%`}
+            <ConfigRow label="Stop loss" sub="Exit immediately below this (0.05–0.90)"
+              value={cfg.stop_loss_pct} display={`${cfg.stop_loss_pct}`}
               onDec={() => step('stop_loss_pct', -0.05, 0.05, 0.90, 2)}
-              onInc={() => step('stop_loss_pct', +0.05, 0.05, 0.90, 2)} />
+              onInc={() => step('stop_loss_pct', +0.05, 0.05, 0.90, 2)}
+              onEdit={v => edit('stop_loss_pct', v, 0.05, 0.90, 2)} />
             <ConfigRow label="Daily loss limit" sub="Pause bot when portfolio drops this much"
-              value={cfg.daily_loss_limit} display={`−${(cfg.daily_loss_limit * 100).toFixed(0)}%`}
+              value={cfg.daily_loss_limit} display={`${cfg.daily_loss_limit}`}
               onDec={() => step('daily_loss_limit', -0.05, 0.05, 0.90, 2)}
-              onInc={() => step('daily_loss_limit', +0.05, 0.05, 0.90, 2)} />
+              onInc={() => step('daily_loss_limit', +0.05, 0.05, 0.90, 2)}
+              onEdit={v => edit('daily_loss_limit', v, 0.05, 0.90, 2)} />
             <ConfigRow label="Position timeout" sub="Force-exit after this long"
-              value={cfg.timeout_minutes} display={`${cfg.timeout_minutes} min`}
+              value={cfg.timeout_minutes} display={`${cfg.timeout_minutes}`}
               onDec={() => step('timeout_minutes', -1, 1, 60, 0)}
-              onInc={() => step('timeout_minutes', +1, 1, 60, 0)} />
+              onInc={() => step('timeout_minutes', +1, 1, 60, 0)}
+              onEdit={v => edit('timeout_minutes', v, 1, 60, 0)} />
           </div>
 
           {/* Take profit */}
           <div className="neu-tile p-4">
             <p className="font-mono text-[10px] text-[#888] uppercase tracking-widest mb-3">Take Profit — Staged Exits</p>
             <ConfigRow label="TP1 — sell 40%" sub="First partial exit at this price multiple"
-              value={cfg.take_profit_1x} display={`${cfg.take_profit_1x.toFixed(1)}x`}
+              value={cfg.take_profit_1x} display={`${cfg.take_profit_1x}`}
               onDec={() => step('take_profit_1x', -0.5, 1.2, 10.0, 1)}
-              onInc={() => step('take_profit_1x', +0.5, 1.2, 10.0, 1)} />
+              onInc={() => step('take_profit_1x', +0.5, 1.2, 10.0, 1)}
+              onEdit={v => edit('take_profit_1x', v, 1.2, 10.0, 1)} />
             <ConfigRow label="TP2 — sell 40%" sub="Second partial exit"
-              value={cfg.take_profit_2x} display={`${cfg.take_profit_2x.toFixed(1)}x`}
+              value={cfg.take_profit_2x} display={`${cfg.take_profit_2x}`}
               onDec={() => step('take_profit_2x', -0.5, 1.5, 20.0, 1)}
-              onInc={() => step('take_profit_2x', +0.5, 1.5, 20.0, 1)} />
+              onInc={() => step('take_profit_2x', +0.5, 1.5, 20.0, 1)}
+              onEdit={v => edit('take_profit_2x', v, 1.5, 20.0, 1)} />
             <ConfigRow label="TP3 — sell rest" sub="Full exit at this multiple"
-              value={cfg.take_profit_3x} display={`${cfg.take_profit_3x.toFixed(1)}x`}
+              value={cfg.take_profit_3x} display={`${cfg.take_profit_3x}`}
               onDec={() => step('take_profit_3x', -1.0, 2.0, 50.0, 1)}
-              onInc={() => step('take_profit_3x', +1.0, 2.0, 50.0, 1)} />
+              onInc={() => step('take_profit_3x', +1.0, 2.0, 50.0, 1)}
+              onEdit={v => edit('take_profit_3x', v, 2.0, 50.0, 1)} />
           </div>
 
           <button
