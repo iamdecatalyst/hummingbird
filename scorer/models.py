@@ -21,6 +21,7 @@ class CheckResult(BaseModel):
 
 class ScoreResult(BaseModel):
     mint: str
+    platform: str = "pump_fun"
     total: int
     decision: str        # "skip" | "small" | "medium" | "full" | "scalp"
     position_sol: float

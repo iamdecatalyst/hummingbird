@@ -72,6 +72,7 @@ async def score(token: TokenDetected) -> ScoreResult:
             reason = "token not found or not a valid mint"
         return ScoreResult(
             mint=token.mint,
+            platform=token.platform,
             total=0,
             decision="skip",
             position_sol=0.0,
@@ -91,6 +92,7 @@ async def score(token: TokenDetected) -> ScoreResult:
 
     return ScoreResult(
         mint=token.mint,
+        platform=token.platform,
         total=total,
         decision=decision,
         position_sol=position_sol,
