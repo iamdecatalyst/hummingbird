@@ -622,11 +622,18 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		broadcastCopy := result // copy before Execute can mutate PositionSOL
+		instances := mgr.All()
+		broadcastCopy := result
+		// Clamp broadcast position to the tightest per-user cap so the channel shows
+		// what will actually be traded, not the scorer's unclamped suggestion.
+		for _, inst := range instances {
+			if cap := inst.Trader.MaxPositionSOL(); cap > 0 && broadcastCopy.PositionSOL > cap {
+				broadcastCopy.PositionSOL = cap
+			}
+		}
 		if cfg.TelegramChannelID != "" && cfg.TelegramToken != "" {
 			go broadcastTradeResult(cfg.TelegramToken, cfg.TelegramChannelID, &broadcastCopy)
 		}
-		instances := mgr.All()
 		for _, inst := range instances {
 			inst.Trader.Execute(&result)
 		}

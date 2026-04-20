@@ -58,7 +58,7 @@ func shortMint(mint string) string {
 
 func (t *Telegram) Entered(p *models.Position) {
 	mode := "SNIPER"
-	if p.Score < 60 {
+	if p.Decision == "scalp" {
 		mode = "SCALPER"
 	}
 

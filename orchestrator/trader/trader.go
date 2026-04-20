@@ -466,6 +466,8 @@ func (t *Trader) LastTradeAt() time.Time {
 }
 
 // Balance fetches SOL balance via Signet — used for trade-critical checks.
+func (t *Trader) MaxPositionSOL() float64 { return t.maxPositionSOL }
+
 func (t *Trader) Balance() float64 {
 	if t.walletID == "" {
 		return 0

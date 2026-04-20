@@ -114,9 +114,9 @@ class Scalper:
                     continue
                 created_at = pair.get("pairCreatedAt") or now_ms
                 age_minutes = (now_ms - created_at) / 60_000
-                # Require at least 10 min old — avoids instant rugs on brand-new tokens.
-                # No upper cap — scalper rides momentum on any established token.
-                if age_minutes < 10:
+                # 10 min floor — avoids instant rug bots on brand-new tokens.
+                # 4 hour cap — older tokens have weaker momentum and higher rug exposure.
+                if age_minutes < 10 or age_minutes > 240:
                     continue
                 self.store.add(
                     mint=mint,
