@@ -163,11 +163,10 @@ func (t *Trader) enter(result *models.ScoreResult) {
 	var tx *signet.TransactionResult
 	var err error
 
-	// pump_fun tokens live on the bonding curve — PumpPortal talks directly to the
-	// pump.fun program with no Jupiter indexing delay. Try it first so we enter while
-	// the curve is still active. Fall back to Signet/Jupiter for graduated tokens and
-	// non-pump platforms (raydium_launchlab, moonshot, boop).
-	if result.Platform == "pump_fun" {
+	// Scalp entries skip PumpPortal — tokens are 8-45 min old, already on Raydium/Jupiter,
+	// no indexing delay needed. Sniper entries for pump_fun try PumpPortal first (bonding curve,
+	// no Jupiter delay), then fall back to Jupiter.
+	if result.Platform == "pump_fun" && result.Decision != "scalp" {
 		log.Printf("[trader] pump_fun — trying PumpPortal directly for %s", result.Mint[:8])
 		tx, err = t.buyViaPumpPortal(result)
 		if err != nil {
@@ -179,8 +178,10 @@ func (t *Trader) enter(result *models.ScoreResult) {
 	}
 
 	// Non-pump_fun or PumpPortal fallback: use Signet/Jupiter.
-	// New tokens take ~10s to be indexed by Jupiter.
-	time.Sleep(10 * time.Second)
+	// Sniper entries wait 10s for Jupiter indexing. Scalp tokens are old enough to skip the wait.
+	if result.Decision != "scalp" {
+		time.Sleep(10 * time.Second)
+	}
 
 	const maxRetries = 3
 	for attempt := range maxRetries {
