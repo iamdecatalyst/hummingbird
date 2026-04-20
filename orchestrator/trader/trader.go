@@ -840,9 +840,9 @@ func EnsureWallet(client *signet.Client, label string) (string, error) {
 // not our wallet. This is the only check between a compromised pumpportal API
 // and Signet broadcasting whatever bytes it gets.
 //
-// We don't fully decode instructions — we just verify program IDs are not the
-// SystemProgram (32-zero-byte pubkey). pump.fun + pump-amm + ATA + ComputeBudget
-// are fine; SystemProgram never appears at top-level in a legit pump-portal swap.
+// SystemProgram::CreateAccount and Allocate are allowed — pump-amm uses them for ATA
+// initialization on first buy. Only Transfer (discriminant 2) and TransferWithSeed (11)
+// are blocked as those drain SOL directly.
 func validatePumpPortalTx(txBytes []byte, expectedFromBase58 string) error {
 	if len(txBytes) < 64 {
 		return fmt.Errorf("tx too short (%d bytes)", len(txBytes))
@@ -935,9 +935,8 @@ func validatePumpPortalTx(txBytes []byte, expectedFromBase58 string) error {
 		if progIdx >= accCount {
 			return fmt.Errorf("ix %d: program index %d out of range", i, progIdx)
 		}
-		if bytes.Equal(accountKeys[progIdx], systemProgram[:]) {
-			return fmt.Errorf("ix %d uses SystemProgram — denied (could direct-transfer SOL)", i)
-		}
+		isSystemProgram := bytes.Equal(accountKeys[progIdx], systemProgram[:])
+
 		// Skip account indices section
 		accIdxCount, n, err := compactU16(buf)
 		if err != nil {
@@ -948,7 +947,8 @@ func validatePumpPortalTx(txBytes []byte, expectedFromBase58 string) error {
 			return fmt.Errorf("ix %d truncated accounts", i)
 		}
 		buf = buf[accIdxCount:]
-		// Skip data
+
+		// Read instruction data
 		dataLen, n, err := compactU16(buf)
 		if err != nil {
 			return fmt.Errorf("ix %d data len: %w", i, err)
@@ -957,7 +957,20 @@ func validatePumpPortalTx(txBytes []byte, expectedFromBase58 string) error {
 		if len(buf) < dataLen {
 			return fmt.Errorf("ix %d truncated data", i)
 		}
+		ixData := buf[:dataLen]
 		buf = buf[dataLen:]
+
+		if isSystemProgram {
+			// Allow CreateAccount (0) and Allocate (8) — used by pump-amm for ATA init.
+			// Block Transfer (2) and TransferWithSeed (11) — those drain SOL.
+			if dataLen < 4 {
+				return fmt.Errorf("ix %d: SystemProgram instruction too short", i)
+			}
+			discriminant := uint32(ixData[0]) | uint32(ixData[1])<<8 | uint32(ixData[2])<<16 | uint32(ixData[3])<<24
+			if discriminant == 2 || discriminant == 11 {
+				return fmt.Errorf("ix %d: SystemProgram::Transfer denied (discriminant=%d)", i, discriminant)
+			}
+		}
 	}
 
 	return nil
