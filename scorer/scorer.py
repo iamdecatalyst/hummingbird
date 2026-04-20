@@ -84,6 +84,12 @@ async def score(token: TokenDetected) -> ScoreResult:
 
     total, decision, position_sol, checks = _apply_scoring(mantis_raw, firefly_data)
 
+    # Extract raw fields for rich Telegram broadcast
+    scan = mantis_raw.get("data", {}).get("scan", {})
+    risk = mantis_raw.get("data", {}).get("risk_score", {})
+    fw_data = (firefly_data or {}).get("data", {}) if firefly_data and firefly_data.get("success") else {}
+    high_flags = [f["detail"] for f in scan.get("flags", []) if f.get("severity") in ("high", "critical") and f.get("detail")]
+
     return ScoreResult(
         mint=token.mint,
         total=total,
@@ -91,6 +97,17 @@ async def score(token: TokenDetected) -> ScoreResult:
         position_sol=position_sol,
         checks=checks,
         scored_at_ms=int(time.time() * 1000),
+        rating=risk.get("rating", ""),
+        mint_authority_revoked=scan.get("mint_authority_revoked"),
+        freeze_authority_revoked=scan.get("freeze_authority_revoked"),
+        bonding_fill_pct=scan.get("bonding_curve_fill_pct"),
+        dev_supply_pct=scan.get("dev_supply_pct"),
+        top_10_holder_pct=scan.get("top_10_holder_pct") or None,
+        deployer_wallet_age_days=scan.get("deployer_wallet_age_days"),
+        deployer_prior_launches=scan.get("deployer_prior_launches"),
+        firefly_score=fw_data.get("score") if fw_data else None,
+        firefly_win_rate=fw_data.get("win_rate") if fw_data else None,
+        scan_flags=high_flags,
     )
 
 

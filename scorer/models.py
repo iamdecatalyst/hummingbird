@@ -26,3 +26,16 @@ class ScoreResult(BaseModel):
     position_sol: float
     checks: dict[str, CheckResult]
     scored_at_ms: int
+
+    # Cricket metadata for rich Telegram broadcast
+    rating: str = ""                             # low | moderate | high | critical
+    mint_authority_revoked: Optional[bool] = None
+    freeze_authority_revoked: Optional[bool] = None
+    bonding_fill_pct: Optional[float] = None
+    dev_supply_pct: Optional[float] = None
+    top_10_holder_pct: Optional[float] = None
+    deployer_wallet_age_days: Optional[int] = None
+    deployer_prior_launches: Optional[int] = None
+    firefly_score: Optional[int] = None
+    firefly_win_rate: Optional[float] = None
+    scan_flags: list[str] = []                   # high/critical flag detail strings

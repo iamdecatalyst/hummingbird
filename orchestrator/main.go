@@ -1476,76 +1476,101 @@ func channelAllowed() bool {
 // broadcastTradeResult posts a styled scan card to the channel from a Python scorer ScoreResult.
 // Used when the Rust listener → Python scorer → orchestrator path is active.
 func broadcastTradeResult(tgToken, channelID string, result *models.ScoreResult) {
-	// Always send entries; throttle skips to avoid Telegram rate limits (~20/min)
 	if result.Decision == "skip" && !channelAllowed() {
 		return
 	}
+
 	mintShort := result.Mint
 	if len(mintShort) > 12 {
 		mintShort = result.Mint[:8] + "…" + result.Mint[len(result.Mint)-4:]
 	}
 
-	// Build check lines from the checks map
-	// cleanReason strips raw error messages from check reasons (e.g. Helius 429 errors)
-	cleanReason := func(r string) string {
-		if strings.Contains(r, "RPC error") || strings.Contains(r, "Too Many Requests") || strings.Contains(r, "http") {
-			return "RPC unavailable"
-		}
-		return r
+	// Risk rating emoji
+	ratingEmoji := map[string]string{
+		"low": "🟢", "moderate": "🟡", "high": "🔴", "critical": "🔴",
+	}
+	rEmoji := ratingEmoji[result.Rating]
+	if rEmoji == "" {
+		rEmoji = "⚪"
+	}
+	ratingLabel := strings.ToUpper(result.Rating)
+
+	// Platform label
+	platform := strings.ToUpper(strings.ReplaceAll(result.Platform, "_", "."))
+	if platform == "" {
+		platform = "PUMP.FUN"
 	}
 
-	checkOrder := []string{"dev_wallet", "supply", "bonding", "contract", "social"}
-	checkEmoji := func(score, max int) string {
-		if max == 0 {
-			return "⚪"
-		}
-		pct := float64(score) / float64(max)
-		switch {
-		case pct >= 0.75:
-			return "🟢"
-		case pct >= 0.4:
-			return "🟡"
-		default:
-			return "🔴"
-		}
-	}
-	checkLabel := map[string]string{
-		"dev_wallet": "Dev Wallet",
-		"supply":     "Supply",
-		"bonding":    "Bonding",
-		"contract":   "Contract",
-		"social":     "Social",
-	}
-
-	var checkLines []string
-	for _, key := range checkOrder {
-		c, ok := result.Checks[key]
-		if !ok {
-			continue
-		}
-		em := checkEmoji(c.Score, c.MaxScore)
-		label := checkLabel[key]
-		if label == "" {
-			label = key
-		}
-		line := fmt.Sprintf("%s %s %d/%d", em, label, c.Score, c.MaxScore)
-		if r := cleanReason(c.Reason); r != "" {
-			line += "  " + r
-		}
-		checkLines = append(checkLines, line)
-	}
-
+	// Header
 	var header string
 	if result.Decision == "skip" {
-		header = fmt.Sprintf("⏭ *Scanned — Skip*   Score: %d/100\n%s", result.Total, mintShort)
+		header = fmt.Sprintf("⏭ *Scanned — Skip*   %s %s (%d/100)\n%s  ·  %s", rEmoji, ratingLabel, result.Total, platform, mintShort)
 	} else {
-		label := strings.ToUpper(result.Decision)
-		header = fmt.Sprintf("🐦 *Sniped — %s*   Score: %d/100\n%.3f SOL  ·  %s", label, result.Total, result.PositionSOL, mintShort)
+		posLabel := strings.ToUpper(result.Decision)
+		header = fmt.Sprintf("🐦 *Sniped — %s*   %s %s (%d/100)\n%s  ·  %.3f SOL  ·  %s", posLabel, rEmoji, ratingLabel, result.Total, platform, result.PositionSOL, mintShort)
 	}
 
-	parts := []string{header}
-	if len(checkLines) > 0 {
-		parts = append(parts, strings.Join(checkLines, "\n"))
+	// Security line
+	mintOk := "✅ Mint revoked"
+	if result.MintAuthorityRevoked != nil && !*result.MintAuthorityRevoked {
+		mintOk = "⚠️ Mint active"
+	}
+	freezeOk := "✅ Freeze revoked"
+	if result.FreezeAuthorityRevoked != nil && !*result.FreezeAuthorityRevoked {
+		freezeOk = "⚠️ Freeze active"
+	}
+	security := mintOk + "   " + freezeOk
+
+	// Supply / bonding line
+	var supplyParts []string
+	if result.DevSupplyPct != nil {
+		supplyParts = append(supplyParts, fmt.Sprintf("Dev: %.1f%%", *result.DevSupplyPct))
+	}
+	if result.Top10HolderPct != nil {
+		supplyParts = append(supplyParts, fmt.Sprintf("Top 10: %.1f%%", *result.Top10HolderPct))
+	}
+	if result.BondingFillPct != nil {
+		supplyParts = append(supplyParts, fmt.Sprintf("Bonding: %.1f%%", *result.BondingFillPct))
+	}
+	supply := ""
+	if len(supplyParts) > 0 {
+		supply = "📊 " + strings.Join(supplyParts, "   ")
+	}
+
+	// Dev wallet + Firefly line
+	devLine := ""
+	if result.DeployerWalletAgeDays != nil {
+		devLine = fmt.Sprintf("👤 Dev: %dd old", *result.DeployerWalletAgeDays)
+		if result.DeployerPriorLaunches != nil && *result.DeployerPriorLaunches > 0 {
+			devLine += fmt.Sprintf("   %d prior launches", *result.DeployerPriorLaunches)
+		}
+	}
+	if result.FireflyScore != nil {
+		if devLine == "" {
+			devLine = fmt.Sprintf("👤 Firefly: %d/100", *result.FireflyScore)
+		} else {
+			devLine += fmt.Sprintf("   Firefly: %d/100", *result.FireflyScore)
+		}
+		if result.FireflyWinRate != nil {
+			devLine += fmt.Sprintf(" (%.0f%% win)", *result.FireflyWinRate)
+		}
+	}
+
+	// Flags
+	var flagLines []string
+	for _, detail := range result.ScanFlags {
+		flagLines = append(flagLines, "🚩 "+detail)
+	}
+
+	parts := []string{header, security}
+	if supply != "" {
+		parts = append(parts, supply)
+	}
+	if devLine != "" {
+		parts = append(parts, devLine)
+	}
+	if len(flagLines) > 0 {
+		parts = append(parts, strings.Join(flagLines, "\n"))
 	}
 	parts = append(parts, "\n⚡ [hummingbird.vylth.com](https://hummingbird.vylth.com)")
 

@@ -12,6 +12,19 @@ type ScoreResult struct {
 	PositionSOL float64                `json:"position_sol"`
 	Checks      map[string]CheckResult `json:"checks"`
 	ScoredAtMs  int64                  `json:"scored_at_ms"`
+
+	// Cricket metadata for rich Telegram broadcast (populated by Python scorer)
+	Rating                string   `json:"rating"`                            // low | moderate | high | critical
+	MintAuthorityRevoked  *bool    `json:"mint_authority_revoked,omitempty"`
+	FreezeAuthorityRevoked *bool   `json:"freeze_authority_revoked,omitempty"`
+	BondingFillPct        *float64 `json:"bonding_fill_pct,omitempty"`
+	DevSupplyPct          *float64 `json:"dev_supply_pct,omitempty"`
+	Top10HolderPct        *float64 `json:"top_10_holder_pct,omitempty"`
+	DeployerWalletAgeDays *int     `json:"deployer_wallet_age_days,omitempty"`
+	DeployerPriorLaunches *int     `json:"deployer_prior_launches,omitempty"`
+	FireflyScore          *int     `json:"firefly_score,omitempty"`
+	FireflyWinRate        *float64 `json:"firefly_win_rate,omitempty"`
+	ScanFlags             []string `json:"scan_flags,omitempty"`
 }
 
 type CheckResult struct {
