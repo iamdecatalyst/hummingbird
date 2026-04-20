@@ -111,18 +111,23 @@ class Scalper:
                     continue
                 created_at = pair.get("pairCreatedAt") or now_ms
                 age_minutes = (now_ms - created_at) / 60_000
-                if age_minutes > 45 or age_minutes < 1:
+                # DexScreener boosts can be hours old — allow up to 4 hours.
+                # Use 1-min floor so we don't catch tokens with bad timestamp data.
+                if age_minutes > 240 or age_minutes < 1:
                     continue
                 liquidity = float((pair.get("liquidity") or {}).get("usd") or 0)
                 if liquidity < 1_000:
                     continue
+                # Store with timestamp_ms = now so the 45-min store eligibility window
+                # is based on when WE discovered it, not when the token launched.
+                # _dex_score uses its own age_minutes from token.first_seen_ms for scoring.
                 self.store.add(
                     mint=mint,
                     platform="pump_fun",
                     chain="solana",
                     dev_wallet="",
                     bonding_curve="",
-                    timestamp_ms=int(created_at),
+                    timestamp_ms=now_ms,
                 )
                 log.info("[scalper] 🔎 discovered %s... age=%.1fm liq=$%.0f", mint[:8], age_minutes, liquidity)
         except Exception as e:
@@ -189,7 +194,9 @@ class Scalper:
 
     def _dex_score(self, token: StoredToken, pair: dict) -> Optional[ScoreResult]:
         now_ms = int(time.time() * 1000)
-        age_minutes = (now_ms - token.first_seen_ms) / 60_000
+        # Use actual pairCreatedAt for age scoring — first_seen_ms is set to discovery time.
+        pair_created_at = pair.get("pairCreatedAt") or token.first_seen_ms
+        age_minutes = (now_ms - pair_created_at) / 60_000
 
         price_usd = float(pair.get("priceUsd") or 0)
         if price_usd <= 0:
