@@ -296,7 +296,7 @@ class Scalper:
         dex_result: ScoreResult,
     ):
         async with sem:
-            cricket_delta, cricket_check = await self._cricket_scan(client, token)
+            cricket_delta, cricket_check, meta = await self._cricket_scan(client, token)
             dex_result.checks["cricket"] = cricket_check
 
             # Hard skip if Cricket says critical
@@ -314,6 +314,18 @@ class Scalper:
             dex_result.position_sol = 0.05 if combined < 75 else 0.10
             dex_result.decision = "scalp"
 
+            # Populate Cricket metadata for rich Telegram broadcast
+            if meta:
+                dex_result.rating = meta.get("rating", "")
+                dex_result.mint_authority_revoked = meta.get("mint_authority_revoked")
+                dex_result.freeze_authority_revoked = meta.get("freeze_authority_revoked")
+                dex_result.bonding_fill_pct = meta.get("bonding_fill_pct")
+                dex_result.dev_supply_pct = meta.get("dev_supply_pct")
+                dex_result.top_10_holder_pct = meta.get("top_10_holder_pct")
+                dex_result.deployer_wallet_age_days = meta.get("deployer_wallet_age_days")
+                dex_result.deployer_prior_launches = meta.get("deployer_prior_launches")
+                dex_result.scan_flags = meta.get("scan_flags", [])
+
             log.info(
                 "[scalper] 🎯 %s...  combined=%d/100  dex=%d  cricket_adj=%+d  pos=%.2f SOL",
                 token.mint[:8], combined, dex_result.total - cricket_delta,
@@ -324,10 +336,10 @@ class Scalper:
 
             await self._forward(dex_result)
 
-    async def _cricket_scan(self, client: httpx.AsyncClient, token: StoredToken) -> tuple[int, CheckResult]:
+    async def _cricket_scan(self, client: httpx.AsyncClient, token: StoredToken) -> tuple[int, CheckResult, dict]:
         """Returns (score_delta, CheckResult). delta is added to dex score."""
         if not CRICKET_API_KEY:
-            return 0, CheckResult(score=0, max_score=0, reason="no API key")
+            return 0, CheckResult(score=0, max_score=0, reason="no API key"), {}
 
         try:
             params: dict[str, str] = {}
@@ -341,9 +353,9 @@ class Scalper:
                 params=params,
             )
             if resp.status_code in (404, 422):
-                return -10, CheckResult(score=0, max_score=30, reason="not found on-chain")
+                return -10, CheckResult(score=0, max_score=30, reason="not found on-chain"), {}
             if resp.status_code != 200:
-                return 0, CheckResult(score=15, max_score=30, reason=f"unavailable ({resp.status_code})")
+                return 0, CheckResult(score=15, max_score=30, reason=f"unavailable ({resp.status_code})"), {}
 
             data = resp.json().get("data", {})
             risk = data.get("risk_score", {})
@@ -352,10 +364,10 @@ class Scalper:
             base = risk.get("score", 50)
 
             if confidence != "high":
-                return 0, CheckResult(score=15, max_score=30, reason=f"low confidence ({confidence})")
+                return 0, CheckResult(score=15, max_score=30, reason=f"low confidence ({confidence})"), {}
 
             if rating == "critical":
-                return -100, CheckResult(score=0, max_score=30, reason="CRITICAL — veto")
+                return -100, CheckResult(score=0, max_score=30, reason="CRITICAL — veto"), {}
             elif rating == "high":
                 delta, note = -15, f"high risk ({base})"
             elif rating == "moderate":
@@ -365,7 +377,6 @@ class Scalper:
             else:
                 delta, note = 0, f"unknown ({base})"
 
-            # Extra: flag penalties
             scan = data.get("scan", {})
             if not scan.get("mint_authority_revoked", True):
                 delta -= 5
@@ -374,11 +385,24 @@ class Scalper:
                 delta -= 5
                 note += " freeze_active"
 
-            display_score = max(0, 15 + delta)  # 15 = neutral baseline for display
-            return delta, CheckResult(score=display_score, max_score=30, reason=note)
+            flags = scan.get("flags", [])
+            meta = {
+                "rating": rating,
+                "mint_authority_revoked": scan.get("mint_authority_revoked"),
+                "freeze_authority_revoked": scan.get("freeze_authority_revoked"),
+                "bonding_fill_pct": scan.get("bonding_curve_fill_pct"),
+                "dev_supply_pct": scan.get("dev_supply_pct"),
+                "top_10_holder_pct": scan.get("top_10_holder_pct"),
+                "deployer_wallet_age_days": scan.get("deployer_wallet_age_days"),
+                "deployer_prior_launches": scan.get("deployer_prior_launches"),
+                "scan_flags": [f["detail"] for f in flags if f.get("severity") in ("high", "critical") and f.get("detail")],
+            }
+
+            display_score = max(0, 15 + delta)
+            return delta, CheckResult(score=display_score, max_score=30, reason=note), meta
 
         except Exception as e:
-            return 0, CheckResult(score=15, max_score=30, reason=f"error: {e!s:.40}")
+            return 0, CheckResult(score=15, max_score=30, reason=f"error: {e!s:.40}"), {}
 
     # ── Forward to orchestrator ───────────────────────────────────────────────
 

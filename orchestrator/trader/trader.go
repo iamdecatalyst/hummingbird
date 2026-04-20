@@ -962,14 +962,15 @@ func validatePumpPortalTx(txBytes []byte, expectedFromBase58 string) error {
 		buf = buf[dataLen:]
 
 		if isSystemProgram {
-			// Allow CreateAccount (0) and Allocate (8) — used by pump-amm for ATA init.
-			// Block Transfer (2) and TransferWithSeed (11) — those drain SOL.
+			// Allow Transfer (2) — used for SOL→WSOL wrapping in pump-amm swaps.
+			// Allow CreateAccount (0) — used for ATA initialization.
+			// Block only TransferWithSeed (11) — no legitimate swap use case.
 			if dataLen < 4 {
 				return fmt.Errorf("ix %d: SystemProgram instruction too short", i)
 			}
 			discriminant := uint32(ixData[0]) | uint32(ixData[1])<<8 | uint32(ixData[2])<<16 | uint32(ixData[3])<<24
-			if discriminant == 2 || discriminant == 11 {
-				return fmt.Errorf("ix %d: SystemProgram::Transfer denied (discriminant=%d)", i, discriminant)
+			if discriminant == 11 {
+				return fmt.Errorf("ix %d: SystemProgram::TransferWithSeed denied", i)
 			}
 		}
 	}
