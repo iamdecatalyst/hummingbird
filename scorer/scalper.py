@@ -131,7 +131,7 @@ class Scalper:
     # ── Main scan ─────────────────────────────────────────────────────────────
 
     async def _scan(self):
-        eligible = [t for t in self.store.get_eligible() if t.mint not in self._active]
+        eligible = [t for t in self.store.get_eligible(min_age_minutes=0) if t.mint not in self._active]
         if not eligible:
             return
 
