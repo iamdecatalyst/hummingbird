@@ -110,7 +110,7 @@ class Scalper:
                 if not mint or self.store.get(mint):
                     continue
                 liquidity = float((pair.get("liquidity") or {}).get("usd") or 0)
-                if liquidity < 1_000:
+                if liquidity < 5_000:
                     continue
                 created_at = pair.get("pairCreatedAt") or now_ms
                 age_minutes = (now_ms - created_at) / 60_000
