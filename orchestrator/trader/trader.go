@@ -311,50 +311,60 @@ func (t *Trader) handleExit(sig monitor.ExitSignal) {
 		balBefore = t.Balance()
 	}
 
-	tx, err := t.signet.Wallets.Swap(t.walletID, signet.SwapParams{
-		FromToken:       sig.Mint,
-		ToToken:         "SOL",
-		Amount:          sellAmount,
-		SlippageBps:     500, // 5% — wider on exit, speed > price
-		DeadlineSeconds: 20,
-	})
-	if err != nil {
-		var sigErr *signet.SignetError
-		isRoutable := errors.As(err, &sigErr) && sigErr.StatusCode != 502 &&
-			!strings.Contains(sigErr.Message, "token_not_routable")
-		if !isRoutable {
-			// Token not routable via Jupiter — try pumpportal sell
-			log.Printf("[trader] exit swap unroutable for %s, trying pumpportal sell", sig.Mint[:8])
-			tx, err = t.sellViaPumpPortal(sig.Mint, sig.Partial)
+	// Try exit up to 3 times — RPC blips and pool delays can cause transient failures.
+	var tx *signet.TransactionResult
+	var err error
+	for attempt := range 3 {
+		if attempt > 0 {
+			log.Printf("[trader] exit retry %d/3 for %s in 5s", attempt+1, sig.Mint[:8])
+			time.Sleep(5 * time.Second)
 		}
+		tx, err = t.signet.Wallets.Swap(t.walletID, signet.SwapParams{
+			FromToken:       sig.Mint,
+			ToToken:         "SOL",
+			Amount:          sellAmount,
+			SlippageBps:     500,
+			DeadlineSeconds: 20,
+		})
 		if err != nil {
-			log.Printf("[trader] exit failed for %s: %v", sig.Mint[:8], err)
-			isStuck := strings.Contains(err.Error(), "Pool account not found") ||
-				strings.Contains(err.Error(), "not found")
-			if isStuck && sig.Partial == 0 {
-				// No pool exists — token is dead/rugged. Write off the position as a total loss
-				// so the monitor stops retrying and the slot is freed.
-				log.Printf("[trader] %s has no pool — writing off as total loss", sig.Mint[:8])
-				t.telegram.Alert(fmt.Sprintf("🪦 *Position Written Off*\n`%s`\nNo pool found — token likely rugged. Position closed at total loss.", sig.Mint))
-				closed := &models.ClosedPosition{
-					Position:      *pos,
-					ExitPriceSOL:  0,
-					ExitAmountSOL: 0,
-					PnLSOL:        -pos.EntryAmountSOL,
-					PnLPercent:    -100,
-					Reason:        models.ExitNoLiquidity,
-					ClosedAt:      time.Now(),
-					TxHash:        "writeoff",
-				}
-				t.portfolio.Close(closed)
-				if t.scalper != nil {
-					go t.scalper.OnPositionClosed(closed.Mint)
-				}
-			} else {
-				t.telegram.Alert(fmt.Sprintf("EXIT FAILED: %s\n%v", sig.Mint[:8], err))
+			var sigErr *signet.SignetError
+			isRoutable := errors.As(err, &sigErr) && sigErr.StatusCode != 502 &&
+				!strings.Contains(sigErr.Message, "token_not_routable")
+			if !isRoutable {
+				log.Printf("[trader] exit swap unroutable for %s, trying pumpportal sell", sig.Mint[:8])
+				tx, err = t.sellViaPumpPortal(sig.Mint, sig.Partial)
 			}
-			return
 		}
+		if err == nil {
+			break
+		}
+		log.Printf("[trader] exit attempt %d failed for %s: %v", attempt+1, sig.Mint[:8], err)
+	}
+
+	if err != nil {
+		// All 3 attempts failed — write off as total loss and free the slot.
+		// Better to record the loss honestly than leave a ghost position blocking trades.
+		log.Printf("[trader] exit failed after 3 attempts for %s — writing off as total loss", sig.Mint[:8])
+		if sig.Partial == 0 {
+			t.telegram.Alert(fmt.Sprintf("🪦 *Position Written Off*\n`%s`\nAll exit attempts failed — token likely rugged. Recorded as total loss.\n_%v_", sig.Mint[:8], err))
+			closed := &models.ClosedPosition{
+				Position:      *pos,
+				ExitPriceSOL:  0,
+				ExitAmountSOL: 0,
+				PnLSOL:        -pos.EntryAmountSOL,
+				PnLPercent:    -100,
+				Reason:        models.ExitNoLiquidity,
+				ClosedAt:      time.Now(),
+				TxHash:        "writeoff",
+			}
+			t.portfolio.Close(closed)
+			if t.scalper != nil {
+				go t.scalper.OnPositionClosed(closed.Mint)
+			}
+		} else {
+			t.telegram.Alert(fmt.Sprintf("⚠️ PARTIAL EXIT FAILED: %s\n%v", sig.Mint[:8], err))
+		}
+		return
 	}
 
 	// Only fully close the position on full exits
