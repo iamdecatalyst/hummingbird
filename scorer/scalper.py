@@ -411,6 +411,16 @@ class Scalper:
 
             if ai_intent == "likely_rug":
                 return -100, CheckResult(score=0, max_score=30, reason="AI: likely rug — veto"), {}
+
+            # Hard safety net: suspicious AI + brand-new deployer + no LP lock = veto
+            # Cricket's new floors handle most of these but this catches insufficient_data edge cases
+            deployer_age = scan.get("deployer_wallet_age_days")
+            lp_locked = scan.get("lp_locked", False)
+            if (ai_intent == "suspicious"
+                    and deployer_age is not None and deployer_age == 0
+                    and not lp_locked):
+                return -100, CheckResult(score=0, max_score=30, reason="suspicious AI + 0d deployer + no LP lock — veto"), {}
+
             if ai_intent == "suspicious":
                 delta -= 15
                 note += " AI:suspicious"
