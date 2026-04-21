@@ -38,6 +38,14 @@ ENTRY_THRESHOLD = 60          # min combined score to enter
 
 CHAIN_MAP = {"solana": "solana", "base": "base", "bnb": "bsc"}
 
+_DEX_PLATFORM = {
+    "pumpfun":   "pump_fun",
+    "pumpswap":  "pump_fun",   # graduated pump.fun tokens on PumpSwap AMM
+    "launchlab": "raydium_launchlab",
+    "moonshot":  "moonshot",
+    "boop":      "boop",
+}
+
 _CRICKET_HEADERS = {"Authorization": f"Bearer {CRICKET_API_KEY}", "User-Agent": "hummingbird/1.0"}
 
 
@@ -131,15 +139,17 @@ class Scalper:
                 except Exception:
                     pass  # RPC blip — allow through, Cricket will catch other risks
 
+                dex_id = pair.get("dexId", "")
+                platform = _DEX_PLATFORM.get(dex_id, dex_id or "unknown")
                 self.store.add(
                     mint=mint,
-                    platform="pump_fun",
+                    platform=platform,
                     chain="solana",
                     dev_wallet="",
                     bonding_curve="",
                     timestamp_ms=now_ms,
                 )
-                log.info("[scalper] 🔎 discovered %s... age=%.0fd%.0fh liq=$%.0f", mint[:8], age_minutes // 1440, (age_minutes % 1440) // 60, liquidity)
+                log.info("[scalper] 🔎 discovered %s... dex=%s age=%.0fd%.0fh liq=$%.0f", mint[:8], dex_id, age_minutes // 1440, (age_minutes % 1440) // 60, liquidity)
         except Exception as e:
             log.warning("[scalper] store_discovered error: %s", e)
 
