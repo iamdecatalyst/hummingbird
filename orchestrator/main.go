@@ -1591,7 +1591,7 @@ func broadcastTradeResult(tgToken, channelID string, result *models.ScoreResult)
 		if len(analysisLines) > 0 {
 			analysisLines = append(analysisLines, "")
 		}
-		analysisLines = append(analysisLines, result.AISummary)
+		analysisLines = append(analysisLines, wordWrap(result.AISummary, 68))
 	}
 	if len(analysisLines) > 0 {
 		parts = append(parts, "```\n"+strings.Join(analysisLines, "\n")+"\n```")
@@ -1617,6 +1617,24 @@ func broadcastTradeResult(tgToken, channelID string, result *models.ScoreResult)
 
 // broadcastScan posts a styled scan summary to the public Telegram channel.
 // Called for every token — skipped ones show risk flags, entered ones celebrate the snipe.
+// wordWrap breaks s into lines of at most width chars on word boundaries.
+func wordWrap(s string, width int) string {
+	var lines []string
+	for len(s) > width {
+		cut := width
+		for cut > 0 && s[cut] != ' ' {
+			cut--
+		}
+		if cut == 0 {
+			cut = width
+		}
+		lines = append(lines, s[:cut])
+		s = strings.TrimLeft(s[cut:], " ")
+	}
+	lines = append(lines, s)
+	return strings.Join(lines, "\n")
+}
+
 func broadcastScan(tgToken, channelID string, token cricket.TokenDetected, scan *cricket.MantisScanResponse, wallet *cricket.FireflyWalletResponse, score int, decision string, posSOL float64) {
 	if decision == "skip" && !channelAllowed() {
 		return
