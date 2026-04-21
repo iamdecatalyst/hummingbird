@@ -43,6 +43,7 @@ class Scalper:
         self.store = store
         self.orchestrator_url = orchestrator_url
         self._active: set[str] = set()
+        self._broadcast: set[str] = set()  # tokens already sent to channel (skip or entry)
 
     async def run(self):
         log.info("🔍 Scalper scanner started (interval: %ds)", SCAN_INTERVAL_SECONDS)
@@ -301,9 +302,14 @@ class Scalper:
             cricket_delta, cricket_check, meta = await self._cricket_scan(client, token)
             dex_result.checks["cricket"] = cricket_check
 
-            # Hard skip if Cricket says critical
+            # Hard skip if Cricket says critical/rug — broadcast once then drop
             if cricket_delta <= -100:
                 log.info("[scalper] ❌ %s... cricket veto: %s", token.mint[:8], cricket_check.reason)
+                if token.mint not in self._broadcast:
+                    self._broadcast.add(token.mint)
+                    dex_result.decision = "skip"
+                    dex_result.checks["cricket"] = cricket_check
+                    await self._forward(dex_result)
                 return
 
             combined = max(0, min(100, dex_result.total + cricket_delta))
@@ -311,6 +317,10 @@ class Scalper:
 
             if combined < ENTRY_THRESHOLD:
                 log.info("[scalper] ⏭  %s... combined=%d (dex+cricket) — below threshold", token.mint[:8], combined)
+                if token.mint not in self._broadcast:
+                    self._broadcast.add(token.mint)
+                    dex_result.decision = "skip"
+                    await self._forward(dex_result)
                 return
 
             dex_result.position_sol = 0.05 if combined < 75 else 0.10
@@ -445,3 +455,4 @@ class Scalper:
 
     def on_position_closed(self, mint: str):
         self._active.discard(mint)
+        self._broadcast.discard(mint)
