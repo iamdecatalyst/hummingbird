@@ -7,8 +7,11 @@ Two jobs:
 """
 import asyncio
 import hmac
+import json
 import logging
+import os
 import sys
+import time
 import uvicorn
 from contextlib import asynccontextmanager
 
@@ -97,6 +100,7 @@ async def _score_and_forward(token: TokenDetected):
         result.position_sol,
     )
     _log_breakdown(result)
+    _write_score_log(result, "sniper")
 
     await _forward(result)
 
@@ -116,6 +120,37 @@ async def scalper_position_closed(body: dict):
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
+
+SCORE_LOG_PATH = os.environ.get("SCORE_LOG_PATH", "/opt/hummingbird/logs/scores.jsonl")
+
+def _write_score_log(result: ScoreResult, source: str):
+    """Append one JSON line per scored token for pattern analysis."""
+    try:
+        os.makedirs(os.path.dirname(SCORE_LOG_PATH), exist_ok=True)
+        record = {
+            "ts": int(time.time()),
+            "source": source,
+            "mint": result.mint,
+            "platform": result.platform,
+            "decision": result.decision,
+            "total": result.total,
+            "position_sol": result.position_sol,
+            "rating": result.rating,
+            "ai_summary": result.ai_summary,
+            "checks": {k: {"score": v.score, "max": v.max_score, "reason": v.reason} for k, v in result.checks.items()},
+            "flags": result.scan_flags,
+            "mint_authority_revoked": result.mint_authority_revoked,
+            "freeze_authority_revoked": result.freeze_authority_revoked,
+            "dev_supply_pct": result.dev_supply_pct,
+            "top_10_holder_pct": result.top_10_holder_pct,
+            "deployer_wallet_age_days": result.deployer_wallet_age_days,
+            "deployer_prior_launches": result.deployer_prior_launches,
+        }
+        with open(SCORE_LOG_PATH, "a") as f:
+            f.write(json.dumps(record) + "\n")
+    except Exception as e:
+        log.warning("[scorelog] write failed: %s", e)
+
 
 def _log_breakdown(result: ScoreResult):
     for name, check in result.checks.items():

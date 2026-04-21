@@ -439,7 +439,13 @@ class Scalper:
 
     # ── Forward to orchestrator ───────────────────────────────────────────────
 
-    async def _forward(self, signal: ScoreResult):
+    async def _forward(self, signal: ScoreResult, write_log: bool = True):
+        if write_log:
+            try:
+                from main import _write_score_log
+                _write_score_log(signal, "scalper")
+            except Exception:
+                pass
         url = f"{self.orchestrator_url}/trade"
         headers = {"Authorization": f"Bearer {SCORER_SECRET}"}
         try:
