@@ -22,7 +22,10 @@ import httpx
 
 from config import CRICKET_API_KEY, CRICKET_BASE_URL, SCORER_SECRET
 from models import CheckResult, ScoreResult
+from rpc import get_account_info
 from store import StoredToken, TokenStore
+
+TOKEN_2022_PROGRAM = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
 
 log = logging.getLogger(__name__)
 
@@ -119,6 +122,15 @@ class Scalper:
                 # 4 hour cap — older tokens have weaker momentum and higher rug exposure.
                 if age_minutes < 10 or age_minutes > 240:
                     continue
+                # Skip Token 2022 tokens — transfer fees break Jupiter exit simulation
+                try:
+                    acct = await get_account_info(mint)
+                    if acct and acct.get("owner") == TOKEN_2022_PROGRAM:
+                        log.info("[scalper] ⛔ %s... Token 2022 — skipping (exit unreliable)", mint[:8])
+                        continue
+                except Exception:
+                    pass  # RPC blip — allow through, Cricket will catch other risks
+
                 self.store.add(
                     mint=mint,
                     platform="pump_fun",
