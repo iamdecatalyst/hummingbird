@@ -397,6 +397,10 @@ class Scalper:
 
             if rating == "critical":
                 return -100, CheckResult(score=0, max_score=30, reason="CRITICAL — veto"), {}
+
+            # Token 2022 — exit simulation unreliable due to transfer fees
+            if data.get("scan", {}).get("token_program") == "token-2022":
+                return -100, CheckResult(score=0, max_score=30, reason="Token 2022 — exit unreliable"), {}
             elif rating == "high":
                 delta, note = -15, f"high risk ({base})"
             elif rating == "moderate":

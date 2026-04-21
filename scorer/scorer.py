@@ -136,6 +136,11 @@ def _apply_scoring(mantis_raw: dict, firefly_raw: Optional[dict]) -> tuple[int, 
             "mantis": CheckResult(score=0, max_score=100, reason="critical risk rating")
         }
 
+    if scan.get("token_program") == "token-2022":
+        return 0, "skip", 0.0, {
+            "mantis": CheckResult(score=0, max_score=100, reason="Token 2022 — exit unreliable")
+        }
+
     # AI analysis — hunter+ tier only, absent for lower tiers (handle gracefully)
     ai = data.get("ai_analysis") or {}
     ai_intent = ai.get("intent", "")
