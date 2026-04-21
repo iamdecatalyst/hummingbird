@@ -75,6 +75,7 @@ export interface UserConfig {
   wallet_id?:       string
   sniper_enabled:   boolean
   scalper_enabled:  boolean
+  swing_enabled:    boolean
   max_position_sol: number
   max_positions:    number
   stop_loss_pct:    number
