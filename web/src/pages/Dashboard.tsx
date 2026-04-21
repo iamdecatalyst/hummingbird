@@ -83,7 +83,8 @@ function PositionCard({ pos }: { pos: Position }) {
     <div className="neu-card-inset p-4 rounded-xl">
       <div className="flex items-start justify-between mb-2">
         <div>
-          <span className="font-mono text-sm text-white font-bold">{shortMint(pos.mint)}</span>
+          <a href={`https://solscan.io/token/${pos.mint}`} target="_blank" rel="noopener noreferrer"
+             className="font-mono text-sm text-white font-bold hover:text-[#00A8FF] transition-colors">{shortMint(pos.mint)} ↗</a>
           <span className="ml-2 font-mono text-xs text-[#00A8FF]">{pos.score >= 75 ? 'SNIPER' : 'SCALPER'}</span>
         </div>
         <span className="font-mono text-xs text-[#888]">{held(pos.opened_at)}</span>
@@ -1190,7 +1191,10 @@ function TabOverview({ stats, positions, closed, online, error }: {
                 <tbody>
                   {closed.slice(0, 8).map((t, i) => (
                     <tr key={i} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
-                      <td className="font-mono text-xs text-white py-2.5 pr-5">{shortMint(t.mint)}</td>
+                      <td className="font-mono text-xs py-2.5 pr-5">
+                        <a href={`https://solscan.io/token/${t.mint}`} target="_blank" rel="noopener noreferrer"
+                           className="text-white hover:text-[#00A8FF] transition-colors">{shortMint(t.mint)} ↗</a>
+                      </td>
                       <td className="font-mono text-xs text-[#00A8FF] py-2.5 pr-5">{t.score >= 75 ? 'SNIPER' : 'SCALPER'}</td>
                       <td className="font-mono text-xs text-[#666] py-2.5 pr-5">{t.entry_amount_sol.toFixed(3)}</td>
                       <td className="font-mono text-xs text-[#666] py-2.5 pr-5">{t.exit_amount_sol.toFixed(3)}</td>
