@@ -2041,8 +2041,9 @@ function ConfigModal({ onClose }: { onClose: () => void }) {
           {/* Modes */}
           <div className="neu-tile p-4">
             <p className="font-mono text-[10px] text-[#888] uppercase tracking-widest mb-3">Trading Modes</p>
-            <ToggleRow label="Sniper" sub="High-score tokens (≥75) — larger position" value={cfg.sniper_enabled} onToggle={() => update({ sniper_enabled: !cfg.sniper_enabled })} />
-            <ToggleRow label="Scalper" sub="Lower-score tokens — smaller position, quick exits" value={cfg.scalper_enabled} onToggle={() => update({ scalper_enabled: !cfg.scalper_enabled })} />
+            <ToggleRow label="Sniper" sub="New launches — catches tokens at birth" value={cfg.sniper_enabled} onToggle={() => update({ sniper_enabled: !cfg.sniper_enabled })} />
+            <ToggleRow label="Scalper" sub="10min–4hr tokens — second-wave momentum plays" value={cfg.scalper_enabled} onToggle={() => update({ scalper_enabled: !cfg.scalper_enabled })} />
+            <ToggleRow label="Swing" sub="24h+ established tokens — $50k+ liquidity, technical entries" value={cfg.swing_enabled ?? true} onToggle={() => update({ swing_enabled: !(cfg.swing_enabled ?? true) })} />
           </div>
 
           {/* Position sizing */}
