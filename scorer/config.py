@@ -1,6 +1,7 @@
 import os
 
 ORCHESTRATOR_URL = os.getenv("ORCHESTRATOR_URL", "http://localhost:8002")
+RPC_HTTP = os.getenv("SOLANA_RPC", "https://api.mainnet-beta.solana.com")
 PORT = int(os.getenv("SCORER_PORT", "8001"))
 
 # Shared secret with the listener (incoming /score) and orchestrator (outgoing /trade).
