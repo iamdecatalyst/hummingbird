@@ -1584,11 +1584,17 @@ func broadcastTradeResult(tgToken, channelID string, result *models.ScoreResult)
 	if devLine != "" {
 		parts = append(parts, devLine)
 	}
-	if len(flagLines) > 0 {
-		parts = append(parts, strings.Join(flagLines, "\n"))
-	}
+	// Flags + AI summary in one code block so it reads as a quoted analysis section
+	var analysisLines []string
+	analysisLines = append(analysisLines, flagLines...)
 	if result.AISummary != "" {
-		parts = append(parts, "```\n"+result.AISummary+"\n```")
+		if len(analysisLines) > 0 {
+			analysisLines = append(analysisLines, "")
+		}
+		analysisLines = append(analysisLines, result.AISummary)
+	}
+	if len(analysisLines) > 0 {
+		parts = append(parts, "```\n"+strings.Join(analysisLines, "\n")+"\n```")
 	}
 	parts = append(parts, "\n⚡ [hummingbird.vylth.com](https://hummingbird.vylth.com)")
 
