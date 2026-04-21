@@ -25,6 +25,7 @@ type ScoreResult struct {
 	FireflyScore          *int     `json:"firefly_score,omitempty"`
 	FireflyWinRate        *float64 `json:"firefly_win_rate,omitempty"`
 	ScanFlags             []string `json:"scan_flags,omitempty"`
+	AISummary             string   `json:"ai_summary,omitempty"` // AI 2-3 sentence analysis (hunter+ tier)
 }
 
 type CheckResult struct {

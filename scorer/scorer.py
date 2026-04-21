@@ -89,9 +89,11 @@ async def score(token: TokenDetected) -> ScoreResult:
     risk = mantis_raw.get("data", {}).get("risk_score", {})
     fw_data = (firefly_data or {}).get("data", {}) if firefly_data and firefly_data.get("success") else {}
     high_flags = [f["detail"] for f in scan.get("flags", []) if f.get("severity") in ("high", "critical") and f.get("detail")]
-    ai_warning = (mantis_raw.get("data", {}).get("ai_analysis") or {}).get("warning")
+    ai_block = mantis_raw.get("data", {}).get("ai_analysis") or {}
+    ai_warning = ai_block.get("warning")
     if ai_warning:
         high_flags.insert(0, f"🤖 {ai_warning}")
+    ai_summary = (ai_block.get("summary") or "").strip()
 
     return ScoreResult(
         mint=token.mint,
@@ -112,6 +114,7 @@ async def score(token: TokenDetected) -> ScoreResult:
         firefly_score=fw_data.get("score") if fw_data else None,
         firefly_win_rate=fw_data.get("win_rate") if fw_data else None,
         scan_flags=high_flags,
+        ai_summary=ai_summary,
     )
 
 

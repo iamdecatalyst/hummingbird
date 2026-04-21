@@ -40,3 +40,4 @@ class ScoreResult(BaseModel):
     firefly_score: Optional[int] = None
     firefly_win_rate: Optional[float] = None
     scan_flags: list[str] = []                   # high/critical flag detail strings
+    ai_summary: str = ""                          # AI 2-3 sentence analysis (hunter+ tier)

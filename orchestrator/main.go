@@ -1587,6 +1587,9 @@ func broadcastTradeResult(tgToken, channelID string, result *models.ScoreResult)
 	if len(flagLines) > 0 {
 		parts = append(parts, strings.Join(flagLines, "\n"))
 	}
+	if result.AISummary != "" {
+		parts = append(parts, "```\n"+result.AISummary+"\n```")
+	}
 	parts = append(parts, "\n⚡ [hummingbird.vylth.com](https://hummingbird.vylth.com)")
 
 	msg := strings.Join(parts, "\n")

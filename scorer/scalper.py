@@ -327,6 +327,7 @@ class Scalper:
                 dex_result.deployer_wallet_age_days = meta.get("deployer_wallet_age_days")
                 dex_result.deployer_prior_launches = meta.get("deployer_prior_launches")
                 dex_result.scan_flags = meta.get("scan_flags", [])
+                dex_result.ai_summary = meta.get("ai_summary", "")
 
             log.info(
                 "[scalper] 🎯 %s...  combined=%d/100  dex=%d  cricket_adj=%+d  pos=%.2f SOL",
@@ -417,6 +418,7 @@ class Scalper:
                     ([f"🤖 {ai_warning}"] if ai_warning else []) +
                     [f["detail"] for f in flags if f.get("severity") in ("high", "critical") and f.get("detail")]
                 ),
+                "ai_summary": (ai.get("summary") or "").strip(),
             }
 
             display_score = max(0, 15 + delta)
