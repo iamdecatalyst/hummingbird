@@ -319,11 +319,14 @@ func (t *Trader) handleExit(sig monitor.ExitSignal) {
 			log.Printf("[trader] exit retry %d/3 for %s in 5s", attempt+1, sig.Mint[:8])
 			time.Sleep(5 * time.Second)
 		}
+		// Escalate slippage on retries — Token 2022 transfer fees and volatile
+		// pump-amm pools often fail at 5%; 1000bps on retry recovers many of these.
+		slippage := 500 + (attempt * 500)
 		tx, err = t.signet.Wallets.Swap(t.walletID, signet.SwapParams{
 			FromToken:       sig.Mint,
 			ToToken:         "SOL",
 			Amount:          sellAmount,
-			SlippageBps:     500,
+			SlippageBps:     slippage,
 			DeadlineSeconds: 20,
 		})
 		if err != nil {

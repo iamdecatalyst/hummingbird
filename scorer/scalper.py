@@ -253,15 +253,19 @@ class Scalper:
         checks["buy_pressure"] = CheckResult(score=pts, max_score=20, reason=reason)
         total += pts
 
-        # 1h trend — 20pts (replaces age — is the wave still going?)
-        if price_change_1h > 20 and vol_1h > 5_000:
-            pts, reason = 20, f"strong 1h trend +{price_change_1h:.0f}% ${vol_1h:,.0f}"
+        # 1h trend — 20pts — price + volume must both be real
+        if price_change_1h > 20 and vol_1h >= 100_000:
+            pts, reason = 20, f"strong 1h +{price_change_1h:.0f}% ${vol_1h:,.0f}"
+        elif price_change_1h > 20 and vol_1h >= 20_000:
+            pts, reason = 14, f"1h trend +{price_change_1h:.0f}% ${vol_1h:,.0f}"
+        elif price_change_1h > 5 and vol_1h >= 20_000:
+            pts, reason = 10, f"positive 1h +{price_change_1h:.0f}% ${vol_1h:,.0f}"
         elif price_change_1h > 5:
-            pts, reason = 12, f"positive 1h +{price_change_1h:.0f}%"
+            pts, reason = 4, f"positive 1h low vol ${vol_1h:,.0f}"
         elif price_change_1h > 0:
-            pts, reason = 6, f"flat 1h +{price_change_1h:.0f}%"
+            pts, reason = 2, f"flat 1h +{price_change_1h:.0f}%"
         elif price_change_1h > -10:
-            pts, reason = 3, f"slight dip 1h {price_change_1h:.0f}%"
+            pts, reason = 1, f"slight dip 1h {price_change_1h:.0f}%"
         else:
             pts, reason = 0, f"dumping 1h {price_change_1h:.0f}%"
         checks["trend_1h"] = CheckResult(score=pts, max_score=20, reason=reason)
@@ -413,6 +417,27 @@ class Scalper:
             if ai_confidence in ("medium", "high") and ai_delta != 0:
                 delta += ai_delta
                 note += f" AI:{ai_delta:+d}"
+
+            # Holder distribution — wide spread = real community, concentration = risk
+            top10 = scan.get("top_10_holder_pct")
+            if top10 is not None:
+                if top10 < 20:
+                    delta += 10
+                    note += f" top10={top10:.0f}%+10"
+                elif top10 < 35:
+                    delta += 5
+                    note += f" top10={top10:.0f}%+5"
+                elif top10 > 70:
+                    delta -= 15
+                    note += f" top10={top10:.0f}%-15"
+                elif top10 > 50:
+                    delta -= 8
+                    note += f" top10={top10:.0f}%-8"
+
+            dev_pct = scan.get("dev_supply_pct")
+            if dev_pct is not None and dev_pct > 15:
+                delta -= 10
+                note += f" dev={dev_pct:.0f}%-10"
 
             flags = scan.get("flags", [])
             meta = {
