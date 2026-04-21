@@ -325,6 +325,7 @@ class Scalper:
                     self._broadcast.add(token.mint)
                     dex_result.decision = "skip"
                     dex_result.checks["cricket"] = cricket_check
+                    dex_result.scan_flags = [f"🚫 {cricket_check.reason}"]
                     await self._forward(dex_result)
                 return
 
@@ -336,6 +337,14 @@ class Scalper:
                 if token.mint not in self._broadcast:
                     self._broadcast.add(token.mint)
                     dex_result.decision = "skip"
+                    # Build reason lines from check breakdown for Telegram broadcast
+                    skip_flags = []
+                    if cricket_check.reason and cricket_check.reason not in ("unavailable", "no API key"):
+                        skip_flags.append(f"Cricket: {cricket_check.reason}")
+                    for name, chk in dex_result.checks.items():
+                        if name != "cricket" and chk.score < chk.max_score // 2:
+                            skip_flags.append(f"{name}: {chk.reason}")
+                    dex_result.scan_flags = skip_flags
                     await self._forward(dex_result)
                 return
 
