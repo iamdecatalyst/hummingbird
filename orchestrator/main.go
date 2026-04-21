@@ -800,6 +800,7 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 			"wallet_id":        walletID,
 			"sniper_enabled":   userCfg.SniperEnabled,
 			"scalper_enabled":  userCfg.ScalperEnabled,
+			"swing_enabled":    userCfg.SwingEnabled,
 			"max_position_sol": userCfg.MaxPositionSOL,
 			"max_positions":    userCfg.MaxPositions,
 			"stop_loss_pct":    userCfg.StopLossPercent,
@@ -1756,6 +1757,7 @@ func dbCfgToBotCfg(database *db.DB, nexusID string) bot.BotConfig {
 	return bot.BotConfig{
 		SniperEnabled:   uc.SniperEnabled,
 		ScalperEnabled:  uc.ScalperEnabled,
+		SwingEnabled:    uc.SwingEnabled,
 		MaxPositionSOL:  uc.MaxPositionSOL,
 		MaxPositions:    uc.MaxPositions,
 		StopLossPercent: uc.StopLossPercent,
@@ -1772,6 +1774,7 @@ func botCfgToDBCfg(bcfg bot.BotConfig) *db.UserConfig {
 	return &db.UserConfig{
 		SniperEnabled:   bcfg.SniperEnabled,
 		ScalperEnabled:  bcfg.ScalperEnabled,
+		SwingEnabled:    bcfg.SwingEnabled,
 		MaxPositionSOL:  bcfg.MaxPositionSOL,
 		MaxPositions:    bcfg.MaxPositions,
 		StopLossPercent: bcfg.StopLossPercent,

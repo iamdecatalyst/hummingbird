@@ -161,6 +161,7 @@ func renderPositions(positions []*models.Position) string {
 func renderConfig(cfg BotConfig) string {
 	sniperStatus := statusToggle(cfg.SniperEnabled)
 	scalperStatus := statusToggle(cfg.ScalperEnabled)
+	swingStatus := statusToggle(cfg.SwingEnabled)
 	riskLabel, riskEmoji := riskDisplay(cfg.MaxPositionSOL)
 	tp1 := cfg.TakeProfit1x
 	if tp1 <= 0 { tp1 = 2.0 }
@@ -178,6 +179,7 @@ func renderConfig(cfg BotConfig) string {
 		boxTop,
 		row("Sniper", sniperStatus),
 		row("Scalper", scalperStatus),
+		row("Swing", swingStatus),
 		boxMid,
 		row("Risk level", fmt.Sprintf("%s  %s", riskEmoji, riskLabel)),
 		row("Max position", fmt.Sprintf("%.2f SOL", cfg.MaxPositionSOL)),
@@ -199,8 +201,11 @@ func renderConfig(cfg BotConfig) string {
 
 func renderEntered(p *models.Position) string {
 	mode := "SNIPER"
-	if p.Score < 60 {
+	switch p.Decision {
+	case "scalp":
 		mode = "SCALPER"
+	case "swing":
+		mode = "SWING"
 	}
 	return strings.Join([]string{
 		fmt.Sprintf("🐦 <b>ENTERED [%s]</b>", mode),
@@ -293,6 +298,7 @@ func truncate(s string, n int) string {
 type BotConfig struct {
 	SniperEnabled   bool
 	ScalperEnabled  bool
+	SwingEnabled    bool
 	MaxPositionSOL  float64
 	MaxPositions    int
 	StopLossPercent float64 // 0.25 = 25%

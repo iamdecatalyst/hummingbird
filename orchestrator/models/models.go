@@ -8,7 +8,7 @@ type ScoreResult struct {
 	DevWallet   string                 `json:"dev_wallet"`
 	Platform    string                 `json:"platform"` // pump_fun | moonshot | raydium_launchlab | boop | etc.
 	Total       int                    `json:"total"`
-	Decision    string                 `json:"decision"` // skip | small | medium | full | scalp
+	Decision    string                 `json:"decision"` // skip | small | medium | full | scalp | swing
 	PositionSOL float64                `json:"position_sol"`
 	Checks      map[string]CheckResult `json:"checks"`
 	ScoredAtMs  int64                  `json:"scored_at_ms"`

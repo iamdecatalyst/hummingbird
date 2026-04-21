@@ -23,6 +23,7 @@ import (
 type UserConfig struct {
 	SniperEnabled   bool    `json:"sniper_enabled"`
 	ScalperEnabled  bool    `json:"scalper_enabled"`
+	SwingEnabled    bool    `json:"swing_enabled"`
 	MaxPositionSOL  float64 `json:"max_position_sol"`
 	MaxPositions    int     `json:"max_positions"`
 	StopLossPercent float64 `json:"stop_loss_percent"` // 0.25 = 25%
@@ -39,6 +40,7 @@ func DefaultUserConfig() *UserConfig {
 	return &UserConfig{
 		SniperEnabled:   true,
 		ScalperEnabled:  true,
+		SwingEnabled:    true,
 		MaxPositionSOL:  0.10,
 		MaxPositions:    5,
 		StopLossPercent: 0.25,

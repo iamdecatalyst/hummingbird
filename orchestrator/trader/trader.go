@@ -163,10 +163,10 @@ func (t *Trader) enter(result *models.ScoreResult) {
 	var tx *signet.TransactionResult
 	var err error
 
-	// Scalp entries skip PumpPortal — tokens are 8-45 min old, already on Raydium/Jupiter,
-	// no indexing delay needed. Sniper entries for pump_fun try PumpPortal first (bonding curve,
-	// no Jupiter delay), then fall back to Jupiter.
-	if result.Platform == "pump_fun" && result.Decision != "scalp" {
+	// Scalp/swing entries skip PumpPortal — tokens are already on Raydium/Jupiter.
+	// Sniper entries for pump_fun try PumpPortal first (bonding curve), then fall back.
+	isSecondary := result.Decision == "scalp" || result.Decision == "swing"
+	if result.Platform == "pump_fun" && !isSecondary {
 		log.Printf("[trader] pump_fun — trying PumpPortal directly for %s", result.Mint[:8])
 		tx, err = t.buyViaPumpPortal(result)
 		if err != nil {
@@ -178,8 +178,8 @@ func (t *Trader) enter(result *models.ScoreResult) {
 	}
 
 	// Non-pump_fun or PumpPortal fallback: use Signet/Jupiter.
-	// Sniper entries wait 10s for Jupiter indexing. Scalp tokens are old enough to skip the wait.
-	if result.Decision != "scalp" {
+	// Sniper entries wait 10s for Jupiter indexing. Scalp/swing tokens are old enough to skip the wait.
+	if !isSecondary {
 		time.Sleep(10 * time.Second)
 	}
 

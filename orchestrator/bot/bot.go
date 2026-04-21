@@ -342,6 +342,11 @@ func (b *Bot) handleCallback(cq *tgbotapi.CallbackQuery) {
 		cfg.ScalperEnabled = !cfg.ScalperEnabled
 		b.setConfig(cid, cfg)
 		b.editConfig(cid, mid)
+	case "swing_toggle":
+		cfg := b.getConfig(cid)
+		cfg.SwingEnabled = !cfg.SwingEnabled
+		b.setConfig(cid, cfg)
+		b.editConfig(cid, mid)
 	case "noop":
 		// display-only button in config keyboard — do nothing
 	case "refresh_main":
@@ -629,6 +634,10 @@ func configKB(cfg BotConfig) *tgbotapi.InlineKeyboardMarkup {
 	if !cfg.ScalperEnabled {
 		scalperBtn = "Scalper ❌ OFF"
 	}
+	swingBtn := "Swing ✅ ON"
+	if !cfg.SwingEnabled {
+		swingBtn = "Swing ❌ OFF"
+	}
 	tp1 := cfg.TakeProfit1x; if tp1 <= 0 { tp1 = 2.0 }
 	tp2 := cfg.TakeProfit2x; if tp2 <= 0 { tp2 = 5.0 }
 	tp3 := cfg.TakeProfit3x; if tp3 <= 0 { tp3 = 10.0 }
@@ -636,7 +645,7 @@ func configKB(cfg BotConfig) *tgbotapi.InlineKeyboardMarkup {
 
 	kb := tgbotapi.NewInlineKeyboardMarkup(
 		// Toggles
-		[]tgbotapi.InlineKeyboardButton{btn(sniperBtn, "sniper_toggle"), btn(scalperBtn, "scalper_toggle")},
+		[]tgbotapi.InlineKeyboardButton{btn(sniperBtn, "sniper_toggle"), btn(scalperBtn, "scalper_toggle"), btn(swingBtn, "swing_toggle")},
 		// Position size
 		[]tgbotapi.InlineKeyboardButton{
 			btn("─ Position", "cfg:pos:dn"),

@@ -23,6 +23,7 @@ from models import ScoreResult, TokenDetected
 from scalper import Scalper
 from scorer import score as run_score
 from store import TokenStore
+from swing import Swing
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [scorer] %(message)s")
 log = logging.getLogger(__name__)
@@ -30,6 +31,7 @@ log = logging.getLogger(__name__)
 # Shared state
 store = TokenStore(max_age_minutes=45)
 scalper = Scalper(store=store, orchestrator_url=ORCHESTRATOR_URL)
+swing = Swing(orchestrator_url=ORCHESTRATOR_URL)
 
 
 if not SCORER_SECRET or len(SCORER_SECRET) < 32:
@@ -54,10 +56,12 @@ def require_scorer_auth(authorization: str = Header(default="")) -> None:
 async def lifespan(app: FastAPI):
     log.info("🐍 Hummingbird Scorer ready on port %d", PORT)
     log.info("   Orchestrator: %s", ORCHESTRATOR_URL)
-    # Start scalper background loop
-    task = asyncio.create_task(scalper.run())
+    # Start scalper + swing background loops
+    t1 = asyncio.create_task(scalper.run())
+    t2 = asyncio.create_task(swing.run())
     yield
-    task.cancel()
+    t1.cancel()
+    t2.cancel()
 
 
 app = FastAPI(title="Hummingbird Scorer", lifespan=lifespan)
@@ -109,13 +113,17 @@ async def _score_and_forward(token: TokenDetected):
 
 @app.post("/scalper/closed")
 async def scalper_position_closed(body: dict):
-    """
-    Called by the orchestrator when a scalp position closes.
-    Frees the slot so the same token can be scalped again if the pattern repeats.
-    """
     mint = body.get("mint", "")
     if mint:
         scalper.on_position_closed(mint)
+    return {"status": "ok"}
+
+
+@app.post("/swing/closed")
+async def swing_position_closed(body: dict):
+    mint = body.get("mint", "")
+    if mint:
+        swing.on_position_closed(mint)
     return {"status": "ok"}
 
 
