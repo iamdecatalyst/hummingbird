@@ -387,6 +387,22 @@ class Scalper:
                 delta -= 5
                 note += " freeze_active"
 
+            # AI analysis — hunter+ tier only, absent for lower tiers (handle gracefully)
+            ai = data.get("ai_analysis") or {}
+            ai_intent = ai.get("intent", "")
+            ai_delta = int(ai.get("ai_risk_delta") or 0)
+            ai_confidence = ai.get("confidence", "low")
+            ai_warning = (ai.get("warning") or "").strip()
+
+            if ai_intent == "likely_rug":
+                return -100, CheckResult(score=0, max_score=30, reason="AI: likely rug — veto"), {}
+            if ai_intent == "suspicious":
+                delta -= 15
+                note += " AI:suspicious"
+            if ai_confidence in ("medium", "high") and ai_delta != 0:
+                delta += ai_delta
+                note += f" AI:{ai_delta:+d}"
+
             flags = scan.get("flags", [])
             meta = {
                 "rating": rating,
@@ -397,7 +413,10 @@ class Scalper:
                 "top_10_holder_pct": scan.get("top_10_holder_pct"),
                 "deployer_wallet_age_days": scan.get("deployer_wallet_age_days"),
                 "deployer_prior_launches": scan.get("deployer_prior_launches"),
-                "scan_flags": [f["detail"] for f in flags if f.get("severity") in ("high", "critical") and f.get("detail")],
+                "scan_flags": (
+                    ([f"🤖 {ai_warning}"] if ai_warning else []) +
+                    [f["detail"] for f in flags if f.get("severity") in ("high", "critical") and f.get("detail")]
+                ),
             }
 
             display_score = max(0, 15 + delta)

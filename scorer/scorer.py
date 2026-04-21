@@ -89,6 +89,9 @@ async def score(token: TokenDetected) -> ScoreResult:
     risk = mantis_raw.get("data", {}).get("risk_score", {})
     fw_data = (firefly_data or {}).get("data", {}) if firefly_data and firefly_data.get("success") else {}
     high_flags = [f["detail"] for f in scan.get("flags", []) if f.get("severity") in ("high", "critical") and f.get("detail")]
+    ai_warning = (mantis_raw.get("data", {}).get("ai_analysis") or {}).get("warning")
+    if ai_warning:
+        high_flags.insert(0, f"🤖 {ai_warning}")
 
     return ScoreResult(
         mint=token.mint,
@@ -128,6 +131,17 @@ def _apply_scoring(mantis_raw: dict, firefly_raw: Optional[dict]) -> tuple[int, 
     if rating == "critical":
         return 0, "skip", 0.0, {
             "mantis": CheckResult(score=0, max_score=100, reason="critical risk rating")
+        }
+
+    # AI analysis — hunter+ tier only, absent for lower tiers (handle gracefully)
+    ai = data.get("ai_analysis") or {}
+    ai_intent = ai.get("intent", "")
+    ai_delta = int(ai.get("ai_risk_delta") or 0)
+    ai_confidence = ai.get("confidence", "low")
+
+    if ai_intent == "likely_rug":
+        return 0, "skip", 0.0, {
+            "mantis": CheckResult(score=0, max_score=100, reason="AI: likely rug")
         }
 
     # Low liquidity hard skip
@@ -244,6 +258,14 @@ def _apply_scoring(mantis_raw: dict, firefly_raw: Optional[dict]) -> tuple[int, 
         elif prior_launches > 3:
             score -= 5
             mantis_notes.append(f"prior_launches={prior_launches} -5")
+
+    # Apply AI adjustments last so they layer on top of all rule-based scoring
+    if ai_intent == "suspicious":
+        score -= 15
+        mantis_notes.append("AI:suspicious -15")
+    if ai_confidence in ("medium", "high") and ai_delta != 0:
+        score += ai_delta
+        mantis_notes.append(f"AI:{ai_delta:+d}")
 
     mantis_score = max(0, min(100, score))
     checks: dict[str, CheckResult] = {
