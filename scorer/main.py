@@ -104,6 +104,7 @@ async def _score_and_forward(token: TokenDetected):
         result.position_sol,
     )
     _log_breakdown(result)
+    result.engine = "sniper"
     _write_score_log(result, "sniper")
 
     await _forward(result)

@@ -127,7 +127,16 @@ class Swing:
                 dex_id = pair.get("dexId", "")
                 platform = _DEX_PLATFORM.get(dex_id, dex_id or "unknown")
                 price = float(pair.get("priceUsd") or 0)
-                self._store[mint] = {"platform": platform, "peak_price": price, "added_ms": now_ms}
+                # Back-calculate recent peak from h24/h6 price change so we don't
+                # start with peak=current on tokens that are already days old.
+                h24 = float((pair.get("priceChange") or {}).get("h24") or 0)
+                h6  = float((pair.get("priceChange") or {}).get("h6") or 0)
+                best_drop = min(h24, h6, 0)  # most negative = deepest recent drop
+                if best_drop < -5 and price > 0:
+                    estimated_peak = price / (1 + best_drop / 100)
+                else:
+                    estimated_peak = price
+                self._store[mint] = {"platform": platform, "peak_price": estimated_peak, "added_ms": now_ms}
                 age_h = int(age_minutes // 60)
                 age_d = age_h // 24
                 log.info("[swing] 🔎 discovered %s... dex=%s age=%dd%dh liq=$%.0f", mint[:8], dex_id, age_d, age_h % 24, liquidity)
@@ -296,6 +305,7 @@ class Swing:
             platform=stored.get("platform", "unknown"),
             total=total,
             decision="swing",
+            engine="swing",
             position_sol=0.0,
             checks=checks,
             scored_at_ms=now_ms,

@@ -310,6 +310,7 @@ class Scalper:
             platform=token.platform or "pump_fun",
             total=total,
             decision="scalp",
+            engine="scalper",
             position_sol=0.0,  # set after Cricket
             checks=checks,
             scored_at_ms=now_ms,

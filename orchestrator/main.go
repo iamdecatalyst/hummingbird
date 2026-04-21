@@ -1511,13 +1511,18 @@ func broadcastTradeResult(tgToken, channelID string, result *models.ScoreResult)
 		platform = "PUMP.FUN"
 	}
 
+	// Engine label
+	engineLabel := strings.ToUpper(result.Engine)
+	if engineLabel == "" {
+		engineLabel = "SNIPER"
+	}
+
 	// Header
 	var header string
 	if result.Decision == "skip" {
-		header = fmt.Sprintf("⏭ *Scanned — Skip*   %s %s (%d/100)\n%s  ·  %s", rEmoji, ratingLabel, result.Total, platform, mintShort)
+		header = fmt.Sprintf("⏭ *Scanned — Skip*   %s %s (%d/100)\n[%s]  %s  ·  %s", rEmoji, ratingLabel, result.Total, engineLabel, platform, mintShort)
 	} else {
-		posLabel := strings.ToUpper(result.Decision)
-		header = fmt.Sprintf("🐦 *Sniped — %s*   %s %s (%d/100)\n%s  ·  %.3f SOL  ·  %s", posLabel, rEmoji, ratingLabel, result.Total, platform, result.PositionSOL, mintShort)
+		header = fmt.Sprintf("🐦 *Entered — %s*   %s %s (%d/100)\n[%s]  %s  ·  %.3f SOL  ·  %s", strings.ToUpper(result.Decision), rEmoji, ratingLabel, result.Total, engineLabel, platform, result.PositionSOL, mintShort)
 	}
 
 	// Security line — only shown when we have actual Cricket data

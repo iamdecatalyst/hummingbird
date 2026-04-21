@@ -23,7 +23,8 @@ class ScoreResult(BaseModel):
     mint: str
     platform: str = "pump_fun"
     total: int
-    decision: str        # "skip" | "small" | "medium" | "full" | "scalp"
+    decision: str        # "skip" | "small" | "medium" | "full" | "scalp" | "swing"
+    engine: str = ""    # "sniper" | "scalper" | "swing"
     position_sol: float
     checks: dict[str, CheckResult]
     scored_at_ms: int
