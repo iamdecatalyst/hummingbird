@@ -1,5 +1,7 @@
 target/
 .env
+.env.local
+web/.env.local
 BLUEPRINT.md
 CLAUDE.md
 *.pem
