@@ -361,3 +361,29 @@ Full catalog and decision matrix: [`labs/arsenal/loading-ui.md`](/mnt/vylth/labs
 
 Wire colour to the per-app accent token (Tailwind class) for on-brand output.
 
+---
+
+## Editorial Documents (Whitepapers, Pitch Decks, Revenue Models)
+
+When asked to create a **whitepaper, pitch deck, revenue model, strategy paper, investor doc, product spec, or any shareable HTML document that is NOT an app UI** — use the Vylth whitepaper style. Do not hand-roll an editorial layout.
+
+- **Style guide:** [`/mnt/vylth/labs/design/whitepaper-style.md`](/mnt/vylth/labs/design/whitepaper-style.md) — read first.
+- **Template:** [`/mnt/vylth/labs/design/whitepaper-template.html`](/mnt/vylth/labs/design/whitepaper-template.html) — copy and fill in.
+- **Reference:** [`/mnt/vylth/vylth-flow/docs/flow-revenue-model.html`](/mnt/vylth/vylth-flow/docs/flow-revenue-model.html) — the original document the style was extracted from.
+
+**Style summary:** white background, black text, JetBrains Mono for all numbers, Inter for prose, 1–2px black borders, one inverted (black) hero card per doc max, print-ready. Distinct from the neumorphic dark app UI in `labs/design/theme.md`.
+
+**Default location** for new editorial documents in this repo: `docs/`.
+
+**Filename conventions:**
+
+| Type | Filename |
+|---|---|
+| Revenue model | `[product]-revenue-model.html` |
+| Pitch / investor | `[product]-pitch-deck.html` |
+| Product spec | `[product]-spec-[feature].html` |
+| Strategy paper | `[product]-strategy-[topic].html` |
+| Whitepaper | `[product]-whitepaper.html` |
+
+Anti-patterns: gradients, rounded corners on structural elements, shadows, colored text, multiple inverted cards.
+
