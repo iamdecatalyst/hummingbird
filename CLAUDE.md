@@ -387,3 +387,28 @@ When asked to create a **whitepaper, pitch deck, revenue model, strategy paper, 
 
 Anti-patterns: gradients, rounded corners on structural elements, shadows, colored text, multiple inverted cards.
 
+---
+
+## React Doctor
+
+This frontend is scored by **react-doctor** — Million.co's React code-health scanner. Run before declaring any feature done:
+
+```bash
+npx -y react-doctor@latest .
+```
+
+You'll get a 0–100 score across state & effects, performance, architecture, security, accessibility, and dead code. Rules toggle automatically based on framework (Next.js / Vite / React Native) and React version.
+
+**Vylth rule:** target ≥75. A merged PR must not lower this repo's score.
+
+**Install rules into your agent (once per workstation):**
+```bash
+npx -y react-doctor@latest install
+```
+
+This teaches Claude Code / Cursor / Codex the same rules so they stop introducing the issues in the first place.
+
+**Baseline score:** 78 / 100 (Great) — recorded 2026-05-09.
+
+Reference: [`labs/arsenal/react-doctor.md`](/mnt/vylth/labs/arsenal/react-doctor.md). Source: https://react.doctor.
+
