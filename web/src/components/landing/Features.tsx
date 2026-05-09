@@ -13,7 +13,7 @@ const FEATURES = [
   {
     icon: <Crosshair size={24} weight="duotone" />,
     title: 'Sniper + Scalper',
-    desc: 'Two modes work together. Sniper catches new launches &lt;100ms. Scalper finds second-wave momentum on 8-25 minute old tokens.',
+    desc: 'Two modes work together. Sniper catches new launches <100ms. Scalper finds second-wave momentum on 8-25 minute old tokens.',
   },
   {
     icon: <TrendUp size={24} weight="duotone" />,
@@ -23,7 +23,7 @@ const FEATURES = [
   {
     icon: <ShieldWarning size={24} weight="duotone" />,
     title: 'Rug Detection',
-    desc: 'Exits immediately on smart-money exodus signals, liquidity drops, or price crashes &gt;15% in 10 seconds.',
+    desc: 'Exits immediately on smart-money exodus signals, liquidity drops, or price crashes >15% in 10 seconds.',
   },
   {
     icon: <ChartBar size={24} weight="duotone" />,
@@ -83,10 +83,9 @@ export default function Features() {
               <h3 className="font-mono font-bold text-sm text-white mb-2 group-hover:text-[#00A8FF] transition-colors">
                 {f.title}
               </h3>
-              <p
-                className="text-[#666] text-xs leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: f.desc }}
-              />
+              <p className="text-[#666] text-xs leading-relaxed">
+                {f.desc}
+              </p>
             </motion.div>
           ))}
         </div>
