@@ -56,8 +56,8 @@ export interface MeResponse {
   last_name:          string
   email:              string
   avatar:             string
-  has_signet:         boolean
-  signet_key_prefix:  string
+  has_antgrid:         boolean
+  antgrid_key_prefix:  string
   wallet_id:          string
   main_wallet_id:     string
   telegram_chat_id:   string
@@ -163,11 +163,11 @@ export const api = {
 
   // Multi-tenant auth — Nexus SSO
   nexusSignin(access_token: string) {
-    return post<{ token: string; has_signet: boolean; user: { id: string; first_name: string; last_name: string; email: string; avatar: string } }>('/auth/nexus', { access_token })
+    return post<{ token: string; has_antgrid: boolean; user: { id: string; first_name: string; last_name: string; email: string; avatar: string } }>('/auth/nexus', { access_token })
   },
   me(): Promise<MeResponse> { return get('/auth/me') },
-  setupSignet(api_key: string, api_secret: string) {
-    return post<{ status: string; bot_active: boolean }>('/auth/setup-signet', { api_key, api_secret })
+  setupAntgrid(api_key: string, api_secret: string) {
+    return post<{ status: string; bot_active: boolean }>('/auth/setup-antgrid', { api_key, api_secret })
   },
 
   // Wallets & Holdings
@@ -204,9 +204,9 @@ export const api = {
     return res.json()
   },
 
-  deleteSignet(): Promise<void> {
+  deleteAntgrid(): Promise<void> {
     const token = getToken()
-    return fetch(`${BASE}/auth/signet`, {
+    return fetch(`${BASE}/auth/antgrid`, {
       method: 'DELETE',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     }).then(r => { if (!r.ok) throw new Error('delete failed') })

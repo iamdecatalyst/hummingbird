@@ -4,7 +4,7 @@ import { NexusCallback, getAccessToken } from '@vylth/nexus-react'
 import Landing from './pages/Landing'
 import Dashboard from './pages/Dashboard'
 import Login from './pages/Login'
-import SignetSetup from './pages/SignetSetup'
+import AntgridSetup from './pages/AntgridSetup'
 import CLIAuth from './pages/CLIAuth'
 import { useAuth } from './hooks/useAuth'
 import { api } from './lib/api'
@@ -20,9 +20,9 @@ function AuthCallback() {
         try {
           const nexusToken = getAccessToken()
           if (!nexusToken) throw new Error('no token')
-          const { has_signet } = await nexusSignin(nexusToken)
+          const { has_antgrid } = await nexusSignin(nexusToken)
           window.umami?.track('signup', { product: 'hummingbird', plan: 'default' })
-          navigate(has_signet ? '/dashboard' : '/dashboard/setup', { replace: true })
+          navigate(has_antgrid ? '/dashboard' : '/dashboard/setup', { replace: true })
         } catch {
           navigate('/', { replace: true })
         }
@@ -74,10 +74,10 @@ function DashboardRoute() {
   // Multi-tenant: not logged in → redirect to /login
   if (!token) return <Navigate to="/login" replace />
 
-  // Logged in but no Signet key yet → Setup
-  if (me && !me.has_signet) {
+  // Logged in but no Antgrid key yet → Setup
+  if (me && !me.has_antgrid) {
     return (
-      <SignetSetup
+      <AntgridSetup
         firstName={me.first_name || 'there'}
         onComplete={refreshMe}
       />
@@ -91,8 +91,8 @@ function DashboardRoute() {
       userName={me ? `${me.first_name} ${me.last_name}`.trim() : undefined}
       userUsername={me?.username}
       userAvatar={me?.avatar}
-      signetKeyPrefix={me?.signet_key_prefix}
-      hasSignet={me?.has_signet}
+      antgridKeyPrefix={me?.antgrid_key_prefix}
+      hasAntgrid={me?.has_antgrid}
       mainWalletId={me?.main_wallet_id}
       telegramChatId={me?.telegram_chat_id}
       onCredentialsSaved={refreshMe}

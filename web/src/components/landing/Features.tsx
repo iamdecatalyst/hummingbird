@@ -37,8 +37,8 @@ const FEATURES = [
   },
   {
     icon: <Key size={24} weight="duotone" />,
-    title: 'Powered by Signet',
-    desc: 'Uses Signet\'s non-custodial wallet API for all trade execution — your keys encrypted at rest, signed on-demand. No private keys in config files.',
+    title: 'Powered by Antgrid',
+    desc: 'Uses Antgrid\'s non-custodial wallet API for all trade execution — your keys encrypted at rest, signed on-demand. No private keys in config files.',
   },
   {
     icon: <GithubLogo size={24} weight="duotone" />,

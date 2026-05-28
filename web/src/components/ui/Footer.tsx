@@ -11,9 +11,9 @@ export default function Footer() {
             title="GitHub" className="text-[#555] hover:text-white transition-colors">
             <img src="/github.svg" alt="GitHub" className="w-5 h-5 opacity-50 hover:opacity-100 transition-opacity" />
           </a>
-          <a href="https://signet.vylth.com" target="_blank" rel="noopener noreferrer"
-            title="Signet API" className="text-[#555] hover:text-[#22c55e] transition-colors">
-            <img src="/signet-logo.png" alt="Signet" className="h-5 object-contain opacity-50 hover:opacity-100 transition-opacity" />
+          <a href="https://antgrid.vylth.com" target="_blank" rel="noopener noreferrer"
+            title="Antgrid API" className="text-[#555] hover:text-[#22c55e] transition-colors">
+            <img src="/antgrid-logo.png" alt="Antgrid" className="h-5 object-contain opacity-50 hover:opacity-100 transition-opacity" />
           </a>
           <a href="https://t.me/vylthummingbird" target="_blank" rel="noopener noreferrer"
             title="Telegram Community" className="text-[#555] hover:text-[#24A1DE] transition-colors">

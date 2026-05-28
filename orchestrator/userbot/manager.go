@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	signet "github.com/VYLTH/signet-sdk-go/signet"
+	antgrid "github.com/VYLTH/antgrid-sdk-go/antgrid"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/alerts"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/config"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/cricket"
@@ -63,7 +63,7 @@ func short(s string) string {
 
 // Start creates (or replaces) a bot instance, ensuring a default wallet exists.
 func (m *Manager) Start(userID, apiKey, apiSecret, telegramChatID string, userCfg *db.UserConfig) error {
-	client := signet.NewClient(apiKey, apiSecret).WithBaseURL(m.cfg.SignetBaseURL)
+	client := antgrid.NewClient(apiKey, apiSecret).WithBaseURL(m.cfg.AntgridBaseURL)
 
 	walletName := fmt.Sprintf("hummingbird-%s", short(userID))
 	walletID, err := trader.EnsureWallet(client, walletName)
@@ -82,7 +82,7 @@ func (m *Manager) startInstance(userID, apiKey, apiSecret, walletID, telegramCha
 	if userCfg == nil {
 		userCfg = db.DefaultUserConfig()
 	}
-	client := signet.NewClient(apiKey, apiSecret).WithBaseURL(m.cfg.SignetBaseURL)
+	client := antgrid.NewClient(apiKey, apiSecret).WithBaseURL(m.cfg.AntgridBaseURL)
 
 	maxPos := userCfg.MaxPositions
 	if maxPos <= 0 {

@@ -310,9 +310,9 @@ function ModalHeader({ icon, title, sub, onClose }: {
 
 // ── Credentials modal ─────────────────────────────────────────────────────────
 
-function CredentialsModal({ signetKeyPrefix, hasSignet, telegramChatId, onClose, onSaved }: {
-  signetKeyPrefix?: string
-  hasSignet?: boolean
+function CredentialsModal({ antgridKeyPrefix, hasAntgrid, telegramChatId, onClose, onSaved }: {
+  antgridKeyPrefix?: string
+  hasAntgrid?: boolean
   telegramChatId?: string
   onClose: () => void
   onSaved?: () => void
@@ -331,7 +331,7 @@ function CredentialsModal({ signetKeyPrefix, hasSignet, telegramChatId, onClose,
     if (!apiKey.trim() || !apiSecret.trim()) { setError('Both fields required'); return }
     setSaving(true); setError('')
     try {
-      await api.setupSignet(apiKey.trim(), apiSecret.trim())
+      await api.setupAntgrid(apiKey.trim(), apiSecret.trim())
       setSaved(true)
       setTimeout(() => { onClose(); onSaved?.() }, 900)
     } catch (e: unknown) {
@@ -340,12 +340,12 @@ function CredentialsModal({ signetKeyPrefix, hasSignet, telegramChatId, onClose,
   }
 
   const handleDelete = async () => {
-    // Destructive: stops the bot, erases encrypted Signet creds. No undo.
-    if (!window.confirm('Remove Signet credentials?\n\nThis stops the bot and deletes your stored API key. You will need to re-enter it to trade again.')) {
+    // Destructive: stops the bot, erases encrypted Antgrid creds. No undo.
+    if (!window.confirm('Remove Antgrid credentials?\n\nThis stops the bot and deletes your stored API key. You will need to re-enter it to trade again.')) {
       return
     }
     setDeleting(true)
-    try { await api.deleteSignet(); onClose(); onSaved?.() }
+    try { await api.deleteAntgrid(); onClose(); onSaved?.() }
     catch (e: unknown) {
       window.alert(e instanceof Error ? e.message : 'Failed to remove credentials')
     } finally { setDeleting(false) }
@@ -364,12 +364,12 @@ function CredentialsModal({ signetKeyPrefix, hasSignet, telegramChatId, onClose,
       <ModalHeader
         icon={<Key size={16} className="text-[#00A8FF]" />}
         title="API Credentials"
-        sub="Signet API key — encrypted at rest"
+        sub="Antgrid API key — encrypted at rest"
         onClose={onClose}
       />
       <div className="p-5 space-y-4">
         {/* Saved key card */}
-        {(hasSignet || signetKeyPrefix) && (
+        {(hasAntgrid || antgridKeyPrefix) && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 12,
             padding: '14px 16px', borderRadius: 14,
@@ -382,7 +382,7 @@ function CredentialsModal({ signetKeyPrefix, hasSignet, telegramChatId, onClose,
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-mono text-[10px] text-[#888] uppercase tracking-widest mb-0.5">Active Key</p>
-              <p className="font-mono text-xs text-[#a0a0a0]">{signetKeyPrefix || 'Key saved'}</p>
+              <p className="font-mono text-xs text-[#a0a0a0]">{antgridKeyPrefix || 'Key saved'}</p>
             </div>
             <button
               onClick={handleDelete}
@@ -397,7 +397,7 @@ function CredentialsModal({ signetKeyPrefix, hasSignet, telegramChatId, onClose,
         )}
 
         <p className="font-mono text-[10px] text-[#888] uppercase tracking-widest">
-          {(hasSignet || signetKeyPrefix) ? 'Replace with new credentials' : 'Enter Signet credentials'}
+          {(hasAntgrid || antgridKeyPrefix) ? 'Replace with new credentials' : 'Enter Antgrid credentials'}
         </p>
 
         {/* API Key */}
@@ -452,11 +452,11 @@ function CredentialsModal({ signetKeyPrefix, hasSignet, telegramChatId, onClose,
             opacity: saving ? 0.6 : 1,
           }}
         >
-          {saved ? '✓ Saved' : saving ? 'Verifying…' : (hasSignet || signetKeyPrefix) ? 'Update Credentials' : 'Save Credentials'}
+          {saved ? '✓ Saved' : saving ? 'Verifying…' : (hasAntgrid || antgridKeyPrefix) ? 'Update Credentials' : 'Save Credentials'}
         </button>
 
         <p className="font-mono text-[10px] text-[#333] text-center">
-          Get your keys at <a href="https://signet.vylth.com" target="_blank" rel="noopener noreferrer" className="text-[#00A8FF] hover:underline">signet.vylth.com</a>
+          Get your keys at <a href="https://antgrid.vylth.com" target="_blank" rel="noopener noreferrer" className="text-[#00A8FF] hover:underline">antgrid.vylth.com</a>
         </p>
 
         {/* Telegram connect */}
@@ -531,7 +531,7 @@ function TabWallets({ mainWalletId, onMainWalletSet }: { mainWalletId?: string; 
       <div className="flex items-center justify-between mb-5">
         <div>
           <h2 className="font-mono font-bold text-lg text-white">Wallets</h2>
-          <p className="font-mono text-xs text-[#888] mt-0.5">Powered by Signet KMS</p>
+          <p className="font-mono text-xs text-[#888] mt-0.5">Powered by Antgrid KMS</p>
         </div>
         <button
           onClick={() => setShowCreate(v => !v)}
@@ -2130,14 +2130,14 @@ interface DashboardProps {
   userName?:           string
   userUsername?:       string
   userAvatar?:         string
-  signetKeyPrefix?:    string
-  hasSignet?:          boolean
+  antgridKeyPrefix?:    string
+  hasAntgrid?:          boolean
   mainWalletId?:       string
   telegramChatId?:     string
   onCredentialsSaved?: () => void
 }
 
-export default function Dashboard({ onLogout, walletId, userName, userUsername, userAvatar, signetKeyPrefix, hasSignet, mainWalletId, telegramChatId, onCredentialsSaved }: DashboardProps) {
+export default function Dashboard({ onLogout, walletId, userName, userUsername, userAvatar, antgridKeyPrefix, hasAntgrid, mainWalletId, telegramChatId, onCredentialsSaved }: DashboardProps) {
   const { stats, positions, closed, online, loading, error, stop, resume } = useOrchestrator()
   const [tab, setTab] = useState('overview')
   const [showCredentials, setShowCredentials] = useState(false)
@@ -2162,9 +2162,9 @@ export default function Dashboard({ onLogout, walletId, userName, userUsername, 
           <img src="/logo.png" alt="Hummingbird" className="w-20 h-20 object-contain mx-auto mb-6"
             style={{ filter: 'drop-shadow(0 0 20px rgba(0,168,255,0.4))' }} />
           <h1 className="font-mono font-bold text-white text-2xl mb-2">Not configured</h1>
-          <p className="text-[#666] text-sm mb-8">Signet credentials missing.</p>
-          <a href="https://signet.vylth.com" target="_blank" rel="noopener noreferrer" className="hb-btn text-sm">
-            Get Signet API key →
+          <p className="text-[#666] text-sm mb-8">Antgrid credentials missing.</p>
+          <a href="https://antgrid.vylth.com" target="_blank" rel="noopener noreferrer" className="hb-btn text-sm">
+            Get Antgrid API key →
           </a>
         </div>
       </div>
@@ -2213,8 +2213,8 @@ export default function Dashboard({ onLogout, walletId, userName, userUsername, 
       {showConfig      && <ConfigModal onClose={() => setShowConfig(false)} />}
       {showCredentials && (
         <CredentialsModal
-          signetKeyPrefix={signetKeyPrefix}
-          hasSignet={hasSignet}
+          antgridKeyPrefix={antgridKeyPrefix}
+          hasAntgrid={hasAntgrid}
           telegramChatId={telegramChatId}
           onClose={() => setShowCredentials(false)}
           onSaved={onCredentialsSaved}

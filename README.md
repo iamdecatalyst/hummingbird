@@ -15,7 +15,7 @@
 
 ---
 
-Detects new token launches in **<100ms**, scores rug risk before entering, scalps momentum on already-running tokens, and exits before the dev dumps. All non-custodial — powered by [Signet](https://signet.vylth.com).
+Detects new token launches in **<100ms**, scores rug risk before entering, scalps momentum on already-running tokens, and exits before the dev dumps. All non-custodial — powered by [Antgrid](https://antgrid.io).
 
 ---
 
@@ -49,7 +49,7 @@ Detects new token launches in **<100ms**, scores rug risk before entering, scalp
         └── score ≥ 60 → ENTER
                 │
                 ▼
-        Signet API swap (Go)
+        Antgrid API swap (Go)
         non-custodial · your keys
                 │
                 ▼
@@ -109,7 +109,7 @@ hummingbird/
 ├── listener/       Rust   — Solana WebSocket detector, <100ms detection
 ├── scorer/         Python — concurrent risk scoring engine
 │   └── checks/            dev_wallet · supply · bonding · contract · social
-├── orchestrator/   Go     — Signet integration, portfolio, Telegram bot
+├── orchestrator/   Go     — Antgrid integration, portfolio, Telegram bot
 │   ├── trader/            execution + exit loop
 │   ├── monitor/           per-position price watcher
 │   ├── portfolio/         open/closed position state
@@ -141,12 +141,12 @@ Hummingbird needs three external services. All have free tiers.
 <table>
 <tr>
 <td align="center" valign="top" width="120">
-<img src="https://media.vylth.com/images/cbnHq6IQ.png" height="44" alt="Signet"/>
+<img src="https://media.vylth.com/images/cbnHq6IQ.png" height="44" alt="Antgrid"/>
 </td>
 <td valign="top">
-<h3>Signet — Wallet &amp; swap execution</h3>
+<h3>Antgrid — Wallet &amp; swap execution</h3>
 <p>Non-custodial KMS — your keys live encrypted, signed on-demand. Powers every swap, transfer, and balance lookup.</p>
-<a href="https://signet.vylth.com"><img src="https://img.shields.io/badge/Get_API_Key-→-22c55e?style=for-the-badge&labelColor=0a1510" alt="Signet"/></a>
+<a href="https://antgrid.io"><img src="https://img.shields.io/badge/Get_API_Key-→-22c55e?style=for-the-badge&labelColor=0a1510" alt="Antgrid"/></a>
 <sub>&nbsp; Free: 1k req · 5 wallets · no card</sub>
 </td>
 </tr>
@@ -187,7 +187,7 @@ Hummingbird needs three external services. All have free tiers.
 ```bash
 cp .env.example .env
 # Required:
-#   SIGNET_API_KEY, SIGNET_API_SECRET     — from signet.vylth.com
+#   ANTGRID_API_KEY, ANTGRID_API_SECRET     — from antgrid.io
 #   CRICKET_API_KEY                       — from cricket.vylth.com
 #   RPC_HTTP, RPC_WS                      — Helius (or other private RPC)
 #   DATABASE_URL                          — postgres://...

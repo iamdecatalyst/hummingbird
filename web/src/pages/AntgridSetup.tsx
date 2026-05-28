@@ -8,7 +8,7 @@ interface Props {
   onComplete: () => void
 }
 
-export default function SignetSetup({ firstName, onComplete }: Props) {
+export default function AntgridSetup({ firstName, onComplete }: Props) {
   const [apiKey,    setApiKey]    = useState('')
   const [apiSecret, setApiSecret] = useState('')
   const [showKey,   setShowKey]   = useState(false)
@@ -21,12 +21,12 @@ export default function SignetSetup({ firstName, onComplete }: Props) {
     setLoading(true)
     setError('')
     try {
-      await api.setupSignet(apiKey.trim(), apiSecret.trim())
+      await api.setupAntgrid(apiKey.trim(), apiSecret.trim())
       onComplete()
     } catch (err: any) {
       const msg = err?.message ?? ''
       if (msg.includes('invalid')) {
-        setError('Invalid Signet credentials — check your API key and secret.')
+        setError('Invalid Antgrid credentials — check your API key and secret.')
       } else {
         setError(msg || 'Something went wrong.')
       }
@@ -57,17 +57,17 @@ export default function SignetSetup({ firstName, onComplete }: Props) {
           <p className="text-[#555] text-sm">
             One more step — connect your{' '}
             <a
-              href="https://signet.vylth.com"
+              href="https://antgrid.vylth.com"
               target="_blank"
               rel="noopener noreferrer"
               className="text-[#00A8FF] hover:text-white transition-colors"
             >
-              Signet wallet
+              Antgrid wallet
             </a>
           </p>
         </motion.div>
 
-        {/* What Signet is */}
+        {/* What Antgrid is */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -96,7 +96,7 @@ export default function SignetSetup({ firstName, onComplete }: Props) {
           {/* API Key */}
           <div>
             <label className="block font-mono text-xs text-[#555] uppercase tracking-widest mb-2">
-              Signet API Key
+              Antgrid API Key
             </label>
             <div className="relative">
               <Key size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#333]" weight="bold" />
@@ -121,7 +121,7 @@ export default function SignetSetup({ firstName, onComplete }: Props) {
           {/* API Secret */}
           <div>
             <label className="block font-mono text-xs text-[#555] uppercase tracking-widest mb-2">
-              Signet API Secret
+              Antgrid API Secret
             </label>
             <div className="relative">
               <Key size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#333]" weight="bold" />
@@ -163,8 +163,8 @@ export default function SignetSetup({ firstName, onComplete }: Props) {
         </motion.form>
 
         <p className="text-center text-[#222] text-xs font-mono mt-5">
-          Don't have a Signet key?{' '}
-          <a href="https://signet.vylth.com" target="_blank" rel="noopener noreferrer"
+          Don't have a Antgrid key?{' '}
+          <a href="https://antgrid.vylth.com" target="_blank" rel="noopener noreferrer"
             className="text-[#333] hover:text-[#555] transition-colors">
             Get one free →
           </a>

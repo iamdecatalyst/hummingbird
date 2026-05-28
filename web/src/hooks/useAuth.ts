@@ -5,7 +5,7 @@ export interface AuthState {
   token:     string | null
   me:        MeResponse | null
   loading:   boolean
-  nexusSignin: (accessToken: string) => Promise<{ has_signet: boolean; user: MeResponse }>
+  nexusSignin: (accessToken: string) => Promise<{ has_antgrid: boolean; user: MeResponse }>
   logout:    () => void
   refreshMe: () => Promise<void>
 }
@@ -28,9 +28,9 @@ export function useAuth(): AuthState {
     localStorage.setItem('hb_token', res.token)
     setToken(res.token)
     const meData = res.user as unknown as MeResponse
-    meData.has_signet = res.has_signet
+    meData.has_antgrid = res.has_antgrid
     setMe(meData)
-    return { has_signet: res.has_signet, user: meData }
+    return { has_antgrid: res.has_antgrid, user: meData }
   }
 
   const logout = () => {

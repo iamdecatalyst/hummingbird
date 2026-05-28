@@ -8,7 +8,7 @@ const STATS = [
   { icon: <Sparkle  size={16} weight="fill" />, value: 'Free',   label: 'To get started' },
 ]
 
-export default function SignetPromo() {
+export default function AntgridPromo() {
   return (
     <section className="relative py-24 overflow-hidden">
       {/* Green ambient glow */}
@@ -67,8 +67,8 @@ export default function SignetPromo() {
                   className="flex items-center gap-3 mb-6"
                 >
                   <img
-                    src="/signet-logo.png"
-                    alt="Signet"
+                    src="/antgrid-logo.png"
+                    alt="Antgrid"
                     className="h-10 object-contain"
                     style={{ filter: 'drop-shadow(0 0 12px rgba(34,197,94,0.5))' }}
                   />
@@ -77,7 +77,7 @@ export default function SignetPromo() {
                       Powered by
                     </div>
                     <div className="font-mono font-bold text-xl text-white leading-tight">
-                      Vylth Signet
+                      Vylth Antgrid
                     </div>
                   </div>
                 </motion.div>
@@ -103,7 +103,7 @@ export default function SignetPromo() {
                   transition={{ duration: 0.5, delay: 0.18 }}
                   className="text-[#888] text-sm leading-relaxed mb-8 max-w-sm"
                 >
-                  Signet is the wallet infrastructure Hummingbird runs on. Non-custodial KMS — your
+                  Antgrid is the wallet infrastructure Hummingbird runs on. Non-custodial KMS — your
                   keys, stored encrypted, signed on-demand. Set up in minutes, free to start.
                 </motion.p>
 
@@ -112,7 +112,7 @@ export default function SignetPromo() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.4, delay: 0.26 }}
-                  href="https://signet.vylth.com"
+                  href="https://antgrid.vylth.com"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 font-mono text-sm font-bold px-6 py-3 rounded-xl transition-all duration-200"

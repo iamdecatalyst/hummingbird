@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	signet "github.com/VYLTH/signet-sdk-go/signet"
+	antgrid "github.com/VYLTH/antgrid-sdk-go/antgrid"
 
 	"github.com/iamdecatalyst/hummingbird/orchestrator/alerts"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/cricket"
@@ -35,9 +35,9 @@ type ScalperCloser interface {
 	OnPositionClosed(mint string)
 }
 
-// Trader executes trades via Signet and manages position lifecycle.
+// Trader executes trades via Antgrid and manages position lifecycle.
 type Trader struct {
-	signet         *signet.Client
+	antgrid        *antgrid.Client
 	walletID       string
 	portfolio      *portfolio.Portfolio
 	telegram       alerts.Notifier
@@ -59,7 +59,7 @@ type Trader struct {
 }
 
 func New(
-	signetClient *signet.Client,
+	antgridClient *antgrid.Client,
 	walletID string,
 	port *portfolio.Portfolio,
 	tg alerts.Notifier,
@@ -72,7 +72,7 @@ func New(
 	onProgress monitor.ProgressFn,
 ) *Trader {
 	t := &Trader{
-		signet:         signetClient,
+		antgrid:        antgridClient,
 		walletID:       walletID,
 		portfolio:      port,
 		telegram:       tg,
@@ -87,7 +87,7 @@ func New(
 	}
 
 	// Fetch and cache the wallet's Solana public address for RPC balance lookups.
-	if w, err := signetClient.Wallets.Get(walletID); err == nil {
+	if w, err := antgridClient.Wallets.Get(walletID); err == nil {
 		t.walletAddress = w.Address
 	}
 
@@ -152,7 +152,7 @@ func (t *Trader) enter(result *models.ScoreResult) {
 		}
 	}
 
-	params := signet.SwapParams{
+	params := antgrid.SwapParams{
 		FromToken:       "SOL",
 		ToToken:         result.Mint,
 		Amount:          fmt.Sprintf("%d", int64(result.PositionSOL*1e9)), // lamports
@@ -160,7 +160,7 @@ func (t *Trader) enter(result *models.ScoreResult) {
 		DeadlineSeconds: 30,
 	}
 
-	var tx *signet.TransactionResult
+	var tx *antgrid.TransactionResult
 	var err error
 
 	// Scalp/swing entries skip PumpPortal — tokens are already on Raydium/Jupiter.
@@ -177,7 +177,7 @@ func (t *Trader) enter(result *models.ScoreResult) {
 		}
 	}
 
-	// Non-pump_fun or PumpPortal fallback: use Signet/Jupiter.
+	// Non-pump_fun or PumpPortal fallback: use Antgrid/Jupiter.
 	// Sniper entries wait 10s for Jupiter indexing. Scalp/swing tokens are old enough to skip the wait.
 	if !isSecondary {
 		time.Sleep(10 * time.Second)
@@ -185,13 +185,13 @@ func (t *Trader) enter(result *models.ScoreResult) {
 
 	const maxRetries = 3
 	for attempt := range maxRetries {
-		tx, err = t.signet.Wallets.Swap(t.walletID, params)
+		tx, err = t.antgrid.Wallets.Swap(t.walletID, params)
 		if err == nil {
 			break
 		}
-		var sigErr *signet.SignetError
+		var sigErr *antgrid.AntgridError
 		if errors.As(err, &sigErr) {
-			// 422 token_not_routable — Signet new API (explicit signal)
+			// 422 token_not_routable — Antgrid new API (explicit signal)
 			if sigErr.StatusCode == 422 && strings.Contains(sigErr.Message, "token_not_routable") {
 				log.Printf("[trader] %s not routable via Jupiter — pumpportal fallback", result.Mint[:8])
 				tx, err = t.buyViaPumpPortal(result)
@@ -312,7 +312,7 @@ func (t *Trader) handleExit(sig monitor.ExitSignal) {
 	}
 
 	// Try exit up to 3 times — RPC blips and pool delays can cause transient failures.
-	var tx *signet.TransactionResult
+	var tx *antgrid.TransactionResult
 	var err error
 	for attempt := range 3 {
 		if attempt > 0 {
@@ -322,7 +322,7 @@ func (t *Trader) handleExit(sig monitor.ExitSignal) {
 		// Escalate slippage on retries — Token 2022 transfer fees and volatile
 		// pump-amm pools often fail at 5%; 1000bps on retry recovers many of these.
 		slippage := 500 + (attempt * 500)
-		tx, err = t.signet.Wallets.Swap(t.walletID, signet.SwapParams{
+		tx, err = t.antgrid.Wallets.Swap(t.walletID, antgrid.SwapParams{
 			FromToken:       sig.Mint,
 			ToToken:         "SOL",
 			Amount:          sellAmount,
@@ -330,7 +330,7 @@ func (t *Trader) handleExit(sig monitor.ExitSignal) {
 			DeadlineSeconds: 20,
 		})
 		if err != nil {
-			var sigErr *signet.SignetError
+			var sigErr *antgrid.AntgridError
 			isRoutable := errors.As(err, &sigErr) && sigErr.StatusCode != 502 &&
 				!strings.Contains(sigErr.Message, "token_not_routable")
 			if !isRoutable {
@@ -454,7 +454,7 @@ func (t *Trader) Close(mint string, reason models.ExitReason) {
 	}
 }
 
-// Balance returns the wallet's current SOL balance via Signet.
+// Balance returns the wallet's current SOL balance via Antgrid.
 // Returns 0 on failure.
 func (t *Trader) markTrade() {
 	t.lastTradeMu.Lock()
@@ -468,14 +468,14 @@ func (t *Trader) LastTradeAt() time.Time {
 	return t.lastTradeAt
 }
 
-// Balance fetches SOL balance via Signet — used for trade-critical checks.
+// Balance fetches SOL balance via Antgrid — used for trade-critical checks.
 func (t *Trader) MaxPositionSOL() float64 { return t.maxPositionSOL }
 
 func (t *Trader) Balance() float64 {
 	if t.walletID == "" {
 		return 0
 	}
-	b, err := t.signet.Wallets.Balance(t.walletID)
+	b, err := t.antgrid.Wallets.Balance(t.walletID)
 	if err != nil {
 		return 0
 	}
@@ -487,12 +487,12 @@ func (t *Trader) Balance() float64 {
 }
 
 // BalanceViaRPC fetches SOL balance directly from Helius RPC.
-// Used for polling/display so we don't waste Signet requests.
+// Used for polling/display so we don't waste Antgrid requests.
 // BalanceViaRPC fetches SOL balance directly from Helius RPC.
 // Returns -1 on any RPC error so callers can distinguish "failed" from "real zero balance".
 func (t *Trader) BalanceViaRPC() float64 {
 	if t.rpcURL == "" || t.walletAddress == "" {
-		return t.Balance() // fallback to Signet
+		return t.Balance() // fallback to Antgrid
 	}
 	body, _ := json.Marshal(map[string]any{
 		"jsonrpc": "2.0",
@@ -545,9 +545,9 @@ func (t *Trader) LatestTxHash() string {
 }
 
 // buyViaPumpPortal builds a pump.fun buy transaction via pumpportal.fun and executes it
-// through Signet's /execute endpoint. Called when /swap returns token_not_routable.
+// through Antgrid's /execute endpoint. Called when /swap returns token_not_routable.
 // Tries "pump" (bonding curve) first, then "pump-amm" (migrated tokens) on 400.
-func (t *Trader) buyViaPumpPortal(result *models.ScoreResult) (*signet.TransactionResult, error) {
+func (t *Trader) buyViaPumpPortal(result *models.ScoreResult) (*antgrid.TransactionResult, error) {
 	if t.walletAddress == "" {
 		return nil, fmt.Errorf("wallet address not set — cannot build pump.fun tx")
 	}
@@ -567,7 +567,7 @@ func (t *Trader) buyViaPumpPortal(result *models.ScoreResult) (*signet.Transacti
 	return nil, lastErr
 }
 
-func (t *Trader) pumpPortalBuy(mint string, amountSOL float64, pool string) (*signet.TransactionResult, error) {
+func (t *Trader) pumpPortalBuy(mint string, amountSOL float64, pool string) (*antgrid.TransactionResult, error) {
 	reqBody, _ := json.Marshal(map[string]any{
 		"publicKey":        t.walletAddress,
 		"action":           "buy",
@@ -603,18 +603,18 @@ func (t *Trader) pumpPortalBuy(mint string, amountSOL float64, pool string) (*si
 	}
 
 	txBase64 := base64.StdEncoding.EncodeToString(txBytes)
-	tx, err := t.signet.Wallets.Execute(t.walletID, txBase64)
+	tx, err := t.antgrid.Wallets.Execute(t.walletID, txBase64)
 	if err != nil {
-		return nil, fmt.Errorf("signet execute: %w", err)
+		return nil, fmt.Errorf("antgrid execute: %w", err)
 	}
 
 	log.Printf("[trader] pumpportal pool=%s success for %s | tx=%s", pool, mint[:8], tx.TxHash)
 	return tx, nil
 }
 
-// sellViaPumpPortal sells a token via pumpportal.fun + Signet /execute.
+// sellViaPumpPortal sells a token via pumpportal.fun + Antgrid /execute.
 // partial: 0 = sell all, 0.4 = sell 40%, etc.
-func (t *Trader) sellViaPumpPortal(mint string, partial float64) (*signet.TransactionResult, error) {
+func (t *Trader) sellViaPumpPortal(mint string, partial float64) (*antgrid.TransactionResult, error) {
 	if t.walletAddress == "" {
 		return nil, fmt.Errorf("wallet address not set")
 	}
@@ -659,7 +659,7 @@ func (t *Trader) sellViaPumpPortal(mint string, partial float64) (*signet.Transa
 			log.Printf("[trader] %v", lastErr)
 			continue
 		}
-		tx, err := t.signet.Wallets.Execute(t.walletID, base64.StdEncoding.EncodeToString(txBytes))
+		tx, err := t.antgrid.Wallets.Execute(t.walletID, base64.StdEncoding.EncodeToString(txBytes))
 		if err != nil {
 			lastErr = err
 			continue
@@ -803,9 +803,9 @@ func (t *Trader) Holdings() ([]Holding, error) {
 // EnsureWallet creates the Solana trading wallet if it doesn't exist yet.
 // ForceSell swaps 100% of a token back to SOL regardless of whether HB has an
 // open position for it. Used for manual recovery of stuck tokens.
-// Tries Jupiter first (via Signet), falls back to pumpportal.
+// Tries Jupiter first (via Antgrid), falls back to pumpportal.
 func (t *Trader) ForceSell(mint string) (string, error) {
-	tx, err := t.signet.Wallets.Swap(t.walletID, signet.SwapParams{
+	tx, err := t.antgrid.Wallets.Swap(t.walletID, antgrid.SwapParams{
 		FromToken:       mint,
 		ToToken:         "SOL",
 		Amount:          "100%",
@@ -813,7 +813,7 @@ func (t *Trader) ForceSell(mint string) (string, error) {
 		DeadlineSeconds: 30,
 	})
 	if err != nil {
-		var sigErr *signet.SignetError
+		var sigErr *antgrid.AntgridError
 		notRoutable := !errors.As(err, &sigErr) || sigErr.StatusCode == 502 ||
 			strings.Contains(sigErr.Message, "token_not_routable")
 		if notRoutable {
@@ -827,7 +827,7 @@ func (t *Trader) ForceSell(mint string) (string, error) {
 	return tx.TxHash, nil
 }
 
-func EnsureWallet(client *signet.Client, label string) (string, error) {
+func EnsureWallet(client *antgrid.Client, label string) (string, error) {
 	wallets, err := client.Wallets.List()
 	if err != nil {
 		return "", fmt.Errorf("list wallets: %w", err)
@@ -839,7 +839,7 @@ func EnsureWallet(client *signet.Client, label string) (string, error) {
 		}
 	}
 
-	w, err := client.Wallets.Create(signet.CreateWalletParams{
+	w, err := client.Wallets.Create(antgrid.CreateWalletParams{
 		Chain: "solana",
 		Label: label,
 	})
@@ -854,7 +854,7 @@ func EnsureWallet(client *signet.Client, label string) (string, error) {
 // and rejects anything that could drain the wallet via SystemProgram::Transfer
 // (or any other SystemProgram instruction at top-level), or whose fee payer is
 // not our wallet. This is the only check between a compromised pumpportal API
-// and Signet broadcasting whatever bytes it gets.
+// and Antgrid broadcasting whatever bytes it gets.
 //
 // SystemProgram::CreateAccount and Allocate are allowed — pump-amm uses them for ATA
 // initialization on first buy. Only Transfer (discriminant 2) and TransferWithSeed (11)

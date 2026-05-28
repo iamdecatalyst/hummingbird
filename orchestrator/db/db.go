@@ -65,8 +65,8 @@ type User struct {
 	LastName         string
 	Email            string
 	Avatar           string
-	HasSignet        bool // true once Signet key has been configured
-	SignetKeyPrefix  string
+	HasAntgrid        bool // true once Antgrid key has been configured
+	AntgridKeyPrefix  string
 	WalletID         string
 	MainWalletID     string
 	TelegramChatID   string
@@ -101,8 +101,8 @@ func (d *DB) migrate() error {
 			last_name     TEXT NOT NULL DEFAULT '',
 			email         TEXT NOT NULL DEFAULT '',
 			avatar        TEXT NOT NULL DEFAULT '',
-			signet_key    BYTEA,
-			signet_secret BYTEA,
+			antgrid_key    BYTEA,
+			antgrid_secret BYTEA,
 			wallet_id     TEXT NOT NULL DEFAULT '',
 			created_at    TIMESTAMPTZ DEFAULT NOW()
 		)
@@ -112,7 +112,23 @@ func (d *DB) migrate() error {
 	if _, err := d.sql.Exec(`ALTER TABLE hb_users ADD COLUMN IF NOT EXISTS username TEXT NOT NULL DEFAULT ''`); err != nil {
 		return err
 	}
-	if _, err := d.sql.Exec(`ALTER TABLE hb_users ADD COLUMN IF NOT EXISTS signet_key_prefix TEXT NOT NULL DEFAULT ''`); err != nil {
+	if _, err := d.sql.Exec(`
+		DO $$
+		BEGIN
+			IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='hb_users' AND column_name='signet_key') THEN
+				ALTER TABLE hb_users RENAME COLUMN signet_key TO antgrid_key;
+			END IF;
+			IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='hb_users' AND column_name='signet_secret') THEN
+				ALTER TABLE hb_users RENAME COLUMN signet_secret TO antgrid_secret;
+			END IF;
+			IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='hb_users' AND column_name='signet_key_prefix') THEN
+				ALTER TABLE hb_users RENAME COLUMN signet_key_prefix TO antgrid_key_prefix;
+			END IF;
+		END $$;
+	`); err != nil {
+		return err
+	}
+	if _, err := d.sql.Exec(`ALTER TABLE hb_users ADD COLUMN IF NOT EXISTS antgrid_key_prefix TEXT NOT NULL DEFAULT ''`); err != nil {
 		return err
 	}
 	if _, err := d.sql.Exec(`ALTER TABLE hb_users ADD COLUMN IF NOT EXISTS main_wallet_id TEXT NOT NULL DEFAULT ''`); err != nil {
@@ -380,12 +396,12 @@ func (d *DB) GetUser(nexusUserID string) (*User, error) {
 	var u User
 	err := d.sql.QueryRow(`
 		SELECT nexus_user_id, COALESCE(username,''), first_name, last_name, email, avatar,
-		       (signet_key IS NOT NULL), COALESCE(signet_key_prefix,''), COALESCE(wallet_id,''),
+		       (antgrid_key IS NOT NULL), COALESCE(antgrid_key_prefix,''), COALESCE(wallet_id,''),
 		       COALESCE(main_wallet_id,''), COALESCE(telegram_chat_id,''), created_at
 		FROM hb_users WHERE nexus_user_id=$1
 	`, nexusUserID).Scan(
 		&u.NexusUserID, &u.Username, &u.FirstName, &u.LastName, &u.Email, &u.Avatar,
-		&u.HasSignet, &u.SignetKeyPrefix, &u.WalletID, &u.MainWalletID, &u.TelegramChatID, &u.CreatedAt,
+		&u.HasAntgrid, &u.AntgridKeyPrefix, &u.WalletID, &u.MainWalletID, &u.TelegramChatID, &u.CreatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -393,8 +409,8 @@ func (d *DB) GetUser(nexusUserID string) (*User, error) {
 	return &u, err
 }
 
-// SetSignetCredentials encrypts and saves the user's Signet API key + secret + wallet ID.
-func (d *DB) SetSignetCredentials(nexusUserID, apiKey, apiSecret, walletID string) error {
+// SetAntgridCredentials encrypts and saves the user's Antgrid API key + secret + wallet ID.
+func (d *DB) SetAntgridCredentials(nexusUserID, apiKey, apiSecret, walletID string) error {
 	encKey, err := d.encrypt([]byte(apiKey))
 	if err != nil {
 		return err
@@ -408,15 +424,15 @@ func (d *DB) SetSignetCredentials(nexusUserID, apiKey, apiSecret, walletID strin
 		prefix = prefix[:16] + "…"
 	}
 	_, err = d.sql.Exec(`
-		UPDATE hb_users SET signet_key=$1, signet_secret=$2, wallet_id=$3, signet_key_prefix=$4 WHERE nexus_user_id=$5
+		UPDATE hb_users SET antgrid_key=$1, antgrid_secret=$2, wallet_id=$3, antgrid_key_prefix=$4 WHERE nexus_user_id=$5
 	`, encKey, encSecret, walletID, prefix, nexusUserID)
 	return err
 }
 
-// ClearSignetCredentials removes the user's Signet credentials (does not delete the user row).
-func (d *DB) ClearSignetCredentials(nexusUserID string) error {
+// ClearAntgridCredentials removes the user's Antgrid credentials (does not delete the user row).
+func (d *DB) ClearAntgridCredentials(nexusUserID string) error {
 	_, err := d.sql.Exec(`
-		UPDATE hb_users SET signet_key=NULL, signet_secret=NULL, signet_key_prefix='', wallet_id='' WHERE nexus_user_id=$1
+		UPDATE hb_users SET antgrid_key=NULL, antgrid_secret=NULL, antgrid_key_prefix='', wallet_id='' WHERE nexus_user_id=$1
 	`, nexusUserID)
 	return err
 }
@@ -433,13 +449,13 @@ func (d *DB) SetTelegramChatID(nexusUserID string, chatID string) error {
 	return err
 }
 
-// AllConfiguredUsersData returns full User records for users with Signet credentials.
+// AllConfiguredUsersData returns full User records for users with Antgrid credentials.
 func (d *DB) AllConfiguredUsersData() ([]*User, error) {
 	rows, err := d.sql.Query(`
 		SELECT nexus_user_id, COALESCE(username,''), first_name, last_name, email, avatar,
-		       (signet_key IS NOT NULL), COALESCE(signet_key_prefix,''), COALESCE(wallet_id,''),
+		       (antgrid_key IS NOT NULL), COALESCE(antgrid_key_prefix,''), COALESCE(wallet_id,''),
 		       COALESCE(main_wallet_id,''), COALESCE(telegram_chat_id,''), created_at
-		FROM hb_users WHERE signet_key IS NOT NULL
+		FROM hb_users WHERE antgrid_key IS NOT NULL
 	`)
 	if err != nil {
 		return nil, err
@@ -450,7 +466,7 @@ func (d *DB) AllConfiguredUsersData() ([]*User, error) {
 		var u User
 		if err := rows.Scan(
 			&u.NexusUserID, &u.Username, &u.FirstName, &u.LastName, &u.Email, &u.Avatar,
-			&u.HasSignet, &u.SignetKeyPrefix, &u.WalletID, &u.MainWalletID, &u.TelegramChatID, &u.CreatedAt,
+			&u.HasAntgrid, &u.AntgridKeyPrefix, &u.WalletID, &u.MainWalletID, &u.TelegramChatID, &u.CreatedAt,
 		); err == nil {
 			users = append(users, &u)
 		}
@@ -458,17 +474,17 @@ func (d *DB) AllConfiguredUsersData() ([]*User, error) {
 	return users, rows.Err()
 }
 
-// GetSignetCredentials decrypts and returns the user's Signet API key + secret.
-func (d *DB) GetSignetCredentials(nexusUserID string) (apiKey, apiSecret string, err error) {
+// GetAntgridCredentials decrypts and returns the user's Antgrid API key + secret.
+func (d *DB) GetAntgridCredentials(nexusUserID string) (apiKey, apiSecret string, err error) {
 	var encKey, encSecret []byte
 	err = d.sql.QueryRow(
-		`SELECT signet_key, signet_secret FROM hb_users WHERE nexus_user_id=$1`, nexusUserID,
+		`SELECT antgrid_key, antgrid_secret FROM hb_users WHERE nexus_user_id=$1`, nexusUserID,
 	).Scan(&encKey, &encSecret)
 	if err != nil {
 		return "", "", err
 	}
 	if encKey == nil {
-		return "", "", fmt.Errorf("no Signet credentials configured")
+		return "", "", fmt.Errorf("no Antgrid credentials configured")
 	}
 	raw, err := d.decrypt(encKey)
 	if err != nil {
@@ -481,9 +497,9 @@ func (d *DB) GetSignetCredentials(nexusUserID string) (apiKey, apiSecret string,
 	return string(raw), string(rawS), nil
 }
 
-// AllConfiguredUsers returns nexus_user_id for users who have Signet credentials set.
+// AllConfiguredUsers returns nexus_user_id for users who have Antgrid credentials set.
 func (d *DB) AllConfiguredUsers() ([]string, error) {
-	rows, err := d.sql.Query(`SELECT nexus_user_id FROM hb_users WHERE signet_key IS NOT NULL`)
+	rows, err := d.sql.Query(`SELECT nexus_user_id FROM hb_users WHERE antgrid_key IS NOT NULL`)
 	if err != nil {
 		return nil, err
 	}

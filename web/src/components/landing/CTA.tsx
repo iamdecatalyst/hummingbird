@@ -47,7 +47,7 @@ export default function CTA() {
           </h2>
 
           <p className="text-[#a0a0a0] text-lg mb-10 max-w-xl mx-auto leading-relaxed">
-            Clone the repo, set your Signet API key, and Hummingbird is live.
+            Clone the repo, set your Antgrid API key, and Hummingbird is live.
             No infrastructure. No private key risk. No babysitting.
           </p>
 
@@ -76,13 +76,13 @@ export default function CTA() {
             Join the Community
           </a>
 
-          {/* Signet callout */}
+          {/* Antgrid callout */}
           <div className="inline-flex items-center gap-3 neu-card-inset px-5 py-3 rounded-2xl">
             <span className="font-mono text-xs text-[#555]">POWERED BY</span>
-            <img src="/signet-logo.png" alt="Signet" className="h-5 object-contain" />
+            <img src="/antgrid-logo.png" alt="Antgrid" className="h-5 object-contain" />
             <span className="font-mono text-xs text-[#555]">—</span>
             <a
-              href="https://signet.vylth.com"
+              href="https://antgrid.vylth.com"
               target="_blank"
               rel="noopener noreferrer"
               className="font-mono text-xs text-[#00A8FF] hover:text-white transition-colors"

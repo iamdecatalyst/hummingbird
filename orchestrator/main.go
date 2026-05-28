@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	signet "github.com/VYLTH/signet-sdk-go/signet"
+	antgrid "github.com/VYLTH/antgrid-sdk-go/antgrid"
 
 	"github.com/iamdecatalyst/hummingbird/orchestrator/alerts"
 	"github.com/iamdecatalyst/hummingbird/orchestrator/auth"
@@ -48,8 +48,8 @@ func main() {
 			log.Fatal("[main] CRICKET_API_KEY is required in multi-tenant mode — get your key at https://cricket.vylth.com")
 		}
 	} else {
-		if cfg.SignetAPIKey == "" || cfg.SignetAPISecret == "" {
-			log.Printf("[main] WARNING: SIGNET_API_KEY / SIGNET_API_SECRET not set — trading disabled until configured")
+		if cfg.AntgridAPIKey == "" || cfg.AntgridAPISecret == "" {
+			log.Printf("[main] WARNING: ANTGRID_API_KEY / ANTGRID_API_SECRET not set — trading disabled until configured")
 		}
 		if cfg.CricketKey == "" {
 			log.Printf("[main] WARNING: CRICKET_API_KEY not set — all tokens will be scored as 0 and skipped")
@@ -90,13 +90,13 @@ func main() {
 	log.Printf("[main] Hummingbird starting\n"+
 		"  Mode:     %s\n"+
 		"  Cricket:  %s %s\n"+
-		"  Signet:   %s %s\n"+
+		"  Antgrid:    %s %s\n"+
 		"  Telegram: %s\n"+
 		"  Database: %s\n"+
 		"  Listener: waiting on :%s/score",
 		mode,
 		check(cfg.CricketKey), cfg.CricketURL,
-		check(cfg.SignetBaseURL), cfg.SignetBaseURL,
+		check(cfg.AntgridBaseURL), cfg.AntgridBaseURL,
 		check(cfg.TelegramToken),
 		check(cfg.DatabaseURL),
 		cfg.Port,
@@ -142,13 +142,13 @@ func startSingleTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMu
 	var walletID string
 	var err error
 
-	signetClient := signet.NewClient(cfg.SignetAPIKey, cfg.SignetAPISecret).
-		WithBaseURL(cfg.SignetBaseURL)
+	antgridClient := antgrid.NewClient(cfg.AntgridAPIKey, cfg.AntgridAPISecret).
+		WithBaseURL(cfg.AntgridBaseURL)
 
-	wid, err := trader.EnsureWallet(signetClient, "hummingbird-trader")
+	wid, err := trader.EnsureWallet(antgridClient, "hummingbird-trader")
 	if err != nil {
 		log.Printf("[main] WARNING: wallet setup failed: %v", err)
-		log.Printf("[main] Unconfigured mode — set SIGNET_API_KEY + SIGNET_API_SECRET in .env and restart.")
+		log.Printf("[main] Unconfigured mode — set ANTGRID_API_KEY + ANTGRID_API_SECRET in .env and restart.")
 	} else {
 		walletID = wid
 		configured = true
@@ -179,7 +179,7 @@ func startSingleTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMu
 			tr.Execute(r)
 		}
 	})
-	tr = trader.New(signetClient, walletID, port, notifier, cc, sc, monitor.DefaultMonitorConfig(), 0, 0, cfg.SolanaRPC, nil)
+	tr = trader.New(antgridClient, walletID, port, notifier, cc, sc, monitor.DefaultMonitorConfig(), 0, 0, cfg.SolanaRPC, nil)
 
 	// Go-side scalper disabled — Python scorer/scalper.py handles discovery via DexScreener+Cricket
 
@@ -297,7 +297,7 @@ func startSingleTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMu
 // Identity = Nexus user ID (VYLTH SSO).
 // Flow: user clicks "Continue with Nexus" → OAuth → Nexus access token sent to backend
 //       → backend validates via Nexus profile API → upsert user → issue our JWT.
-// First login: prompt for Signet API key once → encrypted in DB → bot starts.
+// First login: prompt for Antgrid API key once → encrypted in DB → bot starts.
 // Subsequent logins: Nexus → JWT → bot resumes from stored credentials.
 
 func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux) {
@@ -338,7 +338,7 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 			func(nexusID string, chatID int64) {
 				chatStr := strconv.FormatInt(chatID, 10)
 				database.SetTelegramChatID(nexusID, chatStr)
-				apiKey, apiSecret, err := database.GetSignetCredentials(nexusID)
+				apiKey, apiSecret, err := database.GetAntgridCredentials(nexusID)
 				if err != nil {
 					return
 				}
@@ -371,7 +371,7 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 					log.Printf("[bot] setConfig failed for %s: %v", nexusID[:8], err)
 				}
 				// Restart user instance to pick up new settings
-				apiKey, apiSecret, err := database.GetSignetCredentials(nexusID)
+				apiKey, apiSecret, err := database.GetAntgridCredentials(nexusID)
 				if err != nil {
 					return
 				}
@@ -408,7 +408,7 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 			return
 		}
 		for _, u := range users {
-			apiKey, apiSecret, err := database.GetSignetCredentials(u.NexusUserID)
+			apiKey, apiSecret, err := database.GetAntgridCredentials(u.NexusUserID)
 			if err != nil {
 				log.Printf("[main] skip resume for user %s: %v", u.NexusUserID[:8], err)
 				continue
@@ -497,7 +497,7 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
 			"token":      token,
-			"has_signet": user != nil && user.HasSignet,
+			"has_antgrid": user != nil && user.HasAntgrid,
 			"user": map[string]string{
 				"id":         nexusID,
 				"username":   username,
@@ -530,8 +530,8 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 			"last_name":          user.LastName,
 			"email":              user.Email,
 			"avatar":             user.Avatar,
-			"has_signet":         user.HasSignet,
-			"signet_key_prefix":  user.SignetKeyPrefix,
+			"has_antgrid":         user.HasAntgrid,
+			"antgrid_key_prefix":  user.AntgridKeyPrefix,
 			"wallet_id":          user.WalletID,
 			"main_wallet_id":     user.MainWalletID,
 			"telegram_chat_id":   user.TelegramChatID,
@@ -539,8 +539,8 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 		})
 	})
 
-	// POST /auth/setup-signet — first-time Signet key entry after Nexus login.
-	mux.HandleFunc("POST /auth/setup-signet", func(w http.ResponseWriter, r *http.Request) {
+	// POST /auth/setup-antgrid — first-time Antgrid key entry after Nexus login.
+	mux.HandleFunc("POST /auth/setup-antgrid", func(w http.ResponseWriter, r *http.Request) {
 		nexusID, err := requireAuth(r)
 		if err != nil {
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
@@ -556,7 +556,7 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 		}
 
 		// Verify credentials + get wallet ID
-		client := signet.NewClient(req.APIKey, req.APISecret).WithBaseURL(cfg.SignetBaseURL)
+		client := antgrid.NewClient(req.APIKey, req.APISecret).WithBaseURL(cfg.AntgridBaseURL)
 		short := nexusID
 		if len(short) > 8 {
 			short = short[:8]
@@ -564,11 +564,11 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 		walletName := fmt.Sprintf("hb-%s", short)
 		walletID, err := trader.EnsureWallet(client, walletName)
 		if err != nil {
-			http.Error(w, `{"error":"invalid Signet credentials"}`, http.StatusBadRequest)
+			http.Error(w, `{"error":"invalid Antgrid credentials"}`, http.StatusBadRequest)
 			return
 		}
 
-		if err := database.SetSignetCredentials(nexusID, req.APIKey, req.APISecret, walletID); err != nil {
+		if err := database.SetAntgridCredentials(nexusID, req.APIKey, req.APISecret, walletID); err != nil {
 			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 			return
 		}
@@ -657,7 +657,7 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 		w.Header().Set("Content-Type", "application/json")
 		if inst == nil {
 			user, _ := database.GetUser(nexusID)
-			json.NewEncoder(w).Encode(statsResp{portfolio.Stats{}, 0, user != nil && user.HasSignet})
+			json.NewEncoder(w).Encode(statsResp{portfolio.Stats{}, 0, user != nil && user.HasAntgrid})
 			return
 		}
 		json.NewEncoder(w).Encode(statsResp{inst.Port.Stats(), inst.Trader.Balance(), true})
@@ -843,7 +843,7 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 			return
 		}
 		// Restart bot instance with new config
-		apiKey, apiSecret, cErr := database.GetSignetCredentials(nexusID)
+		apiKey, apiSecret, cErr := database.GetAntgridCredentials(nexusID)
 		if cErr == nil {
 			user, _ := database.GetUser(nexusID)
 			chatID := ""; walletIDr := ""
@@ -877,7 +877,7 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 		}
 		inst := mgr.Get(nexusID)
 		if inst == nil {
-			apiKey, apiSecret, err := database.GetSignetCredentials(nexusID)
+			apiKey, apiSecret, err := database.GetAntgridCredentials(nexusID)
 			if err == nil {
 				user, _ := database.GetUser(nexusID)
 				chatID := ""
@@ -893,15 +893,15 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 		fmt.Fprint(w, `{"status":"resumed"}`)
 	})
 
-	// DELETE /auth/signet — remove stored Signet credentials and stop bot
-	mux.HandleFunc("DELETE /auth/signet", func(w http.ResponseWriter, r *http.Request) {
+	// DELETE /auth/antgrid — remove stored Antgrid credentials and stop bot
+	mux.HandleFunc("DELETE /auth/antgrid", func(w http.ResponseWriter, r *http.Request) {
 		nexusID, err := requireAuth(r)
 		if err != nil {
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
 		mgr.Stop(nexusID)
-		if err := database.ClearSignetCredentials(nexusID); err != nil {
+		if err := database.ClearAntgridCredentials(nexusID); err != nil {
 			http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 			return
 		}
@@ -952,7 +952,7 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 		}
 		walletID := r.PathValue("id")
 		// Restart bot with the new wallet
-		apiKey, apiSecret, err := database.GetSignetCredentials(nexusID)
+		apiKey, apiSecret, err := database.GetAntgridCredentials(nexusID)
 		if err == nil {
 			user, _ := database.GetUser(nexusID)
 			chatID := ""
@@ -969,22 +969,22 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 		fmt.Fprint(w, `{"status":"ok"}`)
 	})
 
-	// GET /wallets — list all Signet wallets for this user
+	// GET /wallets — list all Antgrid wallets for this user
 	mux.HandleFunc("GET /wallets", func(w http.ResponseWriter, r *http.Request) {
 		nexusID, err := requireAuth(r)
 		if err != nil {
 			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 			return
 		}
-		apiKey, apiSecret, err := database.GetSignetCredentials(nexusID)
+		apiKey, apiSecret, err := database.GetAntgridCredentials(nexusID)
 		if err != nil {
-			http.Error(w, `{"error":"no signet credentials"}`, http.StatusBadRequest)
+			http.Error(w, `{"error":"no antgrid credentials"}`, http.StatusBadRequest)
 			return
 		}
-		client := signet.NewClient(apiKey, apiSecret).WithBaseURL(cfg.SignetBaseURL)
+		client := antgrid.NewClient(apiKey, apiSecret).WithBaseURL(cfg.AntgridBaseURL)
 		wallets, err := client.Wallets.List()
 		if err != nil {
-			http.Error(w, `{"error":"signet error"}`, http.StatusBadGateway)
+			http.Error(w, `{"error":"antgrid error"}`, http.StatusBadGateway)
 			return
 		}
 		// Fetch SOL balance for each wallet
@@ -1104,17 +1104,17 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 			http.Error(w, fmt.Sprintf(`{"error":"daily withdraw limit (%.2f SOL) reached"}`, maxDailyWithdrawSOL), http.StatusTooManyRequests)
 			return
 		}
-		apiKey, apiSecret, err := database.GetSignetCredentials(nexusID)
+		apiKey, apiSecret, err := database.GetAntgridCredentials(nexusID)
 		if err != nil {
-			http.Error(w, `{"error":"no signet credentials"}`, http.StatusBadRequest)
+			http.Error(w, `{"error":"no antgrid credentials"}`, http.StatusBadRequest)
 			return
 		}
-		client := signet.NewClient(apiKey, apiSecret).WithBaseURL(cfg.SignetBaseURL)
-		// Ownership check — Signet credentials are per-user, so List() is scoped.
+		client := antgrid.NewClient(apiKey, apiSecret).WithBaseURL(cfg.AntgridBaseURL)
+		// Ownership check — Antgrid credentials are per-user, so List() is scoped.
 		// If walletID isn't in the list, the user doesn't own it.
 		userWallets, werr := client.Wallets.List()
 		if werr != nil {
-			http.Error(w, `{"error":"signet error"}`, http.StatusBadGateway)
+			http.Error(w, `{"error":"antgrid error"}`, http.StatusBadGateway)
 			return
 		}
 		var owned bool
@@ -1128,7 +1128,7 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 			http.Error(w, `{"error":"wallet not found"}`, http.StatusForbidden)
 			return
 		}
-		result, err := client.Wallets.Transfer(walletID, signet.TransferParams{
+		result, err := client.Wallets.Transfer(walletID, antgrid.TransferParams{
 			To:     req.To,
 			Amount: req.Amount,
 		})
@@ -1152,17 +1152,17 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 			Label string `json:"label"`
 		}
 		json.NewDecoder(r.Body).Decode(&req)
-		apiKey, apiSecret, err := database.GetSignetCredentials(nexusID)
+		apiKey, apiSecret, err := database.GetAntgridCredentials(nexusID)
 		if err != nil {
-			http.Error(w, `{"error":"no signet credentials"}`, http.StatusBadRequest)
+			http.Error(w, `{"error":"no antgrid credentials"}`, http.StatusBadRequest)
 			return
 		}
-		client := signet.NewClient(apiKey, apiSecret).WithBaseURL(cfg.SignetBaseURL)
+		client := antgrid.NewClient(apiKey, apiSecret).WithBaseURL(cfg.AntgridBaseURL)
 		label := req.Label
 		if label == "" {
 			label = "hummingbird"
 		}
-		wal, err := client.Wallets.Create(signet.CreateWalletParams{Chain: "solana", Label: label})
+		wal, err := client.Wallets.Create(antgrid.CreateWalletParams{Chain: "solana", Label: label})
 		if err != nil {
 			log.Printf("[wallets] create failed: %v", err)
 			http.Error(w, `{"error":"failed to create wallet"}`, http.StatusBadGateway)
@@ -1174,7 +1174,7 @@ func startMultiTenant(cfg *config.Config, cc *cricket.Client, mux *http.ServeMux
 }
 
 // fetchSOLBalance fetches a wallet's SOL balance directly from Helius RPC.
-// Uses getBalance with the wallet's Solana public address — no Signet request needed.
+// Uses getBalance with the wallet's Solana public address — no Antgrid request needed.
 func fetchSOLBalance(rpcURL, address string) float64 {
 	if rpcURL == "" || address == "" {
 		return 0

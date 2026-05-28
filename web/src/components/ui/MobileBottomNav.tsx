@@ -192,7 +192,7 @@ export default function MobileBottomNav({
                     style={{ color: '#888' }}
                   >
                     <Key size={22} />
-                    <span className="font-mono text-xs font-bold">Signet</span>
+                    <span className="font-mono text-xs font-bold">Antgrid</span>
                   </button>
                   <button
                     onClick={() => { onOpenCredentials(); setMenuOpen(false) }}

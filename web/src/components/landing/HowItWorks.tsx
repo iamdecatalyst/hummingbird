@@ -31,8 +31,8 @@ const STEPS = [
     langLogo: '/lang-go.svg',
     icon: <Target size={28} weight="fill" color="#00A8FF" />,
     title: 'Execute',
-    subtitle: 'Signet API · 3% slippage',
-    desc: 'Orchestrator receives the score decision and executes buys via Signet. Positions are monitored every 2 seconds — staged take-profits at 2x, 5x, 10x, with stop-loss and rug detection.',
+    subtitle: 'Antgrid API · 3% slippage',
+    desc: 'Orchestrator receives the score decision and executes buys via Antgrid. Positions are monitored every 2 seconds — staged take-profits at 2x, 5x, 10x, with stop-loss and rug detection.',
     detail: 'sniper · scalper · TP1/TP2/TP3 · stop-loss',
   },
 ]

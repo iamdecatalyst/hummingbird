@@ -14,10 +14,10 @@ type Config struct {
 	CricketURL string // e.g. https://api-cricket.vylth.com
 	CricketKey string // CRICKET_API_KEY from your Cricket dashboard
 
-	// Signet (single-tenant only — optional in multi-tenant)
-	SignetAPIKey    string
-	SignetAPISecret string
-	SignetBaseURL   string
+	// Antgrid (single-tenant only — optional in multi-tenant)
+	AntgridAPIKey    string
+	AntgridAPISecret string
+	AntgridBaseURL   string
 
 	// Solana RPC
 	SolanaRPC string
@@ -55,9 +55,9 @@ func Load() *Config {
 		CricketURL: getEnv("CRICKET_API_URL", "https://api-cricket.vylth.com"),
 		CricketKey: getEnv("CRICKET_API_KEY", ""),
 
-		SignetAPIKey:    getEnv("SIGNET_API_KEY", ""),
-		SignetAPISecret: getEnv("SIGNET_API_SECRET", ""),
-		SignetBaseURL:   getEnv("SIGNET_BASE_URL", "https://api.signet.vylth.com/v1"),
+		AntgridAPIKey:    getEnv("ANTGRID_API_KEY", ""),
+		AntgridAPISecret: getEnv("ANTGRID_API_SECRET", ""),
+		AntgridBaseURL:   getEnv("ANTGRID_BASE_URL", "https://api.antgrid.io/v1"),
 
 		SolanaRPC: getEnv("RPC_HTTP", "https://api.mainnet-beta.solana.com"),
 
